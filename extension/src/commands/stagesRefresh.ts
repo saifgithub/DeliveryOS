@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { StageTreeProvider } from '../stages/stageTreeProvider';
+import { StageTreeProvider } from '../tree/stageTreeProvider';
 
 export function registerStagesRefresh(
   provider: StageTreeProvider,

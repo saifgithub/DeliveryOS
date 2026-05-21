@@ -1,106 +1,21 @@
 {
-  "name": "deliveryos",
-  "displayName": "DeliveryOS",
-  "description": "A meta-harness for AI-assisted software delivery. Sits above Claude Code / Codex / Cursor as the SDLC memory and orchestration layer.",
-  "version": "0.0.1",
-  "publisher": "deliveryos",
-  "license": "MIT",
-  "icon": "media/deliveryos-logo.png",
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "categories": [
-    "Other"
+  "name": "deliveryos-root",
+  "version": "0.0.0",
+  "private": true,
+  "description": "DeliveryOS monorepo root. The actual extension lives in extension/.",
+  "workspaces": [
+    "contracts",
+    "extension"
   ],
-  "keywords": [
-    "sdlc",
-    "ai",
-    "claude-code",
-    "codex",
-    "harness",
-    "memory"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/deliveryos/deliveryos.git"
-  },
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "main": "./dist/extension.js",
-  "capabilities": {
-    "untrustedWorkspaces": {
-      "supported": false,
-      "description": "DeliveryOS reads and writes .deliveryos-handoff/ and .deliveryos/, runs terminals against the workspace, and reads source files for Codebase Memory. It cannot safely run on untrusted code."
-    },
-    "virtualWorkspaces": {
-      "supported": false,
-      "description": "DeliveryOS requires a local filesystem to write the handoff directory and the memory store. Virtual workspaces (GitHub repos, remote tunnels without a local checkout) are not supported."
-    }
-  },
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "deliveryos",
-          "title": "DeliveryOS",
-          "icon": "media/icon-rocket.svg"
-        }
-      ]
-    },
-    "views": {
-      "deliveryos": [
-        {
-          "id": "deliveryos.stages",
-          "name": "Stages",
-          "contextualTitle": "DeliveryOS",
-          "icon": "media/icon-rocket.svg"
-        }
-      ]
-    },
-    "viewsWelcome": [
-      {
-        "view": "deliveryos.stages",
-        "contents": "**Welcome to DeliveryOS**\n\nA harness around your harness.\n\nDeliveryOS turns a raw idea into a verified release through four stages: DISCOVER → DEFINE → EXECUTE → VERIFY.\n\n[Create a project](command:deliveryos.project.create)\n\nLearn more in the [README](https://github.com/deliveryos/deliveryos#readme).",
-        "when": "!deliveryos.hasProject"
-      }
-    ],
-    "commands": [
-      {
-        "command": "deliveryos.project.create",
-        "title": "DeliveryOS: Create Project",
-        "category": "DeliveryOS",
-        "icon": "$(add)"
-      },
-      {
-        "command": "deliveryos.stages.refresh",
-        "title": "DeliveryOS: Refresh Stage Tree",
-        "category": "DeliveryOS",
-        "icon": "$(refresh)"
-      }
-    ],
-    "menus": {
-      "view/title": [
-        {
-          "command": "deliveryos.stages.refresh",
-          "when": "view == deliveryos.stages",
-          "group": "navigation"
-        }
-      ]
-    }
-  },
   "scripts": {
-    "clean": "rimraf dist *.vsix",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package": "npm run clean && npm run compile && vsce package --no-dependencies",
-    "vscode:prepublish": "npm run compile"
+    "build": "npm -w @deliveryos/contracts run build && npm -w deliveryos run build",
+    "build:contracts": "npm -w @deliveryos/contracts run build",
+    "build:extension": "npm -w deliveryos run build",
+    "clean": "rimraf 'extension/dist' 'extension/*.vsix' 'contracts/dist' 'webview/dist'",
+    "package": "npm run build && npm -w deliveryos run package"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@types/vscode": "^1.85.0",
-    "@vscode/vsce": "^3.0.0",
     "rimraf": "^5.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.5.0"
   }
 }

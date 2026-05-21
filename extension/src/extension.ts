@@ -3,7 +3,7 @@ import { registerProjectCreate } from './commands/projectCreate';
 import { registerStagesRefresh } from './commands/stagesRefresh';
 import { CONTEXT_KEYS } from './contextKeys';
 import { InMemoryProjectRegistry } from './projectRegistry';
-import { StageTreeProvider } from './stages/stageTreeProvider';
+import { StageTreeProvider } from './tree/stageTreeProvider';
 
 export function activate(context: vscode.ExtensionContext): void {
   console.log('DeliveryOS activated');

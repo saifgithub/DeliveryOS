@@ -37,8 +37,10 @@ export function registerProjectCreate(
       const record: ProjectRecord = {
         id: generateProjectId(),
         name: name.trim(),
-        description: args?.description,
         createdAt: Date.now(),
+        ...(args?.description !== undefined && {
+          description: args.description,
+        }),
       };
       registry.setActive(record);
       await vscode.commands.executeCommand(

@@ -13,6 +13,7 @@ env/
 # NOTE: /build/ is root-anchored on purpose — docs/build/ is a tracked
 # process folder and must NOT be ignored.
 dist/
+*.tsbuildinfo
 /build/
 .next/
 out/
@@ -57,3 +58,7 @@ generated/
 # Claude Code session state (worktrees and the active-track pointer)
 .claude/worktrees/
 .claude/active-track
+
+# Generated copies for .vsix packaging (root LICENSE + README are canonical)
+/extension/LICENSE
+/extension/readme.md
