@@ -5,11 +5,13 @@
   "description": "DeliveryOS monorepo root. The actual extension lives in extension/.",
   "workspaces": [
     "contracts",
+    "webview",
     "extension"
   ],
   "scripts": {
-    "build": "npm -w @deliveryos/contracts run build && npm -w deliveryos run build",
+    "build": "node scripts/build.mjs",
     "build:contracts": "npm -w @deliveryos/contracts run build",
+    "build:webview": "npm -w @deliveryos/webview run build",
     "build:extension": "npm -w deliveryos run build",
     "clean": "rimraf 'extension/dist' 'extension/*.vsix' 'contracts/dist' 'webview/dist'",
     "package": "npm run build && npm -w deliveryos run package"
