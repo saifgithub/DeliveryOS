@@ -22,13 +22,17 @@ This chunk closes the largest leak in PRD § 27 Risk 3 ("File-based handoff is l
 ### In scope
 
 - **The diff engine** (universal — Claude Code + Codex):
-  - Inputs: a saved Execution Brief (Sections 7 + 8, parsed via CHUNK-09's `briefMarkdown.ts`) and the Result Memory's `filesChanged: string[]` field (sourced from CHUNK-12's `git diff --name-only HEAD` capture).
+  - Inputs: a saved Execution Brief (Sections 7 + 8, parsed via CHUNK-09's `briefMarkdown.ts`) and the Result Memory's `filesChanged` field (CHUNK-12's `FilesChangedList`, sourced from `git diff --name-only HEAD`).
   - Cross-OS glob matching using `picomatch` (small, fast, well-tested on Windows path separators).
-  - Three per-file classifications: `allowed-and-touched`, `allowed-but-not-touched`, `forbidden-but-touched`.
+  - **Four diff-outcome classes** — three per-file classes plus one per-pattern class:
+    1. `allowed-and-touched` — path matches an Allowed pattern; no Forbidden match. **OK.**
+    2. `allowed-but-not-touched` — *per-pattern, not per-file.* An Allowed bullet for which no actual changed file matched. **Informational; possibly under-scoped work.**
+    3. `forbidden-but-touched` — path matches a Forbidden pattern. **FAIL.** Forbidden wins ties.
+    4. `unclassified-but-touched` — changed path matches neither Allowed nor Forbidden. **Warning, fail-open** — surfaced as a soft note (the brief did not explicitly mention this path) but does not flip the verdict to fail.
   - Top-level verdict `pass | fail` (fail iff at least one `forbidden-but-touched`).
   - Pure function; no I/O. Easily unit-testable.
 - **The diff outcome storage**:
-  - The `DiffOutcome` object is attached to the existing Result Memory record (CHUNK-12's `ParsedResult`), not stored as a separate memory type. CHUNK-14 (verification) reads it from there.
+  - The `DiffOutcome` object is attached to the existing Result Memory record on CHUNK-03's `ResultPayload.diffOutcome` slot, not stored as a separate memory type. Written via `MemoryStore.update(resultId, { payload: { ..., diffOutcome } })` from `extension/src/diff/persist.ts`. CHUNK-14 (verification) reads it via `result.payload.diffOutcome`.
 - **Diff results panel** (webview):
   - Pass/fail banner at the top (green / red).
   - List of forbidden-but-touched files (the FAIL section, expanded by default if non-empty).
@@ -42,7 +46,7 @@ This chunk closes the largest leak in PRD § 27 Risk 3 ("File-based handoff is l
 - **Claude Code PreToolUse hook generator** (research finding #5 — Claude Code profile only):
   - Generates `.claude/hooks/deliveryos-forbidden-paths.sh` (POSIX) and `.claude/hooks/deliveryos-forbidden-paths.ps1` (Windows). Both are written by default; `.claude/settings.json` registers whichever matches the host platform.
   - The script reads `.deliveryos-handoff/current-execution-brief.md`, locates the `## 8. Forbidden Changes` section, extracts the bullet list of patterns, and exits 2 if the tool's target path matches any pattern.
-  - Registers a `<!-- DELIVERYOS:BEGIN --> ... <!-- DELIVERYOS:END -->`-delimited managed block in `.claude/settings.json` against `PreToolUse` for the Edit / Write / MultiEdit tools — reusing CHUNK-10's `managedBlock.ts` for the diff-and-apply pattern.
+  - Registers the `PreToolUse` entry for the Edit / Write / MultiEdit tools by calling CHUNK-10's `applyManagedBlock(existing, body, 'json')` — CHUNK-10 owns the canonical JSON managed-block syntax (a single sentinel key `"deliveryos.managed": { ... }`, with hook content nested at `deliveryos.managed.hooks` per CHUNK-10 § 5.3). CHUNK-13 does **NOT** add new managed-block primitives — it consumes CHUNK-10's API verbatim.
   - User-visible install UX: a "Hook install" tab on the diff results panel (and a shortcut from the brief composer profile picker). Diff against the existing `.claude/settings.json` if present, "Apply" button, never silent — same UX shape as CHUNK-10's CLAUDE.md updater.
 - **Cross-OS glob behaviour**:
   - All matching goes through a tiny `picomatchAdapter.ts` wrapper that normalises Windows backslash paths to forward slashes before matching, and configures `picomatch` with `dot: true` (so `.deliveryos-handoff/**` matches), `nocase: false` (paths are case-sensitive on Linux), and `posixSlashes: true`.
@@ -72,26 +76,45 @@ This chunk closes the largest leak in PRD § 27 Risk 3 ("File-based handoff is l
 
 ```ts
 interface DiffInput {
-  /** Parsed Section 7 Allowed list — one entry per bullet in the brief. */
+  /** Parsed Section 7 Allowed list — one entry per bullet in the brief.
+   *  Globs arrive already-normalised from CHUNK-09's parser (trailing-slash
+   *  shorthand `dir/` rewritten to `dir/**` at parse time). */
   allowedPatterns: string[];
-  /** Parsed Section 8 Forbidden list — one entry per bullet in the brief. */
+  /** Parsed Section 8 Forbidden list — one entry per bullet in the brief.
+   *  Same parse-time normalisation as `allowedPatterns`. */
   forbiddenPatterns: string[];
-  /** Workspace-relative paths of files the harness actually changed.
-   *  Sourced from CHUNK-12's `git diff --name-only HEAD` capture, always
-   *  using forward slashes regardless of host OS. */
-  filesChanged: string[];
+  /** The structured files-changed shape from CHUNK-12. The diff engine
+   *  flattens to a `string[]` of workspace-relative, forward-slash paths
+   *  internally via `filesChanged.fromGit.map(c => c.path)`. */
+  filesChanged: FilesChangedList; // re-exported from CHUNK-12
 }
+
+// From CHUNK-12 (do NOT redefine):
+//   interface FilesChangedList {
+//     fromGit: GitFileChange[];           // [{ path, status }, ...]
+//     fromHarness: ClaimedFileChange[];
+//     gitAvailable: boolean;
+//   }
+```
+
+The engine performs one normalisation step at the top of `runDiff()`:
+
+```ts
+const paths: string[] = input.filesChanged.fromGit.map(c => c.path);
+// All paths from CHUNK-12 are already forward-slash and workspace-relative;
+// the picomatchAdapter still defensively normalises in case the harness-
+// claimed list (fromHarness) is ever folded in.
 ```
 
 The patterns are bullet-list entries from the brief. Examples that must work cleanly:
 
 - `src/**/*.ts` → standard recursive glob.
-- `src/legacy/` → trailing-slash convention for "the whole directory".
+- `src/legacy/**` → "the whole directory" form. CHUNK-09's parser **pre-normalises** the trailing-slash shorthand `src/legacy/` to `src/legacy/**` at parse time (see M16 reconciliation), so the diff engine never sees a raw trailing-slash pattern.
 - `package.json` → exact-path match.
 - `!src/legacy/no-touch.ts` → leading `!` is a negation (a forbidden pattern wins inside an otherwise-allowed area, and vice versa). Documented in CHUNK-09's brief schema.
 - `tests/**/*.spec.ts` → glob with multiple segments.
 
-Patterns from CHUNK-09's `briefMarkdown.ts` parser already arrive trimmed (leading `- `, trailing whitespace, surrounding backticks stripped). This chunk does not re-parse; it consumes the already-parsed string array.
+Patterns from CHUNK-09's `briefMarkdown.ts` parser already arrive trimmed (leading `- `, trailing whitespace, surrounding backticks stripped) **and trailing-slash normalised** to `dir/**`. This chunk does not re-parse and does not re-normalise; it consumes the already-parsed, already-normalised string array.
 
 ### 2.2 Algorithm
 
@@ -250,10 +273,12 @@ PATTERNS=$(awk '
 
 while IFS= read -r PATTERN; do
   [ -z "$PATTERN" ] && continue
-  # Trailing slash → directory match.
-  case "$PATTERN" in
-    */) PATTERN="${PATTERN}**" ;;
-  esac
+  # CHUNK-09 renders an empty Forbidden list as the sentinel "- (none)".
+  # Skip it explicitly so the literal token is never matched against $TARGET.
+  [ "$PATTERN" = "(none)" ] && continue
+  # Trailing-slash normalisation is done by CHUNK-09 at parse time, so the
+  # brief on disk only ever contains pre-normalised patterns. The hook
+  # script does not re-normalise.
   # Shell glob match via `case` builtin. ${TARGET} is never expanded as code.
   # shellcheck disable=SC2254
   case "$TARGET" in
@@ -271,7 +296,8 @@ exit 0
 Key design points:
 
 - **Reads the brief at runtime**, never inlines patterns into the script body. A future brief change is picked up automatically; a malicious brief cannot inject shell at script-generation time.
-- **`case "$TARGET" in $PATTERN)`** uses POSIX shell glob, not full picomatch semantics. This is deliberately conservative — anything picomatch matches that POSIX glob does not (notably `**` recursion) we expand at runtime: trailing `/` becomes `/**` and we run a second `case` pass where any pattern containing `**` is rewritten to `*` for a single-segment match. Documented in § 9 as a known semantic gap; the post-hoc diff catches whatever the hook misses.
+- **`case "$TARGET" in $PATTERN)`** uses POSIX shell glob, not full picomatch semantics. This is deliberately conservative. `**` collapses to `*` (single-segment only) and brace expansion `{a,b}` is not honoured. Trailing-slash normalisation is **done upstream** by CHUNK-09's parser (M16) — the hook script does not re-normalise. The capability gap is documented in § 9 ("Known limitation") as load-bearing, and the post-hoc diff catches whatever the hook under-matches.
+- **Sentinel `(none)` skip.** CHUNK-09 renders an empty Forbidden list as a bullet with the literal text `(none)`. The script early-skips this token so it is never glob-matched (m08).
 - **`printf '%s'`** for all user-derived strings. Never `echo -e`, never anything that respects backslash escapes.
 - **`exit 2`** specifically — Claude Code's documented "block" code. `exit 1` is interpreted as "tool error" which we do not want.
 - **Fail-open on parse failure or missing brief.** The hook is a safety net, not a kill-switch. If DeliveryOS hasn't written a brief yet, we don't want every Edit attempt to error.
@@ -310,8 +336,11 @@ foreach ($line in Get-Content $brief) {
 
 foreach ($pattern in $patterns) {
   if ([string]::IsNullOrWhiteSpace($pattern)) { continue }
+  # Skip the CHUNK-09 empty-list sentinel — m08.
+  if ($pattern -eq '(none)') { continue }
   $p = $pattern
-  if ($p.EndsWith('/')) { $p = "$p**" }
+  # Trailing-slash normalisation happens at brief-parse time in CHUNK-09 (M16);
+  # the script does not re-normalise.
   # PowerShell -like uses * and ? glob, no recursive **.
   # Same semantic gap as POSIX; documented in § 9.
   $likePattern = $p -replace '\*\*', '*'
@@ -326,27 +355,38 @@ exit 0
 
 ### 3.4 `.claude/settings.json` registration
 
-The hook generator reuses CHUNK-10's `managedBlock.ts` to write a managed block keyed `deliveryos-forbidden-paths-hook` inside `.claude/settings.json`. Because `settings.json` is JSON-not-jsonc and JSON has no native comment syntax, CHUNK-10's `managedBlock.ts` is expected to use the *key-prefix sentinel* convention rather than HTML comments — i.e. a top-level key `"// DELIVERYOS:BEGIN deliveryos-forbidden-paths-hook"` and `"// DELIVERYOS:END deliveryos-forbidden-paths-hook"` carrying string values. CHUNK-10 owns that decision; CHUNK-13 only **consumes** the API. If CHUNK-10 instead picks `.json5` / `.jsonc` lenient parsing, this chunk follows.
+The hook generator does **not** define its own managed-block syntax. It calls into CHUNK-10's `applyManagedBlock(existing, body, 'json')` (located at `extension/src/profiles/managedBlock.ts`), which is the **canonical** owner of managed-block primitives for the project. CHUNK-10 chose a single sentinel-key convention for JSON: a top-level key `"deliveryos.managed"` whose object value carries every DeliveryOS-managed sub-tree. CHUNK-10 § 5.3 already stubbed the `deliveryos.managed.hooks` path as the home for hook registrations; CHUNK-13 writes into exactly that slot.
 
-The block contents:
+The shape under `deliveryos.managed.hooks` follows Claude Code's own `.claude/settings.json` hook entry shape — an array of hook entries keyed by tool name. For DeliveryOS, that array contains a single `PreToolUse` entry matching `Edit|Write|MultiEdit`:
 
 ```jsonc
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Edit|Write|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": ".claude/hooks/deliveryos-forbidden-paths.sh"   // or .ps1 on Windows
-          }
-        ]
-      }
-    ]
+  "deliveryos.managed": {
+    // ...other CHUNK-10-managed sub-trees (e.g. profile metadata) ...
+    "hooks": {
+      "PreToolUse": [
+        {
+          "matcher": "Edit|Write|MultiEdit",
+          "hooks": [
+            {
+              "type": "command",
+              "command": ".claude/hooks/deliveryos-forbidden-paths.sh"  // or .ps1 on Windows
+            }
+          ]
+        }
+      ]
+    }
   }
 }
 ```
+
+CHUNK-13's responsibility is to:
+
+1. Build the `hooks` sub-object above (`PreToolUseHookFragment`).
+2. Hand it to `applyManagedBlock(existing, body, 'json')` together with the existing `.claude/settings.json` contents.
+3. Render whatever `ManagedBlockPlan` CHUNK-10 returns in the diff-and-apply UX.
+
+If a user (or another tool) later writes their own `hooks` block at the top level of `.claude/settings.json`, Claude Code merges it with the managed one — that is Claude Code's own settings-merge behaviour, not CHUNK-13's concern.
 
 The generator picks `.sh` or `.ps1` based on `process.platform`. If the user opens the workspace on a different OS later they can re-run the installer; the diff UX will show the swap.
 
@@ -369,16 +409,17 @@ All paths are relative to the monorepo root (the `extension/` + `webview/` split
 | Path | Purpose | New / Modified |
 |------|---------|----------------|
 | `extension/src/diff/types.ts` | `DiffInput`, `DiffOutcome`, `FileVerdict`, `DiffNote` type definitions. Shared with `contracts/`. | new |
-| `extension/src/diff/picomatchAdapter.ts` | Thin wrapper over `picomatch`. Normalises paths to forward slashes, applies our flags (`dot: true`, `posixSlashes: true`, `nocase: false`), expands trailing-slash directory patterns to `pattern/**`. Single `isMatch(path, pattern)` export. | new |
+| `extension/src/diff/picomatchAdapter.ts` | Thin wrapper over `picomatch`. Normalises paths to forward slashes and applies our flags (`dot: true`, `posixSlashes: true`, `nocase: false`). Single `isMatch(path, pattern)` export. Trailing-slash directory shorthand (`dir/` → `dir/**`) is **no longer** the adapter's job — CHUNK-09 pre-normalises patterns at parse time (M16). | new |
 | `extension/src/diff/engine.ts` | The pure diff algorithm. `runDiff(input: DiffInput): DiffOutcome`. No I/O. Easily unit-testable. | new |
 | `extension/src/diff/index.ts` | Barrel export. | new |
-| `extension/src/diff/runForResult.ts` | Glue: takes a Result Memory id, loads the linked brief via CHUNK-09's parser, runs the engine, attaches the outcome to the Result Memory record via CHUNK-12's storage. Called from the result-capture pipeline and from a "Re-run diff" command. | new |
+| `extension/src/diff/runForResult.ts` | Glue: takes a Result Memory id, loads the linked brief via CHUNK-09's parser, runs the engine, hands the outcome to `diff/persist.ts` for persistence. Called from the result-capture pipeline and from a "Re-run diff" command. | new |
+| `extension/src/diff/persist.ts` | Small write-only module that persists a `DiffOutcome` via `MemoryStore.update(resultId, { payload: { ..., diffOutcome } })`. The optional `diffOutcome` slot lives on CHUNK-03's `ResultPayload` (NOT on a CHUNK-12 `ParsedResult` — that file does not exist). | new |
 | `extension/src/hooks/forbiddenPathsScript.ts` | Static template strings + version stamps for the POSIX and PowerShell hook scripts. Pure constants — no logic. The generator picks one and writes it verbatim. | new |
 | `extension/src/hooks/preToolUseGenerator.ts` | The hook installer. Picks platform, writes `.claude/hooks/deliveryos-forbidden-paths.sh` and/or `.ps1` (always writes both — registration picks one), then calls CHUNK-10's `managedBlock.ts` to upsert the registration block in `.claude/settings.json`. Returns a `HookInstallPlan` for the diff-and-apply UX. | new |
 | `extension/src/hooks/hookInstallPlan.ts` | `HookInstallPlan` type — list of file operations the installer is about to perform, with before/after diffs. The "Apply" button consumes this; the panel renders it. | new |
 | `extension/src/panels/diff-results/diffResultsHost.ts` | Host-side panel controller. Spawns the `deliveryos.diff-results` webview, wires the messenger (CHUNK-02 contract), serves the `DiffOutcome` for a selected result, accepts `applyHookInstall` and `openFile` messages. | new |
 | `extension/src/panels/diff-results/diffResultsCommand.ts` | Registers `deliveryos.diff.openForResult(resultId)`. Wired from the tree view item. | new |
-| `extension/src/diff/treeNodes.ts` | Adds the "Diff outcome — PASS / FAIL" child to each Result Memory tree item under VERIFY. Reads `ParsedResult.diffOutcome` to colour the icon and the label. | new |
+| `extension/src/diff/diffTreeContribution.ts` | Exports a `diffOutcomeChildBuilder(resultNode)` function imported by `extension/src/tree/stageTreeProvider.ts` (the canonical single tree-provider file declared by CHUNK-02). Adds the "Diff outcome — PASS / FAIL" child as a sub-node of each Result Memory tree item — Results live under EXECUTE per CHUNK-12, so the diff-outcome child inherits that placement (NOT under VERIFY). Reads `MemoryEntryOfType<'result'>.payload.diffOutcome` (CHUNK-03's `ResultPayload.diffOutcome`) to colour the icon and the label. | new |
 | `extension/src/diff/recompute.ts` | "Re-run diff" command — re-runs the engine if the engine version has bumped since the result was first diffed. | new |
 | `webview/src/panels/diff-results/main.tsx` | Vite entry for the diff-results webview. Mounts `<DiffResultsApp />`. | new |
 | `webview/src/panels/diff-results/DiffResultsApp.tsx` | Top-level component. Owns the messenger subscription, requests the `DiffOutcome` on mount, renders the banner, the three classification sections, and the hook-install tab. | new |
@@ -391,7 +432,7 @@ All paths are relative to the monorepo root (the `extension/` + `webview/` split
 | `contracts/src/index.ts` | Add `export * from './diff';`. | modified |
 | `extension/package.json` | Add `picomatch` dependency (small, no transitive deps that pull in native modules). Add `@types/picomatch` to devDependencies. Register the `deliveryos.diff.openForResult`, `deliveryos.diff.installClaudeHook`, and `deliveryos.diff.recompute` commands. | modified |
 | `extension/src/extension.ts` | Wire the new commands and the tree-node provider extension. | modified |
-| `extension/src/memory/parsedResult.ts` (CHUNK-12 file) | Add an optional `diffOutcome?: DiffOutcome` field. Storage is whatever CHUNK-12 chose; we add the field to its existing JSON shape. | modified |
+| `contracts/src/memory.ts` (CHUNK-03 file) | The optional `diffOutcome?: DiffOutcome` slot is **declared by CHUNK-03 on `ResultPayload`** (CHUNK-03 owns the canonical memory shapes). CHUNK-13 imports the type from there; CHUNK-13 does not modify this file. | (not modified by CHUNK-13) |
 | `extension/test/diff/engine.spec.ts` | Unit tests — see § 9. | new |
 | `extension/test/diff/picomatchAdapter.spec.ts` | Cross-OS path normalisation tests. | new |
 | `extension/test/hooks/preToolUseGenerator.spec.ts` | Tests the installer writes the right files, the platform branch is correct, and the managed-block plan diff matches expectations. | new |
@@ -411,9 +452,12 @@ These types are exported from `extension/src/diff/types.ts` and re-exported thro
 // extension/src/diff/types.ts
 
 export interface DiffInput {
+  /** Already-normalised patterns from CHUNK-09's parser. */
   allowedPatterns: string[];
   forbiddenPatterns: string[];
-  filesChanged: string[];
+  /** Structured shape from CHUNK-12. The engine flattens
+   *  `filesChanged.fromGit.map(c => c.path)` internally. */
+  filesChanged: FilesChangedList; // re-exported from CHUNK-12's contracts module
 }
 
 export type FileClassification =
@@ -487,7 +531,15 @@ export interface HookFileOp {
 }
 
 // ManagedBlockPlan comes from CHUNK-10's managedBlock.ts; do NOT redefine here.
-import type { ManagedBlockPlan } from '../hooks/managedBlock'; // CHUNK-10 path
+// Canonical path: extension/src/profiles/managedBlock.ts (CHUNK-10 owns it).
+// CHUNK-10 exports:
+//   export type ManagedBlockAction = 'create' | 'append-block' | 'replace-block' | 'noop';
+//   export interface ManagedBlockPlan {
+//     action: ManagedBlockAction;
+//     next: string;
+//     blockBody: string;
+//   }
+import type { ManagedBlockPlan } from '../profiles/managedBlock'; // CHUNK-10 path
 ```
 
 ### 5.3 Webview ↔ host messages
@@ -526,11 +578,11 @@ This is the contract between DeliveryOS-generated scripts and Claude Code itself
 
 The diff outcome is stored **on the existing Result Memory record**, not as a new memory type. Specifically:
 
-- CHUNK-12 defines `ParsedResult` (the Result Memory shape) with fields like `summary`, `filesChanged`, `testsRun`, `risks`, `rawText`, etc.
-- CHUNK-13 adds one optional field: `diffOutcome?: DiffOutcome`.
-- CHUNK-12's persistence layer (whatever it chose — `sql.js` row + JSON blob, per research finding #1) round-trips this field as part of the existing serialisation. No schema migration is required because the field is optional and additive.
+- CHUNK-03 defines the canonical `ResultPayload` shape (the payload of `MemoryEntryOfType<'result'>`).
+- The optional `diffOutcome?: DiffOutcome` slot is declared on `ResultPayload` by CHUNK-03 (not by CHUNK-12 and not by CHUNK-13).
+- CHUNK-13's `diff/persist.ts` writes the outcome via `MemoryStore.update(resultId, { payload: { ..., diffOutcome } })`. CHUNK-03's persistence layer (`sql.js` row + JSON-blob body per research finding #1) round-trips the field as part of the existing serialisation. No schema migration is required because the field is optional and additive.
 
-CHUNK-14 reads `parsedResult.diffOutcome` to gate the verification step ("you cannot mark this verified if there are forbidden touches").
+CHUNK-14 reads `result.payload.diffOutcome` to gate the verification step ("you cannot mark this verified if there are forbidden touches").
 
 ### What this chunk does NOT touch
 
@@ -660,15 +712,15 @@ A second entry point: a button "Install forbidden-paths hook" on the brief compo
 │   │ .claude/settings.json — proposed change                   │   │
 │   │                                                           │   │
 │   │   {                                                       │   │
-│   │     "// DELIVERYOS:BEGIN deliveryos-forbidden...": "",    │   │
-│   │ +   "hooks": {                                            │   │
-│   │ +     "PreToolUse": [                                     │   │
-│   │ +       { "matcher": "Edit|Write|MultiEdit",              │   │
-│   │ +         "hooks": [ { "type": "command",                 │   │
-│   │ +           "command": ".claude/hooks/...sh" } ] }        │   │
-│   │ +     ]                                                   │   │
-│   │ +   },                                                    │   │
-│   │     "// DELIVERYOS:END deliveryos-forbidden...": ""       │   │
+│   │     "deliveryos.managed": {                               │   │
+│   │ +     "hooks": {                                          │   │
+│   │ +       "PreToolUse": [                                   │   │
+│   │ +         { "matcher": "Edit|Write|MultiEdit",            │   │
+│   │ +           "hooks": [ { "type": "command",               │   │
+│   │ +             "command": ".claude/hooks/...sh" } ] }      │   │
+│   │ +       ]                                                 │   │
+│   │ +     }                                                   │   │
+│   │     }                                                     │   │
 │   │   }                                                       │   │
 │   └───────────────────────────────────────────────────────────┘   │
 │                                                                   │
@@ -690,6 +742,28 @@ If the user has edited the managed block by hand, CHUNK-10's `managedBlock.ts` i
 
 No write happens without an explicit "Apply" click after the user has seen the diff. Matches CHUNK-10's CLAUDE.md updater UX.
 
+### 9.5 Known limitation — hook glob is weaker than picomatch (M17)
+
+The brief composer (CHUNK-09) saves Forbidden patterns using the full **`picomatch`** grammar — `**` recursion, `{a,b}` brace expansion, character classes `[abc]`, leading `!` negation. The **post-hoc diff engine** honours all of that.
+
+The **real-time Claude Code PreToolUse hook scripts**, however, can only run inside the host shell (POSIX `case`, PowerShell `-like`). Both are strictly weaker than picomatch:
+
+| Construct                   | Post-hoc diff (picomatch) | Real-time hook (shell) |
+|-----------------------------|---------------------------|------------------------|
+| `*`, `?` single-segment     | Yes                       | Yes                    |
+| `**` recursive              | Yes                       | **Collapses to `*`** (single segment only) |
+| `{a,b}` brace expansion     | Yes                       | **Not supported** (treated literally) |
+| `[abc]` character classes   | Yes                       | Partial (POSIX only)   |
+| `!` negation                | Yes                       | **Not supported**      |
+
+A Forbidden pattern that exercises `**`, `{a,b}`, or `!` is enforced **post-hoc but NOT in real time**. The hook fails open on under-match and the post-hoc diff catches the violation after the fact — the harness has already written the file, but the verdict still surfaces as FAIL and CHUNK-14 still blocks the release.
+
+**UX requirement.** CHUNK-09's brief composer (which already validates Forbidden globs at save time) **warns** when a Forbidden pattern uses any construct the Claude Code PreToolUse hook cannot enforce in real time. Suggested copy:
+
+> "This pattern uses `**` (or `{a,b}`, or `!`), which the Claude Code PreToolUse hook cannot enforce in real time. The post-hoc diff will still catch a violation, but the harness may have already written the file. Consider rewriting as one or more single-segment globs for stronger real-time protection."
+
+This is **docs-only / UX-only** — the diff engine itself is unaffected, and the hook scripts above already silently collapse `**` → `*`. The warning sets the user's expectation correctly; the README captures the same caveat (CHUNK-16).
+
 ---
 
 ## 10. Step-by-step implementation outline
@@ -706,10 +780,11 @@ A suggested order for the 4–5 session-days.
 
 ### Day 2 — wire into Result Memory + tree
 
-- Add `diffOutcome?: DiffOutcome` to CHUNK-12's `ParsedResult`. Update its serialiser/deserialiser to round-trip the field.
-- Write `extension/src/diff/runForResult.ts` — load brief, run diff, attach to result, persist.
+- Confirm CHUNK-03's `ResultPayload` declares the optional `diffOutcome?: DiffOutcome` slot (CHUNK-03 owns this — CHUNK-13 does not edit `contracts/src/memory.ts`).
+- Write `extension/src/diff/runForResult.ts` — load brief, run diff, hand the outcome to `diff/persist.ts`.
+- Write `extension/src/diff/persist.ts` — single `persistDiffOutcome(resultId, outcome)` call that delegates to `MemoryStore.update(resultId, { payload: { ..., diffOutcome } })`.
 - Wire it into CHUNK-12's result-capture pipeline so every new result auto-diffs. Also expose `deliveryos.diff.recompute` for the "Re-run diff" button.
-- Write `extension/src/diff/treeNodes.ts` extending the VERIFY tree with the diff-outcome child.
+- Write `extension/src/diff/diffTreeContribution.ts` exporting `diffOutcomeChildBuilder(resultNode)`; `extension/src/tree/stageTreeProvider.ts` (CHUNK-02's canonical single tree-provider file) imports it to attach the diff-outcome child to each Result Memory tree item. Results live under EXECUTE per CHUNK-12, so the diff-outcome child inherits that placement (reads `payload.diffOutcome`).
 
 ### Day 3 — webview panel
 
@@ -724,7 +799,7 @@ A suggested order for the 4–5 session-days.
 ### Day 4 — hook generator (POSIX)
 
 - Write `extension/src/hooks/forbiddenPathsScript.ts` with the POSIX template string.
-- Write `extension/src/hooks/hookInstallPlan.ts` and `preToolUseGenerator.ts`. The generator consumes CHUNK-10's `managedBlock.ts` for the settings.json patch.
+- Write `extension/src/hooks/hookInstallPlan.ts` and `preToolUseGenerator.ts`. The generator consumes CHUNK-10's `applyManagedBlock(existing, body, 'json')` from `extension/src/profiles/managedBlock.ts` for the settings.json patch.
 - Build `webview/src/panels/diff-results/HookInstallTab.tsx`.
 - Manual end-to-end test on macOS / Linux:
   - Brief forbids `src/legacy/`.
@@ -753,14 +828,14 @@ The test plan combines fast unit tests, a `shellcheck` pass, and two end-to-end 
 
 | Test | Setup | Expected |
 |------|-------|----------|
-| Empty inputs | `{ allowed: [], forbidden: [], filesChanged: [] }` | `verdict: 'pass'`, no files. |
+| Empty inputs | `{ allowed: [], forbidden: [], filesChanged: { fromGit: [], fromHarness: [], gitAvailable: true } }` | `verdict: 'pass'`, no files. |
 | Pure allowed | allow `src/**`, change `src/a.ts` | `verdict: 'pass'`, classification `allowed-and-touched`. |
 | Pure forbidden | forbid `src/legacy/`, change `src/legacy/foo.ts` | `verdict: 'fail'`, classification `forbidden-but-touched`, matchedRule `src/legacy/`, matchedSection `8`. |
 | Forbidden wins over allowed | allow `src/**`, forbid `src/legacy/`, change `src/legacy/foo.ts` | `verdict: 'fail'`, matchedSection `8`. |
 | Unclassified | allow `src/**`, change `docs/readme.md` | `verdict: 'pass'`, classification `unclassified-but-touched`. |
 | Allowed but not touched | allow `tests/**`, change `src/a.ts` | `verdict: 'pass'`, `unmatchedAllowedPatterns: ['tests/**']`, plus an `unclassified-but-touched` entry. |
 | Negation | allow `src/**`, forbid `!src/safe.ts`, change `src/safe.ts` | Negation handling — see § 11.5. |
-| Trailing-slash directory | forbid `node_modules/`, change `node_modules/foo/bar.js` | Block. |
+| Pre-normalised directory glob | forbid `node_modules/**` (the post-CHUNK-09-parse form of the trailing-slash shorthand), change `node_modules/foo/bar.js` | Block. The engine never sees the raw `node_modules/` form — that normalisation lives in CHUNK-09. |
 | Exact-path match | forbid `package.json`, change `package.json` | Block. |
 | Windows-style input | change `src\\legacy\\foo.ts` (backslash) | Normalised to forward slash before matching; block triggers. |
 | Stable ordering | identical inputs run twice | Identical outputs (no Map iteration determinism issues). |
@@ -832,7 +907,7 @@ The negation marker is documented in CHUNK-09's brief schema; this chunk's only 
 On a Windows host:
 
 1. Brief forbids `src/legacy/`.
-2. Trigger a result with `filesChanged: ['src\\legacy\\foo.ts']` (Git on Windows still reports forward slashes, but defensively test both — see CHUNK-12's normalisation).
+2. Trigger a result whose `filesChanged.fromGit` contains `[{ path: 'src\\legacy\\foo.ts', status: 'modified' }]` (matches CHUNK-12's canonical `GitFileChange.status` union — full-word strings, not single letters; Git on Windows still reports forward slashes, but defensively test both — see CHUNK-12's normalisation).
 3. **Expected:** the diff engine still flags it (the adapter normalises before matching).
 
 ### 11.9 Hook-escape test
@@ -856,7 +931,7 @@ Run the generated `.sh` against a benign target (`src/safe.ts`). **Expected:** n
 
 `picomatch` is well-tested on Windows (forward-slash internal model, backslash inputs normalised). Risk is residual: case sensitivity differs (HFS+ case-insensitive, ext4 case-sensitive, NTFS configurable). MVP picks `nocase: false` — the deterministic Linux-style behaviour — and surfaces an info note in the diff panel if it detects a Windows host running case-insensitive matches that would have produced different results. Defer fancy detection to v2.
 
-The POSIX shell `case` glob inside the hook script is strictly weaker than picomatch (no `**` recursion, no negation). Mitigation: expand trailing `/` to `/**`, then rewrite `**` to `*` for the `case` matcher (one-segment glob). For deep recursive patterns the hook will under-match — i.e. some forbidden touches will get through the hook, fall to the harness, and get caught by the post-hoc diff. That's acceptable: the hook is a **first line of defence**, not a **complete** defence. CHUNK-14 verification still gates release. **Document this gap in the README and in the explainer copy on the Hook Install tab.**
+The POSIX shell `case` glob inside the hook script is strictly weaker than picomatch (no `**` recursion, no negation, no brace expansion). Trailing-slash shorthand is normalised by CHUNK-09 at parse time (M16) — the hook script does not see it. For everything else, the hook rewrites `**` to `*` (single-segment match) and treats `{a,b}` / `!` literally. The detailed gap table lives in § 9.5 (Known limitation). For deep recursive patterns the hook will under-match — i.e. some forbidden touches will get through the hook, fall to the harness, and get caught by the post-hoc diff. That's acceptable: the hook is a **first line of defence**, not a **complete** defence. CHUNK-14 verification still gates release. **Documented in § 9.5, in the brief composer warning copy (CHUNK-09), and in the README (CHUNK-16).**
 
 ### Hook script exploitability if the brief contains shell metacharacters
 
@@ -869,14 +944,11 @@ Mitigated by:
 
 Residual risk: if someone tampers with `.deliveryos-handoff/current-execution-brief.md` directly (outside DeliveryOS), they could potentially write a pattern that exploits a yet-unknown corner of POSIX shell glob. Mitigation is the workspace-trust gate (CHUNK-01 sets `untrustedWorkspaces.supported: false`); the threat model assumes the workspace is trusted.
 
-### `.claude/settings.json` JSON-comment convention
+### `.claude/settings.json` managed-block convention
 
-`.claude/settings.json` is JSON, not JSONC. CHUNK-10's `managedBlock.ts` owns the decision of how to delimit a managed block in pure JSON. Two known options:
+`.claude/settings.json` is JSON, not JSONC. CHUNK-10 (the canonical owner of managed-block syntax) chose a **single sentinel-key** convention: a top-level key `"deliveryos.managed"` whose object value contains every DeliveryOS-managed sub-tree (profile metadata, hooks, etc.). CHUNK-10 § 5.3 stubbed `deliveryos.managed.hooks` as the hook-registration path; CHUNK-13 writes into exactly that slot via `applyManagedBlock(existing, body, 'json')`.
 
-1. **Sentinel keys**: top-level keys named `"// DELIVERYOS:BEGIN <id>"` and `"// DELIVERYOS:END <id>"` with empty-string values. Valid JSON, ignored by Claude Code, surveyable by a regex scan. This is the assumed choice.
-2. **jsonc parser fallback**: if Claude Code happens to accept `//` comments (it might — many "JSON" config readers do), use them. **Do not rely on this without confirming.**
-
-CHUNK-13 calls `managedBlock.ts` and renders whatever plan it returns. If CHUNK-10's choice changes, this chunk needs no changes.
+CHUNK-13 does **not** define its own managed-block primitives, **does not** use HTML-comment-style markers (`<!-- DELIVERYOS:BEGIN ... -->`), and **does not** use the older BEGIN/END string-key form (`"// DELIVERYOS:BEGIN <id>"` / `"// DELIVERYOS:END <id>"`) — those were removed in Prompt 4 to reconcile with CHUNK-10 (audit finding B01). If CHUNK-10's syntax ever changes, this chunk follows without any local edits.
 
 ### Codex has no equivalent enforcement
 
@@ -905,13 +977,13 @@ If we change the diff algorithm post-release (engineVersion 1 → 2), existing R
 - **CHUNK-02** — webview shell + messenger contract. The diff-results panel and hook-install tab plug into the existing messenger pattern.
 - **CHUNK-03** — memory persistence. The `DiffOutcome` rides on Result Memory's existing storage.
 - **CHUNK-09** — `briefMarkdown.ts` parser exposes parsed Section 7 + Section 8 bullet arrays. Brief Section 8 must be a markdown bullet list; the parser handles `-`, `*`, leading whitespace, trailing whitespace, and backtick-wrapped patterns.
-- **CHUNK-10** — Harness Profile schema (we read `profile.name === 'claude-code'` to decide whether to enable the hook tab) AND `managedBlock.ts` (we hand it the proposed block + key, it returns a `ManagedBlockPlan` we render and apply).
+- **CHUNK-10** — Harness Profile schema (we read `profile.name === 'claude-code'` to decide whether to enable the hook tab) AND `extension/src/profiles/managedBlock.ts` (we call `applyManagedBlock(existing, body, 'json')`; it returns a `ManagedBlockPlan` — `{ action, next, blockBody }` — that we render and apply). CHUNK-13 writes hook content into `deliveryos.managed.hooks` per CHUNK-10 § 5.3.
 - **CHUNK-11** — handoff directory constants (`.deliveryos-handoff/current-execution-brief.md` path). The hook script's brief path matches.
-- **CHUNK-12** — `ParsedResult.filesChanged` populated from `git diff --name-only HEAD`. The diff engine consumes this verbatim.
+- **CHUNK-12** — `ResultPayload.filesChanged` (the canonical `FilesChangedList { fromGit, fromHarness, gitAvailable }` shape) populated from `git diff --name-only HEAD`. The diff engine flattens `fromGit.map(c => c.path)` internally.
 
 ### Downstream (this chunk exposes)
 
-- **CHUNK-14** — verification reads `parsedResult.diffOutcome.verdict` to gate the "Mark verified" action. A FAIL outcome should require an explicit "override" with a justification recorded into Verification Memory (CHUNK-14 owns that policy).
+- **CHUNK-14** — verification reads `result.payload.diffOutcome.verdict` to gate the "Mark verified" action. A FAIL outcome should require an explicit "override" with a justification recorded into Verification Memory (CHUNK-14 owns that policy).
 - **CHUNK-15** — Bug Triage demo. The scripted demo deliberately produces a forbidden touch to showcase both the real-time block (Claude Code) and the post-hoc diff (Codex). Demo seed brief lives under `examples/`.
 - **CHUNK-16** — README, essay, GitHub Release. The PreToolUse hook + `--dangerously-skip-permissions` story is the lead anecdote.
 
@@ -921,20 +993,20 @@ If we change the diff algorithm post-release (engineVersion 1 → 2), existing R
 - Webview message contract style → CHUNK-02.
 - Execution Brief markdown schema → CHUNK-09.
 - Harness Profile schema → CHUNK-10.
-- Managed delimiter block syntax (`<!-- DELIVERYOS:BEGIN --> ... <!-- DELIVERYOS:END -->` for markdown, sentinel-keys for JSON) → CHUNK-10.
+- Managed-block syntax (`<!-- DELIVERYOS:BEGIN ... -->` markers for markdown, single sentinel key `"deliveryos.managed": { ... }` for JSON) → CHUNK-10. CHUNK-13 consumes `applyManagedBlock(existing, body, 'json')` only.
 - Handoff directory layout → CHUNK-11.
-- `ParsedResult` shape → CHUNK-12; we add only an optional `diffOutcome` field.
+- `ResultPayload` shape → CHUNK-03; the optional `diffOutcome` slot is declared by CHUNK-03 (M05 reconciliation), not added by CHUNK-13.
 
 ---
 
-## Appendix A — Quick reference: the three classifications
+## Appendix A — Quick reference: the four diff-outcome classes
 
 | Classification              | Triggered by                                              | Counts toward FAIL? | Default panel state |
 |-----------------------------|-----------------------------------------------------------|---------------------|---------------------|
 | `allowed-and-touched`       | path matches an allowed pattern, no forbidden match       | no                  | collapsed           |
+| `allowed-but-not-touched`   | *per-pattern* — an allowed bullet for which no file matched | no (info only)    | collapsed           |
 | `forbidden-but-touched`     | path matches a forbidden pattern (overrides allowed)      | **yes**             | expanded            |
-| `unclassified-but-touched`  | path matches neither allowed nor forbidden                | no (info only)      | collapsed           |
-| (`allowed-but-not-touched`) | per-pattern, not per-file — no file matched this pattern  | no (info only)      | collapsed           |
+| `unclassified-but-touched`  | path matches neither allowed nor forbidden                | no (warn, fail-open) | collapsed           |
 
 ---
 

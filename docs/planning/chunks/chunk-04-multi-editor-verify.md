@@ -14,11 +14,11 @@
 
 ### Goal
 
-Prove that the DeliveryOS `.vsix` produced by CHUNK-01 (with the webview from CHUNK-02 and the memory store from CHUNK-03 already wired in) installs and runs cleanly on at least **three** of the five target editors. Ship a cross-platform install script that detects installed editors and installs into each. Set up GitHub Releases so that `git tag vX.Y.Z && git push --tags` produces a downloadable `.vsix` with a published SHA-256 hash. Wire an in-extension version check that notifies the user when a newer release exists.
+Prove that the DeliveryOS `.vsix` produced by CHUNK-01 (with the webview from CHUNK-02 and the memory store from CHUNK-03 already wired in) installs and runs cleanly on **VS Code AND Cursor (both REQUIRED) plus at least one of {Windsurf, VSCodium, Antigravity}**. Ship a cross-platform install script that detects installed editors and installs into each. Set up GitHub Releases so that `git tag vX.Y.Z && git push --tags` produces a downloadable `.vsix` with a published SHA-256 hash. Wire an in-extension version check that notifies the user when a newer release exists.
 
 ### In scope
 
-- Manual sideload smoke-test of the existing `.vsix` into **at least three** of {VS Code, Cursor, Windsurf, VSCodium, Antigravity} on the developer's primary OS (macOS — Linux/Windows are nice-to-haves), confirming:
+- Manual sideload smoke-test of the existing `.vsix` into **VS Code AND Cursor (both REQUIRED) plus at least one of {Windsurf, VSCodium, Antigravity}** on the developer's primary OS (macOS — Linux/Windows are nice-to-haves), confirming:
   - The DeliveryOS activity-bar icon appears.
   - The "Hello DeliveryOS" webview from CHUNK-02 renders without CSP errors.
   - The memory store from CHUNK-03 writes `.deliveryos/memory.sqlite` and persists a project record across editor restarts.
@@ -36,7 +36,7 @@ Prove that the DeliveryOS `.vsix` produced by CHUNK-01 (with the webview from CH
 - **Auto-install of the new VSIX.** The version check notifies only; the user reinstalls manually. No background download, no silent reinstall.
 - **Marketplace listing.** Microsoft's marketplace is restricted to first-party VS Code; explicitly rejected in ADR-0001.
 - **Windows-first install testing.** Windows install script is shipped but verified opportunistically; macOS is the primary verification path for v0.0.1.
-- **Antigravity-required.** Antigravity counts as a bonus editor if its CLI is locatable; the "at least three" bar is met by VS Code + Cursor + (Windsurf OR VSCodium).
+- **Antigravity-required.** Antigravity counts as a bonus editor if its CLI is locatable; the canonical bar is **VS Code + Cursor REQUIRED, plus one of {Windsurf, VSCodium, Antigravity}** — typically Windsurf OR VSCodium.
 - **New cross-chunk schemas.** This chunk consumes CHUNK-01/-02/-03 outputs and introduces no shared contracts of its own.
 
 ---
@@ -53,7 +53,7 @@ All five editors share the VS Code extension API surface (per ADR-0001) and acce
 | VSCodium     | `codium`         | `codium --install-extension <path-to-vsix> --force`       | `/Applications/VSCodium.app/Contents/Resources/app/bin/codium` | Open-source build of Code-OSS; useful for signature-verification baseline. |
 | Antigravity  | `antigravity`    | `antigravity --install-extension <path-to-vsix> --force`  | unknown (may need binary-path probing)                          | If CLI not locatable, document manual "Install from VSIX" GUI flow.   |
 
-**Done bar:** at least three of the five must install + activate + render the webview + persist memory. The chosen three should be **VS Code + Cursor + (Windsurf or VSCodium)** to cover both the Microsoft-distributed and open-source-rebuild lineages.
+**Done bar:** **VS Code AND Cursor are both REQUIRED.** In addition, at least one of {Windsurf, VSCodium, Antigravity} must install + activate + render the webview + persist memory. This canonicalises the Phase 0 boundary state per BUILD-PLAN / `part-1-plan.md` ("Installed in VS Code AND Cursor from the same file") — a smoke run that covers VS Code + Windsurf + VSCodium but skips Cursor does NOT pass. Cover both the Microsoft-distributed and open-source-rebuild lineages by picking Windsurf or VSCodium as the third editor.
 
 ---
 
@@ -95,8 +95,10 @@ All five editors share the VS Code extension API surface (per ADR-0001) and acce
   3. `npm ci` (workspace install — picks up `extension/`, `webview/`, `contracts/` per CHUNK-02's monorepo).
   4. `npm run build` (transitive build of all workspaces).
   5. `npx @vscode/vsce package --no-yarn --out deliveryos-${GITHUB_REF_NAME#v}.vsix` (run from `extension/` workspace).
-  6. `sha256sum deliveryos-*.vsix > deliveryos-*.vsix.sha256` and capture the hex digest into a `$GITHUB_OUTPUT` variable.
-  7. `gh release create "$GITHUB_REF_NAME" deliveryos-*.vsix deliveryos-*.vsix.sha256 --title "DeliveryOS $GITHUB_REF_NAME" --notes "$(printf 'See README for install instructions.\n\n**SHA-256:** `%s`\n' "$DIGEST")"` (uses the `GITHUB_TOKEN` provided by `permissions: contents: write`).
+  6. Compute `SHA256SUMS.txt` covering **every** binary asset that will be attached to the release: the `.vsix`, `scripts/install.sh`, `scripts/install.ps1`, and `demo.mp4` if present at the repo root. Use `sha256sum deliveryos-*.vsix scripts/install.sh scripts/install.ps1 $(test -f demo.mp4 && echo demo.mp4) > SHA256SUMS.txt`.
+  7. `gh release create "$GITHUB_REF_NAME" deliveryos-*.vsix scripts/install.sh scripts/install.ps1 SHA256SUMS.txt $(test -f demo.mp4 && echo demo.mp4) --title "DeliveryOS $GITHUB_REF_NAME" --notes-file RELEASE_NOTES.md` (uses the `GITHUB_TOKEN` provided by `permissions: contents: write`).
+- **Release-notes contract.** The workflow consumes `RELEASE_NOTES.md` from the repo root via `--notes-file`. This file is **authored and committed BEFORE tagging** — CHUNK-16 owns the file's content (see CHUNK-16's outline step "Author RELEASE_NOTES.md → commit → then tag v0.1.0"). Earlier `v0.0.X` tags may either commit a minimal `RELEASE_NOTES.md` (one paragraph) or the workflow can fall back to a small inline default if the file is missing — CHUNK-16 sets the canonical pattern.
+- **Attached assets contract.** Every release attaches: (a) `deliveryos-<version>.vsix`, (b) `scripts/install.sh`, (c) `scripts/install.ps1`, (d) `SHA256SUMS.txt` (covering all binary assets including the `.vsix` and install scripts; plus `demo.mp4` when present), and (e) `demo.mp4` if it exists at the repo root (CHUNK-16 owns this file from the v0.1.0 release onward).
 - No matrix; single Linux runner is sufficient (the `.vsix` is platform-neutral).
 - No publish to Marketplace / OpenVSX (explicitly out of scope per ADR-0001).
 
@@ -200,14 +202,13 @@ The PowerShell script mirrors these exit codes via `$LASTEXITCODE` / `exit <n>`.
 
 ### 5.3 SHA-256 publication
 
-- `sha256sum deliveryos-*.vsix | tee deliveryos-*.vsix.sha256 | awk '{print $1}' > digest.txt`.
-- Read into a workflow variable: `DIGEST=$(cat digest.txt)`.
-- Both the raw `.sha256` sidecar file AND the digest embedded in the release notes body are uploaded. Users can pick whichever verification path they prefer.
+- `sha256sum deliveryos-*.vsix scripts/install.sh scripts/install.ps1 $(test -f demo.mp4 && echo demo.mp4) > SHA256SUMS.txt`. A single `SHA256SUMS.txt` covers every binary asset attached to the release. Users verify with `shasum -a 256 -c SHA256SUMS.txt` on the downloaded set.
+- `SHA256SUMS.txt` is uploaded as a release asset alongside the binary attachments. The release notes body comes from `RELEASE_NOTES.md` (M14) and may also include the digest line for the `.vsix` for convenience — but the canonical machine-verifiable artefact is `SHA256SUMS.txt`.
 
 ### 5.4 Release creation
 
 - Uses the `gh` CLI (pre-installed on `ubuntu-latest`) authenticated via the workflow's `GITHUB_TOKEN`.
-- Release notes body template (HEREDOC):
+- Release notes body is read **from `RELEASE_NOTES.md` at the repo root** via `gh release create --notes-file RELEASE_NOTES.md`. The file is authored and committed before the tag is pushed; CHUNK-16 owns the v0.1.0 content. Sample skeleton for any release (CHUNK-16 expands for v0.1.0):
 
   ```markdown
   ## DeliveryOS v{VERSION}
@@ -229,11 +230,11 @@ The PowerShell script mirrors these exit codes via `$LASTEXITCODE` / `exit <n>`.
   ### Verify
 
   ```sh
-  echo "{DIGEST}  deliveryos-{VERSION}.vsix" | shasum -a 256 -c
+  shasum -a 256 -c SHA256SUMS.txt
   ```
   ```
 
-  Token substitution happens in the workflow step; the README's static install section duplicates the verify pattern (§8).
+  The workflow does NOT substitute tokens into the notes file (the notes-file flow is verbatim). The README's static install section duplicates the verify pattern (§8).
 
 ### 5.5 Failure modes
 
@@ -438,7 +439,9 @@ For **each of at least three** editors in {VS Code, Cursor, Windsurf, VSCodium, 
 5. Run `deliveryos.project.create`, give a project name. The Intent Memory entry from CHUNK-03 must be written. Confirm `<workspace>/.deliveryos/memory.sqlite` exists and `<workspace>/.deliveryos/memory/intent/<id>.md` exists with the raw idea text.
 6. Close the editor. Reopen it. Tree view must show the project.
 
-**Pass condition.** All six steps pass in at least three editors. Record which three in the test log (commit message or a `docs/planning/chunks/chunk-04-test-results.md` if useful, but not required as a deliverable).
+7. **Signature-verification observation.** Record, per editor, whether any signature-verification warning surfaced during install (per PRD § 25.1; research finding #3 expects none, but the canary lives here). One line in the test log per editor, e.g. `code: no warning`, `cursor: no warning`, `windsurf: warning — "publisher not verified" dialog, dismissed`. This row is mandatory output of the smoke test even when no warnings appear.
+
+**Pass condition.** All six functional steps pass in **VS Code, Cursor, and at least one of {Windsurf, VSCodium, Antigravity}**. VS Code + Cursor are REQUIRED (B04). Record which three (or more) editors were tested AND a single-line signature-verification observation per editor in the test log (commit message or a `docs/planning/chunks/chunk-04-test-results.md` if useful, but not required as a deliverable).
 
 ### 11.2 Install script behaviour
 
@@ -533,10 +536,11 @@ This chunk introduces **no new shared contracts**.
 
 This chunk is done when **all** of the following are true:
 
-- [ ] The `.vsix` installs and runs (activity bar visible, hello webview renders, memory persists) in **at least three** of {VS Code, Cursor, Windsurf, VSCodium, Antigravity}.
+- [ ] The `.vsix` installs and runs (activity bar visible, hello webview renders, memory persists) in **VS Code AND Cursor (both REQUIRED) plus at least one of {Windsurf, VSCodium, Antigravity}**. A run that covers three editors but skips Cursor does NOT pass (per B04).
+- [ ] The signature-verification observation row is recorded per tested editor in the smoke-test log (per m04 / PRD § 25.1), regardless of whether a warning surfaced.
 - [ ] `scripts/install.sh` installs into every detected editor on macOS, returning the documented exit codes. (Linux verified opportunistically.)
 - [ ] `scripts/install.ps1` exists with parity behaviour; Windows verification opportunistic.
-- [ ] `.github/workflows/release.yml` triggers on `v*` tag push, runs `vsce package`, creates a GitHub Release with `.vsix` + `.sha256` sidecar attached, and embeds the SHA-256 in the release notes.
+- [ ] `.github/workflows/release.yml` triggers on `v*` tag push, runs `vsce package`, reads release notes from `RELEASE_NOTES.md` at the repo root via `gh release create --notes-file`, and creates a GitHub Release with the following attached: `deliveryos-<version>.vsix`, `scripts/install.sh`, `scripts/install.ps1`, `SHA256SUMS.txt` (covering all binary assets), and `demo.mp4` if present at the repo root. (CHUNK-16 owns the v0.1.0 `RELEASE_NOTES.md` content and `demo.mp4`.)
 - [ ] `git tag v0.0.1 && git push --tags` produces a working public release artefact.
 - [ ] The in-extension version check fires a notification when run against a newer release (verified by tagging v0.0.2 with a previous v0.0.1 install).
 - [ ] The `deliveryos.checkForUpdates` setting is contributed and respected.

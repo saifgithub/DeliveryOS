@@ -393,6 +393,11 @@ And a row in `memory_links`:
 from_id="REQ-002", to_id="TS-REQ-002", kind="has-test-spec"
 ```
 
+**Canonical link-kind contract (M02):**
+
+- **Requirement → TestSpec** uses `kind: 'has-test-spec'` (canonical). CHUNK-08 owns this edge.
+- **Verification → Requirement** uses `kind: 'verifies'` (CHUNK-03 `LINK_KINDS`; reserved for VERIFY-stage edges; written by CHUNK-14). It is NOT used by CHUNK-08 for Requirement → TestSpec — earlier drafts of CHUNK-07 mis-attributed the Requirement → TestSpec edge to `'verifies'`; that is corrected. **One kind per edge:** Requirement → TestSpec is `'has-test-spec'`; Verification → TestSpec (a separate edge owned by CHUNK-14) is `'evaluates'`.
+
 ### Markdown body location
 
 ```
@@ -405,11 +410,11 @@ The body is the AI's raw markdown response (the same string stored in `TestSpec.
 
 ## 6. Decision: Test Specification is its **own memory type**, not a subtype of Verification Memory
 
-Part-1-plan defers this call to CHUNK-08. The recommended path in the parent plan is **own type**, and this spec adopts it.
+Part-1-plan defers this call to CHUNK-08. The recommended path in the parent plan is **own type**, and this spec adopts it. **Resolved canonically in Phase A Prompt 4 (m03):** CHUNK-03's `MEMORY_TYPES` tuple now declares `'test-spec'` as its **9th** entry. CHUNK-08 references `'test-spec'` from CHUNK-03's canonical tuple — it does NOT redeclare.
 
 ### Decision
 
-`test-spec` is the **ninth** memory type. Verification Memory remains as defined in `architecture/memory-layers.md` §7 and is populated in CHUNK-14 (the post-execution verification verdict).
+`test-spec` is the **ninth** memory type, declared in CHUNK-03's `MEMORY_TYPES`. Verification Memory remains as defined in `architecture/memory-layers.md` §7 and is populated in CHUNK-14 (the post-execution verification verdict).
 
 ### Rationale
 

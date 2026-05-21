@@ -81,7 +81,8 @@ The cost of npm is the duplicated `node_modules` if a dep is on the boundary of 
 │   │   ├── serializers/
 │   │   │   └── helloPanelSerializer.ts  WebviewPanelSerializer for hello
 │   │   └── tree/
-│   │       └── stagesTree.ts            (existing from CHUNK-01)
+│   │       └── stageTreeProvider.ts     RENAMED from CHUNK-01 `src/stages/stageTreeProvider.ts`
+│   │                                    (see § 3.5 "Files renamed from CHUNK-01" below)
 │   ├── resources/                       icons etc. (existing)
 │   └── dist/                            tsc output (gitignored)
 ├── webview/                             NEW package: Vite + React + Tailwind app(s)
@@ -948,7 +949,7 @@ import { registerOpenHelloCommand } from "./commands/openHello";
 import { HostMessenger } from "./webview/messenger";
 import { helloPanelSerializer } from "./serializers/helloPanelSerializer";
 import { HELLO_VIEW_TYPE } from "./webview/helloPanel";
-// …existing CHUNK-01 imports: stagesTree, projectCreate…
+// …existing CHUNK-01 imports: stageTreeProvider, projectCreate…
 
 export function activate(context: vscode.ExtensionContext): void {
   const host = new HostMessenger();
@@ -970,6 +971,23 @@ export function deactivate(): void {
 ```
 
 ---
+
+### 3.5 Files renamed from CHUNK-01 (canonical post-monorepo paths)
+
+This chunk's package split is the moment we lock the canonical post-monorepo paths for every file CHUNK-01 created at the repo root. Every later chunk references these paths, never CHUNK-01's pre-monorepo ones.
+
+| CHUNK-01 path (pre-monorepo) | CHUNK-02 path (canonical, post-monorepo) | Owner | Notes |
+|---|---|---|---|
+| `src/extension.ts` | `extension/src/extension.ts` | this chunk | Updated to wire the host messenger + serializer; same `activate` / `deactivate` shape. |
+| `src/projectRegistry.ts` | `extension/src/projectRegistry.ts` | this chunk (moved); CHUNK-03 replaces internals with persisted impl | Interface (`IProjectRegistry`) stable across the move. |
+| `src/stages/stageDefinitions.ts` | `extension/src/tree/stageDefinitions.ts` | this chunk | Constants only; no API change. |
+| `src/stages/stageTreeProvider.ts` | `extension/src/tree/stageTreeProvider.ts` | this chunk | **Canonical tree-provider file.** All later chunks (CHUNK-05, 06, 07, 08, 09, 11, 12, 14) contribute child-builder functions into this single file. |
+| `src/stages/stageTreeNodes.ts` | `extension/src/tree/stageTreeNodes.ts` | this chunk | Discriminated-union types for `StageNode \| ArtefactNode`. Later chunks extend the union here. |
+| `src/commands/projectCreate.ts` | `extension/src/commands/projectCreate.ts` | this chunk | Same handler, new path. |
+| `src/commands/stagesRefresh.ts` | `extension/src/commands/stagesRefresh.ts` | this chunk | Same handler, new path. |
+| `src/contextKeys.ts` | `extension/src/contextKeys.ts` | this chunk | Constants. |
+
+**No separate `executeTreeProvider.ts` file.** All stage children — Discover artefacts (CHUNK-05), Define artefacts (CHUNK-06 / 07 / 08 / 09), Execute artefacts (CHUNK-11 / 12), Verify artefacts (CHUNK-14) — live in functions inside `extension/src/tree/stageTreeProvider.ts`. The provider's `getChildren(element)` dispatches by `element.stageId` to a small set of child-builder functions colocated in the same file. This resolves the M03 ownership drift: there is one file, one owner per child branch, and no fan-out across `executeTreeProvider.ts` / `verifyTreeProvider.ts` / etc.
 
 ### 3.4 Root + tooling
 

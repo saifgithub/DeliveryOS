@@ -21,7 +21,7 @@ Take the approved PRD produced by CHUNK-06 and decompose it — in manual prompt
 - A **Paste-decomposed** flow:
   - Long-text input where the user pastes the AI's response.
   - Parser tries JSON first; falls back to markdown-table; if both fail, surfaces the raw text in an "Add manually" editor.
-  - On successful parse, creates one Requirement Memory entry per row, each linked to the PRD via `memory_links(kind: "derived-from")`.
+  - On successful parse, creates one Requirement Memory entry per row, each linked to the PRD via `memory_links(kind: "derives-from")` (canonical per CHUNK-03's `LINK_KINDS`; M02). The PRD entry is a `type='requirement'` row with `payload.kind === 'prd'` (canonical per B05; not a separate `'prd'` memory type).
 - A **Requirements catalogue webview** (`deliveryos.openRequirements`):
   - Table with columns: ID, Title, Type, Priority, Source PRD section, Verification status.
   - Filter by Type / Priority / Verification status. Sort by any column.
@@ -149,7 +149,7 @@ New file. A standalone panel — opened as its own webview instance, not embedde
 
 ### Tree-view changes (no new file)
 
-Owned by CHUNK-01's existing `extension/src/tree/projectTree.ts` (the static stage tree from Week 1). This chunk extends it:
+Owned by `extension/src/tree/stageTreeProvider.ts` (the canonical single tree-provider file declared by CHUNK-02 — renamed from CHUNK-01's pre-monorepo `src/stages/stageTreeProvider.ts`). This chunk extends it:
 
 - The DEFINE node gains two children: existing "Draft PRD" (CHUNK-06) plus the new "Requirements" group.
 - The "Requirements" group lazy-loads children by calling `memoryStore.list("requirement")` and filtering to entries whose `payload_json.kind === "requirement-item"` (the parent PRD has `kind === "prd"` — see §4).
@@ -278,10 +278,10 @@ Notes:
 }
 
 // memory_links
-{ "from_id": "req-7c1f…", "to_id": "prd-9a02…", "kind": "derived-from" }
+{ "from_id": "req-7c1f…", "to_id": "prd-9a02…", "kind": "derives-from" }
 ```
 
-The `"derived-from"` link kind is introduced by CHUNK-07. It joins the existing link kinds CHUNK-03 ships (which CHUNK-03 leaves as a free-text `kind TEXT` column, by design).
+The `"derives-from"` link kind is **canonical per CHUNK-03's `LINK_KINDS`** (hyphenated, present tense — M02). CHUNK-07 uses it verbatim; earlier drafts of this spec referred to `'derived-from'` (past tense). One spelling project-wide: **`derives-from`**. The PRD endpoint of this link is the `type='requirement'` row whose `payload.kind === 'prd'` (B05; there is no separate `'prd'` memory type).
 
 ### Markdown body
 
@@ -432,7 +432,7 @@ Pre-condition: a project from CHUNK-01 exists with a PRD persisted by CHUNK-06.
 15. Close VS Code. Reopen. Catalogue still shows N rows; the renamed one persisted.
 16. Repeat step 6 with a deliberately broken paste (random text). Confirm the parse-failure manual-add editor appears and lets the user add a row by hand.
 17. Repeat step 6 with a markdown-table response instead of JSON. Confirm it parses.
-18. Open `.deliveryos/memory.sqlite` with the `sqlite3` CLI. Confirm N rows with `type='requirement'` and `payload_json` containing `"kind":"requirement-item"`. Confirm N `memory_links` rows with `kind='derived-from'`.
+18. Open `.deliveryos/memory.sqlite` with the `sqlite3` CLI. Confirm N rows with `type='requirement'` and `payload_json` containing `"kind":"requirement-item"`. Confirm N `memory_links` rows with `kind='derives-from'` (canonical hyphenation per M02).
 19. Inspect `.deliveryos/memory/requirement/` — N new markdown files exist plus the PRD's existing one.
 20. Open the webview devtools (`Developer: Open Webview Developer Tools`) — confirm zero CSP violations.
 
@@ -473,7 +473,7 @@ The AI sometimes invents IDs (`REQ-1`, `R1`, `FR-001`). Resolution: parser drops
 ### Open questions (flag for Prompt 3 audit)
 
 - **Is `payload_json.kind` the right discriminator** for separating PRD vs requirement entries inside the same `type='requirement'` bucket, or should CHUNK-03 introduce a sub-type column? Recommendation: keep it in payload for now (zero schema change required) and revisit in Prompt 3 if the cohesion check shows other chunks need the same pattern.
-- **`derived-from` link kind naming** — is it consistent with what CHUNK-09 wants for "execution-brief derives from requirement"? Worth a Prompt-3 sanity check on link-kind vocabulary across chunks.
+- **~~`derived-from` link kind naming~~** — RESOLVED in Phase A Prompt 4: the canonical spelling is **`derives-from`** (CHUNK-03 `LINK_KINDS`). Every consumer uses this spelling; no `derived-from` literal remains anywhere.
 - **PRD section list** — the detail dropdown needs a list of section headings. Best source is CHUNK-06's section-based PRD editor, which already knows them. Confirm with CHUNK-06 spec in Prompt 3 that the section list is exposed (e.g., `payload_json.sections: string[]`).
 
 ---
@@ -489,7 +489,7 @@ The AI sometimes invents IDs (`REQ-1`, `R1`, `FR-001`). Resolution: parser drops
 
 ### Outbound (this chunk produces, consumed by later chunks)
 
-- **CHUNK-08 (Test Designer)** — reads the requirement entries this chunk writes; mutates `verificationStatus` from `"empty"` to `"draft"` or `"approved"`; creates linked Test Spec entries with `kind = "verifies"` (CHUNK-08's link kind).
+- **CHUNK-08 (Test Designer)** — reads the requirement entries this chunk writes; mutates `verificationStatus` from `"empty"` to `"draft"` or `"approved"`; creates linked Test Spec entries with `kind = "has-test-spec"` (the canonical Requirement → TestSpec edge per CHUNK-08 / M02). The `'verifies'` kind is reserved for Verification → Requirement (per CHUNK-03 `LINK_KINDS`) and is NOT written here.
 - **CHUNK-09 (Execution Brief composer)** — iterates over approved requirements; pulls their text, source PRD section, and the test specs CHUNK-08 attached.
 
 ### Shared-contract obligations honoured

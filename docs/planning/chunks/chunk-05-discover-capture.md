@@ -263,29 +263,39 @@ All TypeScript. Schemas live in `contracts/` so both sides of the boundary share
 
 ### 5.1 Domain types
 
-**Memory schema reused from CHUNK-03.** `IntentMemory` is the existing discriminated-union variant in `contracts/src/memory.ts`. CHUNK-05 does NOT redeclare it; instead, it extends the `payload_json` shape with two new fields. Per the shared-contract rule in part-1-plan.md §"Shared cross-chunk contracts", the type for the Intent `payload_json` lives next to the Intent entry, not in this chunk.
+**Memory schema reused from CHUNK-03.** `IntentMemory` is the existing discriminated-union variant in `contracts/src/memory.ts`. **CHUNK-03 (NOT CHUNK-05) owns the canonical `IntentPayload` shape.** CHUNK-05 imports it and does NOT redeclare. Per the shared-contract rule in part-1-plan.md §"Shared cross-chunk contracts", and per M15 in the Phase A validation report, the canonical type lives next to the Intent entry in CHUNK-03's contracts module.
 
-**Proposed shape of `IntentMemoryPayload` (defined in `contracts/src/memory.ts`, CHUNK-03 territory — but CHUNK-05 needs these two fields):**
+**Canonical `IntentPayload` shape (lives in `contracts/src/memory.ts`, owned by CHUNK-03):**
 
 ```ts
 // in contracts/src/memory.ts (CHUNK-03 owns this file)
-export interface IntentMemoryPayload {
-  rawIdea: RawIdea;                    // added by CHUNK-05
-  discovery: DiscoveryRecord | null;   // added by CHUNK-05
-  // ... any other Intent payload fields defined in CHUNK-03
+export interface IntentPayload {
+  /** The user's raw idea text, captured before the discovery interview. */
+  rawIdea: {
+    text: string;
+    capturedAt: number;     // unix ms
+  };
+  /** Discovery interview result; null until the user completes the interview. */
+  discovery: {
+    promptSnapshot: string;       // exact prompt that was sent to the AI tool, for audit
+    answers: DiscoveryAnswer[];   // one per question, possibly with markedNA
+    completedAt: number;          // unix ms when the user saved the answers
+  } | null;
 }
 ```
 
+CHUNK-05 imports `IntentPayload` and the canonical `RawIdea` / `DiscoveryRecord` / `DiscoveryAnswer` shapes from CHUNK-03's `contracts/src/memory.ts` — these are the persisted shapes and CHUNK-05 must NOT redeclare them. The CHUNK-05 webview state types in §5.2 are **panel-local view models** named distinctly (`RawIdeaView`, `DiscoveryDraft`, `DiscoveryAnswerInput`) so there is **no identifier collision** with the canonical types. Conversion happens at the host adapter (request/response handlers). The persisted shape is always the canonical one above.
+
 If CHUNK-03 has already shipped without these fields, the migration runner in CHUNK-03's memory store (the "8-line migration runner" mentioned in CHUNK-03 spec) bumps `_schema_version` and adds the columns / defaults. This chunk does not own the migration mechanism but does own the migration step required to introduce these fields.
 
-**New domain types — defined in `contracts/src/discover.ts`:**
+**Panel-local view models — defined in `contracts/src/discover.ts`** (named distinctly to avoid colliding with CHUNK-03's canonical `RawIdea`/`DiscoveryRecord`/`DiscoveryAnswer`):
 
 ```ts
-export interface RawIdea {
-  body: string;
+export interface RawIdeaView {
+  body: string;            // === canonical RawIdea.text after adapt
   title?: string;          // optional short title; auto-derived if omitted
-  savedAt: number;         // unix ms
-  updatedAt: number;       // unix ms
+  savedAt: number;         // unix ms; === canonical RawIdea.capturedAt
+  updatedAt: number;       // unix ms; panel-only
 }
 
 export interface DiscoveryQuestion {
@@ -295,21 +305,37 @@ export interface DiscoveryQuestion {
   helperText?: string;
 }
 
-export interface DiscoveryAnswer {
+export interface DiscoveryAnswerInput {
   questionId: string;      // FK to DiscoveryQuestion.id
   body: string;            // markdown allowed; sanitised before render (see §10)
   markedNA: boolean;
 }
 
-export interface DiscoveryRecord {
+export interface DiscoveryDraft {
   promptGeneratedAt: number | null;   // when buildDiscoveryPrompt last ran
   promptSnapshot: string | null;      // the exact prompt the user copied (for audit)
   questionsSnapshotIds: string[];     // ids of the question library at prompt time
   rawAnswersPaste: string;            // the unparsed paste (audit / fallback)
-  answers: DiscoveryAnswer[];         // one per question, possibly with markedNA
+  answers: DiscoveryAnswerInput[];    // one per question, possibly with markedNA
   unmatchedText: string;              // anything the parser could not place
   answeredAt: number | null;          // when saveAnswers last ran
 }
+```
+
+The host adapter projects between these panel-local view models and the canonical persisted shapes:
+
+```text
+panel: RawIdeaView { body, savedAt, updatedAt, title? }
+        ↓ host adapter (drops updatedAt + title; renames body→text, savedAt→capturedAt)
+canon:  RawIdea { text, capturedAt }
+
+panel: DiscoveryDraft (rich; with promptGeneratedAt, questionsSnapshotIds, rawAnswersPaste, unmatchedText)
+        ↓ host adapter (keeps promptSnapshot, answers, derives completedAt from answeredAt)
+canon:  DiscoveryRecord { promptSnapshot, answers, completedAt }
+
+panel: DiscoveryAnswerInput { questionId, body, markedNA }
+        ↓ host adapter (resolves question text by id; drops markedNA when N/A)
+canon:  DiscoveryAnswer { question, answer }
 ```
 
 `questionsSnapshotIds` preserves which questions were asked, so a future library change doesn't invalidate stored records.

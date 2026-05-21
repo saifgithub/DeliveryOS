@@ -354,7 +354,7 @@ CHUNK-06 introduces **exactly one new memory entry shape**: the PRD parent Requi
 | `created_at` | ms epoch on first paste. |
 | `updated_at` | ms epoch on every save. |
 
-A "PRD parent" entry is distinguished from a "child requirement" entry (CHUNK-07) by a `payload_json.kind: 'prd-parent' | 'requirement-child'` tag. CHUNK-07's catalogue queries on that tag.
+A "PRD" entry is distinguished from a "child requirement" entry (CHUNK-07) by a `payload_json.kind: 'prd' | 'requirement-child'` tag. CHUNK-07's catalogue queries on that tag. **PRD storage is canonical (per B05):** `type: 'requirement'` + `payload.kind === 'prd'`. There is NO separate `'prd'` memory type. The markdown body lives at `.deliveryos/memory/requirement/<prd-id>.md`.
 
 ### Memory link (CHUNK-03 schema)
 
@@ -362,11 +362,11 @@ One link is written when the PRD is first persisted:
 
 | Column | Value |
 |---|---|
-| `from_id` | `<prd-uuid>` (Requirement Memory parent) |
+| `from_id` | `<prd-uuid>` (Requirement Memory parent, `type='requirement'` + `payload.kind='prd'`) |
 | `to_id` | `<intent-uuid>` (Intent Memory entry created in CHUNK-03 + filled in CHUNK-05) |
-| `kind` | `'derives-from'` |
+| `kind` | `'derives-from'` (canonical hyphenation per CHUNK-03 `LINK_KINDS`; not `'derived-from'`) |
 
-CHUNK-07 will later write `from_id: <child-requirement-uuid>, to_id: <prd-uuid>, kind: 'belongs-to'` links — out of scope here.
+CHUNK-07 will later write `from_id: <child-requirement-uuid>, to_id: <prd-uuid>, kind: 'derives-from'` links — Requirement → PRD also uses the canonical `'derives-from'` kind per CHUNK-03. (Earlier drafts of this spec mentioned a `'belongs-to'` kind for the Requirement → PRD edge; that string is dropped — Requirement → PRD is `'derives-from'`, matching CHUNK-07's canonical writer.)
 
 ### Markdown body on disk
 
@@ -559,13 +559,13 @@ Success: every step above completes without an error in the dev console, without
 ### Depends on
 
 - **CHUNK-02** — webview foundation (Vite build, CSP HTML factory, `vscode-messenger` host + webview wiring, hybrid Tailwind theme, `WebviewPanelSerializer` base class).
-- **CHUNK-03** — `MemoryStore` API (`create`/`update`/`read`/`link`), the polymorphic `memory_entries` table, `memory_links` table, and the `<workspace>/.deliveryos/memory/<type>/<id>.md` on-disk convention. Re-uses the schema verbatim with `type = 'requirement'` and `payload_json.kind = 'prd-parent'`.
+- **CHUNK-03** — `MemoryStore` API (`create`/`update`/`read`/`link`), the polymorphic `memory_entries` table, `memory_links` table, and the `<workspace>/.deliveryos/memory/<type>/<id>.md` on-disk convention. Re-uses the schema verbatim with `type = 'requirement'` and `payload_json.kind = 'prd'` (canonical per B05).
 - **CHUNK-05** — Discovery Record exists (stored as an extension of the Intent Memory entry per CHUNK-05's spec). `buildGenerateDraftPrompt` reads it directly via `MemoryStore.loadDiscoveryRecord(projectId)`.
 
 ### Exposes (consumed by later chunks)
 
 - **CHUNK-07 (Requirements catalogue)** reads the PRD parent Requirement Memory entry's `payload_json.sections` to render the "source PRD section" filter and to seed the decomposition prompt with the right slice of PRD text per requirement.
-- **CHUNK-09 (Execution Brief composer)** indirectly consumes the PRD through CHUNK-07's child Requirement Memory entries, which link back to the PRD parent via the `'belongs-to'` memory link.
+- **CHUNK-09 (Execution Brief composer)** indirectly consumes the PRD through CHUNK-07's child Requirement Memory entries, which link back to the PRD parent via the canonical `'derives-from'` memory link.
 - **CHUNK-14 (Release Evidence)** walks the memory graph backwards from Verification → … → Requirement (child) → Requirement (PRD parent) → Intent. The PRD parent's on-disk markdown body is included verbatim in the exported Release Evidence document.
 
 ### Honoured shared contracts (per [part-1-plan.md § Shared cross-chunk contracts](../part-1-plan.md))
@@ -575,3 +575,18 @@ Success: every step above completes without an error in the dev console, without
 - **`.deliveryos/` memory directory layout** — CHUNK-03. PRD body goes to `.deliveryos/memory/requirement/<id>.md`.
 - **Managed delimiter block syntax** — not used here (no `CLAUDE.md` / `AGENTS.md` updates). Defined in CHUNK-10, untouched.
 - **Execution Brief markdown schema, Harness Profile schema, Handoff directory layout** — not touched by this chunk.
+
+---
+
+## 12. Definition of done
+
+This chunk is done when **all** of the following are true (mirrors the CHUNK-06 done-when row in [`part-1-plan.md`](../part-1-plan.md) and resolves m16):
+
+- [ ] The user can open the PRD editor on a project whose Intent Memory has a non-empty Discovery Record.
+- [ ] The "Generate prompt" flow produces a prompt that interpolates the raw idea + the Discovery Record + the canonical 8-section PRD outline; "Copy" copies it to the system clipboard.
+- [ ] Paste-back accepts a section-headed markdown blob, runs through the lenient parser, and populates the 8 PRD sections into the editor. **The parser passes on ≥ 3 fixtures committed under `extension/test/fixtures/prd/` (covering: a clean canonical paste, a re-ordered paste, and a paste with one or more sections missing).**
+- [ ] The PRD is editable section-by-section in the webview. Every section's edits are persisted on blur via `prd.saveSection` (or equivalent), updating both `payload_json.sections[...]` and the `.deliveryos/memory/requirement/<prd-id>.md` markdown body.
+- [ ] PRD storage uses the canonical shape per B05: `type='requirement'` + `payload.kind === 'prd'`. Body at `.deliveryos/memory/requirement/<prd-id>.md`. **No separate `'prd'` memory type, no `'prd-parent'` string anywhere.**
+- [ ] The PRD → Intent link is written with `kind='derives-from'` (canonical hyphenation; not `'derived-from'`).
+- [ ] **Reload survives restart.** Closing the editor and reopening the workspace restores the PRD editor state from `MemoryStore.read(prdId)` via the `WebviewPanelSerializer`.
+- [ ] The end-to-end discovery → PRD prompt → paste-back → editable PRD → save flow is exercisable manually in <5 minutes for a "Bug Triage Assistant" demo project.

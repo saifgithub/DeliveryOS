@@ -62,6 +62,9 @@ include_lint_commands: true       # render the lint command list in the brief pr
 include_forbidden_changes: true   # always true for both MVP profiles; reserved for future Cursor (concise) profile
 output_format: markdown           # the rendered brief mime; markdown for both MVP profiles
 mcp_capable: true                 # whether the harness supports MCP servers (informational; MCP is post-MVP)
+command_template: >-              # shell command CHUNK-11's terminal launcher invokes; supports ${BRIEF_PATH}/${RESULT_PATH}/${WORKSPACE} substitution
+  claude --add-dir . "Run the brief at ${BRIEF_PATH} and write result to ${RESULT_PATH}"
+harness_version_pin:              # optional; set only when the user wants to pin a known-good CLI version (e.g. "claude-code@1.4.2")
 ```
 
 ### Field-by-field semantics
@@ -78,8 +81,10 @@ mcp_capable: true                 # whether the harness supports MCP servers (in
 | `include_forbidden_changes` | boolean | If true, render Section 8 (Forbidden Changes) verbatim. True for both MVP profiles. The flag exists so a future concise profile can omit it. |
 | `output_format` | `'markdown'` | Output mime. Markdown for both MVP profiles. Reserved for future profiles that might emit JSON. |
 | `mcp_capable` | boolean | Whether the harness natively supports MCP. **Informational only in MVP** — neither profile uses MCP yet (per PRD § 18.Y Mode 3, post-MVP). Recorded so the UI can later toggle an MCP server entry. |
+| `command_template` | string (optional) | Shell command that **CHUNK-11's terminal launcher** invokes after writing the brief into the handoff directory. Supports three substitution tokens: `${BRIEF_PATH}` resolves to `<handoff_dir>/current-execution-brief.md`; `${RESULT_PATH}` resolves to `<handoff_dir>/result.md`; `${WORKSPACE}` resolves to the workspace root absolute path. Substitution is a literal string replace performed by CHUNK-11 at launch time (CHUNK-10 stores the template verbatim). Optional so future profiles can omit it (e.g. an MCP-only profile that has no CLI entry-point); both MVP profiles set it. |
+| `harness_version_pin` | string (optional) | Records the harness CLI version this profile was authored against (e.g. `claude-code@1.4.2`). **Informational** for MVP — used in telemetry and UI tooltips, never enforced at launch. Both MVP profile literals leave this field undefined; only set it when the user explicitly wants to pin a known-good CLI version. Mirrors the version-pin guidance in `docs/architecture/harness-profiles.md`. |
 
-> Versioning: per `docs/architecture/harness-profiles.md` final paragraph — profiles are version-pinned. For MVP we hard-code two profiles and pin them in code comments to the harness versions they were authored against ("Claude Code CLI 1.x as of 2026-Q2", "Codex CLI as of 2026-Q2"). No runtime version negotiation; if a future Claude Code release breaks the contract we ship a new extension version.
+> Versioning: per `docs/architecture/harness-profiles.md` final paragraph — profiles are version-pinned. For MVP we hard-code two profiles and pin them in code comments to the harness versions they were authored against ("Claude Code CLI 1.x as of 2026-Q2", "Codex CLI as of 2026-Q2"). `harness_version_pin` (above) is the structured field that captures the same intent inside the schema; we leave it undefined for the MVP literals and let the code-comment pin stand. No runtime version negotiation; if a future Claude Code release breaks the contract we ship a new extension version.
 
 ### The two MVP profiles (concrete)
 
@@ -96,6 +101,8 @@ include_lint_commands: true
 include_forbidden_changes: true
 output_format: markdown
 mcp_capable: true
+command_template: 'claude --add-dir . "Run the brief at ${BRIEF_PATH} and write result to ${RESULT_PATH}"'
+# harness_version_pin: undefined for MVP — code-comment pin to "Claude Code CLI 1.x as of 2026-Q2"
 ```
 
 **Codex:**
@@ -111,9 +118,11 @@ include_lint_commands: true
 include_forbidden_changes: true
 output_format: markdown
 mcp_capable: true
+command_template: 'codex exec -o ${RESULT_PATH} "Run the brief at ${BRIEF_PATH}"'
+# harness_version_pin: undefined for MVP — code-comment pin to "Codex CLI as of 2026-Q2"
 ```
 
-Both profiles share the same `handoff_dir` and `brief_style`. The differences live in (a) the `instruction_file` and (b) the **content of the suggested managed block** (Codex documents the `-o` flag, Claude documents the instruction-driven `result.md`, plus the `.claude/settings.json` stub).
+Both profiles share the same `handoff_dir` and `brief_style`. The differences live in (a) the `instruction_file`, (b) the `command_template` (Codex uses `-o` to redirect the last assistant message to `result.md`; Claude Code has no equivalent flag so its `result.md` write is instruction-driven, with the launch command framed around the brief path), and (c) the **content of the suggested managed block** (Codex documents the `-o` flag, Claude documents the instruction-driven `result.md`, plus the `.claude/settings.json` stub).
 
 ---
 
@@ -128,10 +137,13 @@ The canonical TypeScript shape of the Profile schema. Mirrors the YAML above 1:1
 - `export type ProfileName = 'claude-code' | 'codex';` — MVP-only union. Adding a profile means widening this union (forces a compile error at every switch point).
 - `export type BriefStyle = 'structured-full' | 'concise';`
 - `export type OutputFormat = 'markdown';` (single-member union for now; reserved for forward compatibility).
-- `export interface HarnessProfile { … all 10 fields … }`
+- `export type ManagedBlockFormat = 'md' | 'json' | 'gitignore';` — three managed-block flavours (markdown for CLAUDE.md / AGENTS.md, JSON for `.claude/settings.json`, gitignore for `.gitignore` — used by CHUNK-11).
+- `export interface HarnessProfile { … all 12 fields … }` — 10 original fields plus `command_template?: string` and `harness_version_pin?: string`.
 - `export interface RenderedBrief { profileName: ProfileName; briefId: string; markdown: string; renderedAt: string; }` — output of `render.ts`.
-- `export interface ManagedBlock { file: string; begin: string; end: string; body: string; }` — output of `managedBlock.ts` reader.
-- `export interface SuggestedUpdate { file: string; existingContent: string \| null; nextContent: string; managedBlock: ManagedBlock; action: 'create' \| 'append-block' \| 'replace-block' \| 'noop'; }` — output of `suggestedUpdates.ts`.
+- `export interface ManagedBlock { file: string; format: ManagedBlockFormat; begin: string; end: string; body: string; }` — output of `managedBlock.ts` reader.
+- `export type ManagedBlockAction = 'create' | 'append-block' | 'replace-block' | 'noop';` — exported separately so CHUNK-13 (and any other downstream consumer) can import the action union by name.
+- `export interface ManagedBlockPlan { action: ManagedBlockAction; next: string; blockBody: string; }` — public return shape of `applyManagedBlock(...)`. CHUNK-13 imports this from `extension/src/profiles/managedBlock.ts`.
+- `export interface SuggestedUpdate { file: string; existingContent: string \| null; nextContent: string; managedBlock: ManagedBlock; action: ManagedBlockAction; }` — output of `suggestedUpdates.ts`. Reuses `ManagedBlockAction` rather than redeclaring the union inline.
 
 Re-exported from `contracts/` (see § 3.4) so the webview can import the same types.
 
@@ -184,16 +196,20 @@ Exports:
 - `export const BEGIN_MARKER_MD = '<!-- DELIVERYOS:BEGIN -->';`
 - `export const END_MARKER_MD = '<!-- DELIVERYOS:END -->';`
 - `export const SENTINEL_KEY_JSON = 'deliveryos.managed';` — for JSON files (see § 4 "JSON variant").
-- `export function readManagedBlock(content: string, format: 'md' \| 'json'): ManagedBlock | null` — returns the existing block, or `null` if none found. Throws if multiple `BEGIN` markers found (the user broke our invariant).
-- `export function buildManagedBlock(body: string, format: 'md' \| 'json'): string` — produces the delimited block (with a leading blank line if appending to existing content).
-- `export function applyManagedBlock(existing: string \| null, body: string, format: 'md' \| 'json'): { next: string; action: SuggestedUpdate['action'] }` — idempotent applier:
+- `export const BEGIN_MARKER_GITIGNORE = '# DELIVERYOS:BEGIN';` — hash-prefixed marker for `.gitignore` (see § 4.4 "Gitignore variant"). Consumed by CHUNK-11.
+- `export const END_MARKER_GITIGNORE = '# DELIVERYOS:END';`
+- `export type ManagedBlockAction = 'create' | 'append-block' | 'replace-block' | 'noop';` — public action union; exported by name so CHUNK-13 imports it without redeclaring.
+- `export interface ManagedBlockPlan { action: ManagedBlockAction; next: string; blockBody: string; }` — public return shape of `applyManagedBlock`. `next` is the full resulting file content; `blockBody` is the body inside the managed block (handy for callers who want to diff just the block).
+- `export function readManagedBlock(content: string, format: ManagedBlockFormat): ManagedBlock | null` — returns the existing block, or `null` if none found. Throws if multiple `BEGIN` markers found (the user broke our invariant). `format` is `'md' | 'json' | 'gitignore'`.
+- `export function buildManagedBlock(body: string, format: ManagedBlockFormat): string` — produces the delimited block (with a leading blank line if appending to existing content).
+- `export function applyManagedBlock(existing: string \| null, body: string, format: ManagedBlockFormat): ManagedBlockPlan` — idempotent applier:
   - If `existing` is `null` (file does not exist) → `action: 'create'`, `next` = managed block with a one-line file header comment ("This file is read by Claude Code at session start. The DeliveryOS-managed block below tells Claude Code how to coordinate with DeliveryOS.").
   - If `existing` contains no `BEGIN` marker → `action: 'append-block'`, `next` = `existing` + `\n\n` + managed block.
   - If `existing` contains a `BEGIN` marker with the same `body` (byte-equal after trimming trailing whitespace) → `action: 'noop'`, `next` = `existing` (idempotency).
   - If `existing` contains a `BEGIN` marker with a different `body` → `action: 'replace-block'`, `next` = `existing` with the block rewritten in place. Content outside the block is **byte-preserved**.
 - Atomic-write helper: `export async function writeFileAtomic(uri: vscode.Uri, content: string): Promise<void>` — write to `<file>.deliveryos.tmp`, then `vscode.workspace.fs.rename` (or `vscode.workspace.fs.writeFile` followed by rename — `rename` is atomic on POSIX; on Windows we fall back to write-then-replace with the caveat documented under § Risks).
 
-The reader uses a strict regex: `/<!-- DELIVERYOS:BEGIN -->([\s\S]*?)<!-- DELIVERYOS:END -->/`. Non-greedy, single match. Multi-match → throw.
+The markdown-format reader uses a strict regex: `/<!-- DELIVERYOS:BEGIN -->([\s\S]*?)<!-- DELIVERYOS:END -->/`. Non-greedy, single match. Multi-match → throw. The gitignore-format reader uses the same line-based strategy with hash markers (`/^# DELIVERYOS:BEGIN\n([\s\S]*?)^# DELIVERYOS:END$/m`); behaviour is otherwise identical to the markdown variant.
 
 #### `extension/src/profiles/suggestedUpdates.ts`
 
@@ -325,6 +341,31 @@ Rules:
 
 Considered: JSON5-style `// DELIVERYOS:BEGIN` line markers. Rejected because (a) `.claude/settings.json` is parsed by Claude Code as strict JSON in some code paths (we cannot rely on JSON5 tolerance), (b) line markers in JSON arrays would need their own ad-hoc parser, (c) the sentinel-key approach round-trips through `JSON.parse`/`JSON.stringify` losslessly, (d) it generalises cleanly to other JSON configs we might manage later (`.codex/config.json`, etc.). Documented as decision-by-rejection here so we don't relitigate.
 
+### 4.4 Gitignore variant (`.gitignore`)
+
+`.gitignore` does not support HTML comments and is not JSON, so it gets a **third** managed-block format using hash-prefixed line markers. Consumed by **CHUNK-11**, which appends DeliveryOS-internal paths (e.g. `.deliveryos-handoff/result.md`, `.deliveryos-handoff/history/`) to the workspace's `.gitignore` so result artefacts don't leak into commits.
+
+Tokens (exact byte sequences, full-line markers — no inline tail content):
+
+```
+# DELIVERYOS:BEGIN
+… DeliveryOS-managed lines …
+# DELIVERYOS:END
+```
+
+Rules — identical in spirit to the markdown variant, with the markers swapped for hash-prefixed line tokens:
+
+1. **Single block per file.** Multi-`BEGIN` → throw.
+2. **Idempotent.** Same body twice → noop. Whitespace normalisation matches the markdown variant.
+3. **In-place rewrite.** Content outside the block is byte-preserved.
+4. **Append-if-absent.** If no `BEGIN` is found, append two newlines + the block at end-of-file.
+5. **Create-if-missing.** If `.gitignore` does not exist, create it with the managed block only — no header comment (gitignore conventions don't carry a file-level preface the way CLAUDE.md does, and any non-pattern leading line just creates noise).
+6. **Atomic write.** Same temp-file-then-rename pattern.
+
+The reader and applier share `managedBlock.ts`'s implementation; the only difference from the markdown variant is the marker token strings. The format flag (`'gitignore'`) selects them.
+
+> CHUNK-11 owns the **content** appended to `.gitignore` (the list of paths). CHUNK-10 only owns the framing — the marker syntax, the idempotent applier, the atomic write.
+
 ---
 
 ## 5. Suggested updates content
@@ -435,6 +476,7 @@ Per part-1-plan.md § Risks: pick a small lib, no Monaco.
 export type ProfileName = 'claude-code' | 'codex';
 export type BriefStyle = 'structured-full' | 'concise';
 export type OutputFormat = 'markdown';
+export type ManagedBlockFormat = 'md' | 'json' | 'gitignore';
 
 export interface HarnessProfile {
   name: ProfileName;
@@ -447,6 +489,22 @@ export interface HarnessProfile {
   include_forbidden_changes: boolean;
   output_format: OutputFormat;
   mcp_capable: boolean;
+  /**
+   * Shell command CHUNK-11's terminal launcher invokes after writing the brief
+   * into the handoff dir. Substitution tokens (literal string replace at launch):
+   *   ${BRIEF_PATH}  → <handoff_dir>/current-execution-brief.md
+   *   ${RESULT_PATH} → <handoff_dir>/result.md
+   *   ${WORKSPACE}   → workspace root absolute path
+   * Both MVP profile literals set this; future profiles may omit it.
+   */
+  command_template?: string;
+  /**
+   * Optional CLI version pin (e.g. "claude-code@1.4.2"). Informational only —
+   * surfaced in telemetry and UI tooltips, never enforced at launch.
+   * MVP literals leave this undefined; set it only when the user wants to
+   * pin a known-good CLI version.
+   */
+  harness_version_pin?: string;
 }
 
 export interface RenderedBrief {
@@ -458,20 +516,34 @@ export interface RenderedBrief {
 
 export interface ManagedBlock {
   file: string;            // workspace-relative
-  format: 'md' | 'json';
+  format: ManagedBlockFormat;
   begin: string;           // marker literal
   end: string;             // marker literal
-  body: string;            // body between markers (md) or JSON value of sentinel key (json)
+  body: string;            // body between markers (md/gitignore) or JSON value of sentinel key (json)
 }
 
-export type UpdateAction = 'create' | 'append-block' | 'replace-block' | 'noop';
+// Public action union — exported by name so CHUNK-13 can import it directly
+// rather than redeclaring inline.
+export type ManagedBlockAction = 'create' | 'append-block' | 'replace-block' | 'noop';
+
+// Public return shape of applyManagedBlock(...). CHUNK-13 imports this type
+// from extension/src/profiles/managedBlock.ts.
+export interface ManagedBlockPlan {
+  action: ManagedBlockAction;
+  next: string;       // resulting full file content
+  blockBody: string;  // the body inside the managed block
+}
+
+// `UpdateAction` is retained as a backward-compatible alias of ManagedBlockAction
+// in case any earlier draft referenced it; new code should use ManagedBlockAction.
+export type UpdateAction = ManagedBlockAction;
 
 export interface SuggestedUpdate {
   file: string;
   existingContent: string | null;
   nextContent: string;
   managedBlock: ManagedBlock;
-  action: UpdateAction;
+  action: ManagedBlockAction;
   warning?: string; // e.g. "your file's existing block was hand-edited"
   error?: string;   // e.g. JSON parse failure
 }
@@ -680,10 +752,11 @@ Per the Done-when in part-1-plan.md (CHUNK-10 section):
 ### Exposes (canonical contracts for downstream chunks)
 
 - **`HarnessProfile` schema** (types + `PROFILES` registry). Consumed by:
-  - **CHUNK-11** (handoff): reads `profile.handoff_dir` and `profile.instruction_file`, uses `profile.name` to switch on the command to send to the terminal (`claude --add-dir .` vs `codex exec -o …`).
+  - **CHUNK-11** (handoff): reads `profile.handoff_dir`, `profile.instruction_file`, and **`profile.command_template`** to build the terminal-launch command. CHUNK-11 performs the literal string substitution of `${BRIEF_PATH}` / `${RESULT_PATH}` / `${WORKSPACE}` against the resolved workspace and handoff paths, then sends the resulting command to the terminal. It also reads `profile.harness_version_pin` (when set) for the launch tooltip / telemetry but does not enforce it.
   - **CHUNK-13** (PreToolUse hook installer): reads `profile.instruction_file` and `profile.name === 'claude-code'` to gate hook installation to the Claude Code profile only.
 - **Managed delimiter block syntax + applier** (`managedBlock.ts`). Consumed by:
-  - **CHUNK-13** for `.claude/settings.json` hook installation — reuses `applyManagedBlock` with format `'json'`, mutates only the `deliveryos.managed.hooks` sub-key.
+  - **CHUNK-11** for `.gitignore` updates — reuses `applyManagedBlock` with format `'gitignore'` (hash-marker variant, § 4.4).
+  - **CHUNK-13** for `.claude/settings.json` hook installation — reuses `applyManagedBlock` with format `'json'`, mutates only the `deliveryos.managed.hooks` sub-key. CHUNK-13 imports the **`ManagedBlockPlan`** and **`ManagedBlockAction`** types from `extension/src/profiles/managedBlock.ts` (named exports) rather than redeclaring them.
 - **`profile.*` message namespace.** No downstream consumer; the brief composer owns these.
 
 ### Does not depend on

@@ -599,7 +599,7 @@ Each chunk follows this schema:
 - Allowed/Forbidden diff engine:
   - Inputs: the saved Execution Brief (Sections 7 Allowed + 8 Forbidden) and the Result Memory's "files actually changed" (from CHUNK-12's `git diff`).
   - Algorithm: glob-match (use a small lib like `picomatch`) each changed file against Allowed and Forbidden lists.
-  - Three classifications per file: `allowed-and-touched` (OK), `allowed-but-not-touched` (OK, possibly under-scoped work), `forbidden-but-touched` (FAIL).
+  - Four classifications per file: `allowed-and-touched` (OK), `allowed-but-not-touched` (OK, possibly under-scoped work), `forbidden-but-touched` (FAIL), `unclassified-but-touched` (WARNING, fail-open — file matched neither Allowed nor Forbidden). Iteration 2 promoted this from 3 → 4 to match CHUNK-13's actual implementation.
   - Plus a top-level `pass | fail` verdict.
 - Diff results panel (pass/fail panel with clear OK/FAIL UI per file).
 - **Claude Code PreToolUse hook generator** (research finding #5):

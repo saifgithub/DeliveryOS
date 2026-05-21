@@ -21,7 +21,7 @@ Set up the TypeScript VS Code extension project (the `yo code` generator or a ma
 Done when: the `.vsix` installs into VS Code and the DeliveryOS sidebar appears.
 
 **Week 2 (2026-06-01)** — Webview and memory store, multi-editor check.
-Add one webview panel rendering a React + Tailwind "hello" app. Wire a SQLite (or simple JSON) store for project data. Sideload the `.vsix` into Cursor as well, and at least one of Windsurf or VSCodium, to confirm cross-editor install works. Note the signature-verification behaviour on each.
+Add one webview panel rendering a React + Tailwind "hello" app. Wire a `sql.js` (WASM SQLite) store for project data — see PRD § 25.2 for why the native `better-sqlite3` binding is the wrong choice for a sideloaded cross-editor VSIX. Sideload the `.vsix` into Cursor as well, and at least one of Windsurf or VSCodium, to confirm cross-editor install works. Note the signature-verification behaviour on each.
 Done when: the webview renders, a project record persists across editor restarts, and the extension installs in at least three editors.
 
 Phase 0 demoable state: "Here is DeliveryOS installed in VS Code and Cursor from the same file."

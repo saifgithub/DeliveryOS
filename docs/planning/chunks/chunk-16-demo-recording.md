@@ -356,7 +356,16 @@ Each caption is one sentence. Resist the urge to add a second.
 
 ### 8.1 Tag and trigger
 
+**Order of operations matters (M14):** CHUNK-16 owns the **content** of `RELEASE_NOTES.md`. The file must be **authored and committed at the repo root BEFORE the tag is pushed**. CHUNK-04's GitHub Actions workflow consumes the committed file verbatim via `gh release create --notes-file RELEASE_NOTES.md`.
+
 ```sh
+# 1. Author RELEASE_NOTES.md (content per § 8.3) and demo.mp4 at repo root.
+# 2. Commit them on main.
+git add RELEASE_NOTES.md demo.mp4
+git commit -m "release: prepare v0.1.0 notes and demo backup"
+git push origin main
+
+# 3. Tag and push. The workflow now sees the notes file.
 git tag -a v0.1.0 -m "DeliveryOS v0.1.0 — first public proof of work"
 git push origin v0.1.0
 ```
@@ -366,10 +375,10 @@ This triggers the GitHub Actions workflow from CHUNK-04 (`.github/workflows/rele
 1. Checks out the tag.
 2. Runs `npm ci`.
 3. Runs `vsce package` → produces `deliveryos-0.1.0.vsix`.
-4. Computes SHA-256 of the `.vsix`.
+4. Computes `SHA256SUMS.txt` covering all attached binary assets (the `.vsix`, install scripts, `demo.mp4`).
 5. Creates a GitHub Release from the tag.
-6. Attaches the `.vsix`, the `SHA256SUMS.txt`, the demo video `.mp4` backup, and the install scripts.
-7. Generates release notes from the body file `RELEASE_NOTES.md` at repo root (filled in by hand before pushing the tag — see § 8.3).
+6. Attaches: the `.vsix`, `SHA256SUMS.txt`, `demo.mp4` (CHUNK-16 owns this file; committed at repo root before tagging), `scripts/install.sh`, `scripts/install.ps1`.
+7. Generates release notes by passing `--notes-file RELEASE_NOTES.md` to `gh release create` (the file at repo root, committed in step 2 above). **CHUNK-16 owns the file content; CHUNK-04 owns the workflow plumbing that consumes it.**
 
 ### 8.2 Release page contents
 
@@ -421,7 +430,8 @@ After the tag is pushed:
 | `docs/screenshots/06-release-evidence.png`    | create  | Capture per § 7.3.                                                                                                                                                                                 |
 | `docs/screenshots/07-version-check.png`       | create  | Optional. Only if time.                                                                                                                                                                            |
 | `docs/screenshots/08-multi-editor.png`        | create  | Optional. Only if time.                                                                                                                                                                            |
-| `RELEASE_NOTES.md`                            | create  | New file at repo root. Body for the GitHub Release per § 8.3.                                                                                                                                      |
+| `RELEASE_NOTES.md`                            | create  | New file at repo root. **CHUNK-16 owns the content (M14).** Body for the GitHub Release per § 8.3. Authored + committed BEFORE tagging. CHUNK-04's workflow consumes it via `--notes-file RELEASE_NOTES.md`.                                                                              |
+| `demo.mp4`                                    | create  | Demo-video backup committed at repo root before tagging. Attached by CHUNK-04's workflow when present.                                                                                                                                                                                  |
 | `package.json`                                | edit    | Bump `version` to `0.1.0`. Confirm `publisher`, `displayName`, `description`, `repository`, `bugs`, `homepage`, `icon`, `categories`, `keywords` are all populated. No code logic change.          |
 | `CHANGELOG.md`                                | edit    | Append `## [0.1.0] - 2026-08-24` with a one-paragraph summary lifted from the release notes.                                                                                                       |
 | `.github/workflows/release.yml`               | tweak   | From CHUNK-04. Confirm it picks up `RELEASE_NOTES.md`, attaches the demo `.mp4` and install scripts. No new functionality, only verification that the existing workflow handles v0.1.0 cleanly.    |
@@ -470,11 +480,12 @@ A four-day pass with one buffer day. Adjust to taste; treat the order as the loa
 
 1. Draft the essay following § 6.3. First pass for structure, second pass for tone.
 2. Show the essay to one outside reader for the comprehension test (§ 11). Apply feedback.
-3. Fill in `RELEASE_NOTES.md` per § 8.3.
-4. Bump `package.json` version to `0.1.0`.
-5. Update `CHANGELOG.md`.
-6. Final sanity pass: `git diff` for typos, broken paths, placeholder text.
-7. Compute SHA-256 of a local `vsce package` build and confirm the release workflow will produce the same.
+3. **Author `RELEASE_NOTES.md` at the repo root per § 8.3.** This file is the canonical release-notes body that CHUNK-04's workflow consumes via `--notes-file`. CHUNK-16 owns the content (M14); CHUNK-04 owns the consumption.
+4. Commit `RELEASE_NOTES.md` and `demo.mp4` to `main` **before** tagging — the workflow only sees what's at the tagged commit.
+5. Bump `package.json` version to `0.1.0`.
+6. Update `CHANGELOG.md`.
+7. Final sanity pass: `git diff` for typos, broken paths, placeholder text.
+8. Compute SHA-256 of a local `vsce package` build and confirm the release workflow will produce the same.
 
 ### Day 5 — Tag, push, verify
 

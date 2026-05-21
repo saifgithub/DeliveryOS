@@ -47,10 +47,11 @@ examples/bug-triage/
 ├── README.md                              ← describes the demo target and its role
 ├── pyproject.toml                         ← FastAPI + pytest deps, ruff config
 ├── .gitignore
-├── .deliveryos/                           ← pre-filled Codebase Memory (CHUNK-03 schema)
-│   ├── codebase-memory.md                 ← folder structure, conventions, test command
-│   ├── project.json                       ← project record matching the SQLite schema
-│   └── memory.sqlite                      ← optional; OK to let DeliveryOS create on first open
+├── .deliveryos/                           ← pre-filled memory store (CHUNK-03 canonical layout)
+│   ├── memory.sqlite                      ← seeded with one Intent + one Codebase row
+│   └── memory/
+│       ├── intent/<id>.md                 ← Intent body: project + raw idea + minimal discovery
+│       └── codebase/<id>.md               ← Codebase body: folder structure, conventions, `pytest`
 ├── src/
 │   └── backend/
 │       ├── __init__.py
@@ -77,7 +78,16 @@ examples/bug-triage/
         └── __init__.py                    ← test_bugs_api.py will be added by the demo run
 ```
 
-**Pre-filled Codebase Memory (`examples/bug-triage/.deliveryos/codebase-memory.md`)** captures, per the PRD § 23 example:
+**Pre-filled memory store (`examples/bug-triage/.deliveryos/`)** follows CHUNK-03's canonical layout exactly: a `memory.sqlite` containing two `memory_entries` rows, with matching markdown bodies under `memory/<type>/<id>.md`. There is **no** `project.json` (project metadata lives inside the Intent Memory entry, per CHUNK-03's convention) and **no** flat `codebase-memory.md` (Codebase Memory is a typed row like every other memory type).
+
+**Row 1 — Intent Memory** (`type='intent'`), with body at `memory/intent/<id>.md`:
+
+- Project record fields (name: `Bug Triage Assistant`, created_at, etc.) in the row's `payload`.
+- `payload.rawIdea`: *"I want a bug triage assistant"*.
+- `payload.discovery`: minimal pre-filled discovery (one or two answers, just enough to anchor the project; the recorded demo re-runs discovery live).
+
+**Row 2 — Codebase Memory** (`type='codebase'`), with body at `memory/codebase/<id>.md`, capturing per the PRD § 23 example:
+
 - Repo layout summary (folders above).
 - Convention: route handlers thin; business logic in services.
 - Existing pattern: see `src/backend/api/users.py` (this is intentional — the brief will reference users.py as a *read-only* reference pattern, while listing it as a Forbidden change. That contrast is the demo's teaching moment).
@@ -85,6 +95,8 @@ examples/bug-triage/
 - Lint: `ruff check .`.
 - Auth: bearer token via `src/backend/core/auth.py`.
 - Known constraints: migrations are handled by a separate brief.
+
+**Seeding.** A small `examples/bug-triage/scripts/seed-demo.ts` script generates `memory.sqlite` plus the two body files from a checked-in YAML/JSON source (`scripts/seed-demo.source.yml`). This keeps the pre-filled state reproducible across rehearsals and lets us regenerate the demo workspace cleanly when CHUNK-03's schema evolves. The seed script itself is light — the on-disk state described above is what the demo actually consumes; the script's heavier features (idempotency, schema-version checks) can defer.
 
 **`examples/bug-triage/README.md`** explains:
 - What the demo target is and is not (it is not a real product; it is the canvas DeliveryOS draws on).
@@ -109,7 +121,8 @@ The runbook walks DeliveryOS exactly once, top to bottom, through every chunk's 
 | 6 | Select REQ-001. Click **Run Test Designer**. Paste back verification criteria and a test spec (four cases per PRD § 23). | Test Designer (CHUNK-08) | `04-test-spec-req-001.md` |
 | 7 | Click **Generate Execution Brief**. DeliveryOS assembles the 10-section brief. User edits the Allowed and Forbidden lists in the composer to match PRD § 23 exactly (Allowed: `src/backend/api/bugs.py`, `src/backend/models/bug_report.py`, `src/backend/services/bug_report_service.py`, `tests/integration/test_bugs_api.py`; Forbidden: `src/backend/api/users.py`, `migrations/`, `src/frontend/`). | Execution Brief composer (CHUNK-09) | `05-brief-req-001.md` (rendered output for visual reference only) |
 | 8 | Select the **Claude Code** harness profile. DeliveryOS shows the suggested `CLAUDE.md` update inside the managed delimiter block. User accepts. The brief is written to `examples/bug-triage/.deliveryos-handoff/current-execution-brief.md`. | Harness profiles (CHUNK-10) | — |
-| 9 | Click **Run with Claude Code**. DeliveryOS opens the VS Code terminal with the harness command pre-typed. The PreToolUse hook is installed via the managed delimiter block in `.claude/settings.json`. User hits Enter. | File handoff + terminal (CHUNK-11) | — (live AI in final demo; in rehearsal, paste `06-claude-run-violation.md` into the result capture step instead) |
+| 8a | **Install the PreToolUse hook (explicit, user-driven — required before Step 9).** Open the **diff-results panel**, switch to the **Hook Install** tab, review the suggested managed-delimiter-block update to `.claude/settings.json`, and click **Apply**. CHUNK-13's install flow is **never** automatic; this step makes the user action visible on camera. If the recording style is to keep this off-camera, install the hook before recording starts and show the Hook Install tab only as a "look, here's where this lives" B-roll detail — but **the install itself is always an explicit Apply click, not a side effect of Step 9**. | PreToolUse hook install (CHUNK-13) | — |
+| 9 | Click **Run with Claude Code**. DeliveryOS opens the VS Code terminal with the harness command pre-typed. (The PreToolUse hook is already in place from Step 8a — Step 9 does **not** install it.) User hits Enter. | File handoff + terminal (CHUNK-11) | — (live AI in final demo; in rehearsal, paste `06-claude-run-violation.md` into the result capture step instead) |
 | 10 | **The forbidden-file moment fires** (see § 5 for the script). Claude Code attempts to edit `src/backend/api/users.py`. The PreToolUse hook blocks the write live; the terminal shows the block message; DeliveryOS surfaces a notification. | Diff + PreToolUse hook (CHUNK-13) | `06-claude-run-violation.md` |
 | 11 | Claude Code returns its `result.md`. The result watcher picks it up. DeliveryOS parses the summary, changed files, tests run. | Result capture (CHUNK-12) | `06-claude-run-violation.md` |
 | 12 | The Allowed/Forbidden diff panel renders. It flags the attempted forbidden write **post-hoc** as well (the hook blocked the write but the attempt is still recorded in the result). Pass/fail is **fail**. | Diff (CHUNK-13) | — |
@@ -118,7 +131,15 @@ The runbook walks DeliveryOS exactly once, top to bottom, through every chunk's 
 | 15 | Click **Update memory**. The memory graph is updated: Result Memory, Verification Memory, and Codebase Memory all advance. | Memory update (CHUNK-14) | — |
 | 16 | Click **Export Release Evidence**. DeliveryOS produces the traceability document chaining Intent → Requirement → Design → Execution → Result → Verification → Release. Opens it in a new editor tab. | Release Evidence (CHUNK-14) | — |
 
-End state: the demo target now has a real `src/backend/api/bugs.py` (and its sibling files), passing tests, and a release evidence document checked in to `.deliveryos/release-evidence/REL-2026-08-24.md` — but those changes are discarded between runs (see § 9, "Reset between runs").
+**Memory-type discipline.** The flow above writes to **only** the 8 canonical memory types declared by CHUNK-03 (`intent`, `requirement`, `design`, `codebase`, `execution`, `result`, `verification`, `release`) plus `test-spec` (CHUNK-08). Specifically:
+
+- Step 3 (Discovery) updates the **Intent Memory** row in place — `payload.discovery` per CHUNK-05's `IntentPayload` shape. There is no `discovery` memory type and no `memory/discovery/` folder.
+- Step 4 (PRD) writes a `requirement` row whose `payload.kind === 'prd'` per CHUNK-06's model. There is no `prd` memory type and no `memory/prd/` folder. The PRD body lives at `memory/requirement/<id>.md` like any other requirement.
+- Steps 7, 14, 16 write `execution`, `verification`, `release` rows respectively, each in their canonical `memory/<type>/` folder.
+
+If any future edit to this chunk implies a separate Discovery or PRD memory type (folder or row type), that edit is wrong and must be reverted.
+
+End state: the demo target now has a real `src/backend/api/bugs.py` (and its sibling files), passing tests, and a release evidence document written to `.deliveryos/releases/release-YYYYMMDD-<shortuuid>.md` (path + ID format owned by CHUNK-14) — but those changes are discarded between runs (see § 9, "Reset between runs").
 
 ---
 
@@ -166,7 +187,7 @@ The DeliveryOS UI is identical in both modes — it is a manual-mode paste field
 
 **Final demo MUST use live AI** from step 2 onward (raw idea is typed live; discovery, PRD, requirements, test spec, brief composition all use live AI). The recording's credibility is in showing real AI tools producing the artefacts. Rehearsal mode is for the ~10–20 dry runs leading up to the recording day.
 
-**How "take N" failure recovery works.** Between takes, run `git clean -fdx examples/bug-triage/.deliveryos-handoff/ examples/bug-triage/src/backend/api/bugs.py examples/bug-triage/src/backend/models/bug_report.py examples/bug-triage/src/backend/services/bug_report_service.py examples/bug-triage/tests/integration/test_bugs_api.py && git checkout examples/bug-triage/` to restore the initial state. The demo runbook lists this command as the "reset" step.
+**How "take N" failure recovery works.** Between takes, run `examples/bug-triage/scripts/reset-demo.sh` (specified in § 9.4) to restore the initial state. The reset script is **explicitly scoped** to the demo subtree and refuses to run if there are uncommitted changes outside `examples/bug-triage/` — see the guard in § 9.4. The demo runbook lists this script as the "reset" step; **do not** run a bare `git clean -fdx` from the repo root or against any path broader than `examples/bug-triage/`.
 
 ---
 
@@ -222,8 +243,11 @@ If the polish list reveals an API that is genuinely missing, treat that as a bug
 | `examples/bug-triage/README.md` | Demo target docs | Explains role, install, test command, initial state, reset command. |
 | `examples/bug-triage/pyproject.toml` | Python project file | FastAPI, pytest, ruff. Pinned versions. |
 | `examples/bug-triage/.gitignore` | | Standard Python ignores plus `.deliveryos-handoff/`. |
-| `examples/bug-triage/.deliveryos/codebase-memory.md` | Pre-filled Codebase Memory | Folder layout, conventions, test command, lint command, auth note. |
-| `examples/bug-triage/.deliveryos/project.json` | Project record | Project name, ID, created_at, links. Schema per CHUNK-03. |
+| `examples/bug-triage/.deliveryos/memory.sqlite` | Seeded SQLite store | Two rows: one Intent Memory (project + raw idea + minimal discovery), one Codebase Memory. Schema per CHUNK-03. |
+| `examples/bug-triage/.deliveryos/memory/intent/<id>.md` | Intent body file | Pre-filled body for the Intent row. |
+| `examples/bug-triage/.deliveryos/memory/codebase/<id>.md` | Codebase body file | Folder layout, conventions, test command, lint command, auth note — Codebase Memory body per CHUNK-03. |
+| `examples/bug-triage/scripts/seed-demo.ts` | Seed generator | Builds the two body files + `memory.sqlite` from `scripts/seed-demo.source.yml`. Light heuristics OK; the on-disk seeded state is what the demo actually consumes. |
+| `examples/bug-triage/scripts/seed-demo.source.yml` | Seed source-of-truth | YAML/JSON checked-in copy of the project, raw idea, minimal discovery, and Codebase Memory contents. |
 | `examples/bug-triage/src/backend/app.py` | FastAPI app factory | Existing, no `/bugs` router yet. |
 | `examples/bug-triage/src/backend/api/users.py` | ⛔ Forbidden trap file | Real-looking thin handler — the reference pattern the brief points at. |
 | `examples/bug-triage/src/backend/api/bugs.py` | ★ Target file | Initially absent or empty stub. The demo creates it. |
@@ -270,7 +294,26 @@ These edits land inside the panels built by their owning chunks; no new files. T
 
 ### 9.4 Reset / hygiene scripts
 
-- `examples/bug-triage/scripts/reset-demo.sh` — checks the target back out to its committed snapshot and clears `.deliveryos-handoff/`. **Wrapper around `git checkout` + `git clean -fd`**; declared here as a single shell script to remove ambiguity about how to reset between takes.
+- `examples/bug-triage/scripts/reset-demo.sh` — restores the demo target to its committed snapshot between takes. Declared here as a single shell script to remove ambiguity about how to reset.
+
+  **Destructive-reset guard (mandatory).** Before doing anything destructive, the script runs:
+
+  ```sh
+  if git status --porcelain | grep -vE '^.. examples/bug-triage/' | grep -q .; then
+    echo "reset-demo.sh: refusing to run — uncommitted changes outside examples/bug-triage/."
+    echo "Commit, stash, or revert them first, then retry."
+    exit 1
+  fi
+  ```
+
+  Only if the working tree is clean outside the demo subtree does the script proceed. The destructive steps are then **narrowly scoped**:
+
+  - `git checkout -- examples/bug-triage/` to restore tracked files in the subtree.
+  - `git clean -fd examples/bug-triage/.deliveryos-handoff/` to drop the handoff folder (no `-x`, no broader path).
+  - `rm -f` of the *specific* generated files the demo creates: `examples/bug-triage/src/backend/api/bugs.py`, `examples/bug-triage/src/backend/models/bug_report.py`, `examples/bug-triage/src/backend/services/bug_report_service.py`, `examples/bug-triage/tests/integration/test_bugs_api.py`.
+
+  **Never** run `git clean -fdx` from the repo root or against a path broader than `examples/bug-triage/.deliveryos-handoff/`. The guard above plus the targeted paths jointly protect against accidental wipes when rehearsing from a dirty working tree.
+- `examples/bug-triage/scripts/seed-demo.ts` — regenerates `examples/bug-triage/.deliveryos/memory.sqlite` and the two body files (`memory/intent/<id>.md`, `memory/codebase/<id>.md`) from a checked-in source (`scripts/seed-demo.source.yml`). Run once at skeleton-commit time and any time CHUNK-03's schema changes. Idempotent; safe to re-run.
 
 ---
 
@@ -283,7 +326,7 @@ Sized for a 4–5 session-day Week 13.
 - Write the FastAPI app skeleton with `app.py`, `core/auth.py`, `core/db.py`, the existing `users.py`, the empty model/service `__init__.py` files, conftest, and the forbidden traps (`migrations/0001_init.sql`, `src/frontend/placeholder.tsx`).
 - Write `pyproject.toml`, `README.md`, `.gitignore`.
 - Confirm `pytest -q` runs (no tests collected is fine) and `ruff check .` passes against the skeleton.
-- Write `.deliveryos/codebase-memory.md` and `.deliveryos/project.json` matching the CHUNK-03 schema.
+- Write `scripts/seed-demo.source.yml` and `scripts/seed-demo.ts`; run the seed script to produce `.deliveryos/memory.sqlite` plus body files at `.deliveryos/memory/intent/<id>.md` and `.deliveryos/memory/codebase/<id>.md`, all matching the CHUNK-03 schema.
 - Commit the skeleton in a single commit titled `chore(examples): bug-triage demo target skeleton`.
 
 **Day 2 — runbook + canned responses.**
@@ -349,14 +392,15 @@ The "test" for CHUNK-15 is **the demo itself**.
 **R5 — `.deliveryos-handoff/` accidentally committed.** If the user forgets `.gitignore`, the handoff folder ends up in git history.
 *Mitigation.* The example repo's `.gitignore` lists it explicitly. The runbook's reset script also clears it.
 
-**R6 — Codebase Memory pre-fill drifts from the actual skeleton.** If `codebase-memory.md` lists a folder that does not exist, the brief references will be wrong.
-*Mitigation.* T1 walkthrough A catches this — the brief composer surfaces the bad reference in its preview. Day 3 dry run is the safety net.
+**R6 — Codebase Memory pre-fill drifts from the actual skeleton.** If the seeded Codebase Memory body at `memory/codebase/<id>.md` lists a folder that does not exist, the brief references will be wrong.
+*Mitigation.* T1 walkthrough A catches this — the brief composer surfaces the bad reference in its preview. Day 3 dry run is the safety net. Re-running `scripts/seed-demo.ts` after any skeleton change keeps the seeded body in sync.
 
 **R7 — Webview polish creates a regression in an earlier-chunk panel.** Copy edits can break states, e.g. a disabled-button tooltip can mask a real submit blocker.
 *Mitigation.* T1 walkthrough A exercises every panel in the demo path. Anything off-path is out of scope for CHUNK-15 and explicitly not regression-tested here.
 
 **Open questions.**
-- **OQ-1.** Should `examples/bug-triage/.deliveryos/memory.sqlite` be committed, or left for DeliveryOS to create on first open? Recommendation: **not committed** — the demo includes opening DeliveryOS on a fresh repo, and the SQLite file is what DeliveryOS produces. Confirm in Day 1 of implementation.
+
+- **OQ-1.** Should the seeded `examples/bug-triage/.deliveryos/memory.sqlite` be committed, or regenerated at first open by running `scripts/seed-demo.ts`? Recommendation: **commit the seeded `memory.sqlite` and the two body files** so the demo opens to the pre-filled state with zero setup; document `scripts/seed-demo.ts` as the way to regenerate them when the schema changes. Confirm in Day 1 of implementation.
 - **OQ-2.** Does the runbook need a "narrator" voice column? Recommendation: **yes**, the italics talking-point bullets in § 4 are enough; CHUNK-16 can extend them but the structure should land here.
 - **OQ-3.** Should the rehearsal canned responses be checked in to the public repo, or kept in a private demo branch? Recommendation: **checked in** — they double as worked examples in the README for new users.
 
@@ -370,7 +414,7 @@ The "test" for CHUNK-15 is **the demo itself**.
 |---|---|
 | CHUNK-01 | Activity bar + tree view. |
 | CHUNK-02 | Webview foundation; all polish lands inside CHUNK-02-built webviews. |
-| CHUNK-03 | Memory schema; pre-filled Codebase Memory at `examples/bug-triage/.deliveryos/` follows it. |
+| CHUNK-03 | Memory schema; seeded Intent + Codebase Memory rows at `examples/bug-triage/.deliveryos/memory.sqlite` with bodies under `memory/<type>/<id>.md` follow it exactly. |
 | CHUNK-04 | Multi-editor install (T5 smoke uses Cursor). |
 | CHUNK-05 | Raw idea + discovery interview surfaces. |
 | CHUNK-06 | PRD editor. |
@@ -386,7 +430,8 @@ The "test" for CHUNK-15 is **the demo itself**.
 **Exposes.** A runnable, repeatable, recordable end-to-end demo for **CHUNK-16** to capture as the proof of work.
 
 **Honoured shared contracts.**
-- Memory schema (CHUNK-03): pre-filled Codebase Memory follows it; no schema redeclaration.
+
+- Memory schema (CHUNK-03): seeded Intent + Codebase rows follow the canonical `memory_entries` schema + `memory/<type>/<id>.md` body layout; no schema redeclaration and no separate `project.json` or flat `codebase-memory.md`.
 - Webview message contracts (`contracts/` package): no new message types added here; polish stays within existing slices.
 - Execution Brief schema (CHUNK-09): the demo brief is generated by the composer, not hand-rolled.
 - Harness Profile schema (CHUNK-10): the demo uses the Claude Code profile as-is.

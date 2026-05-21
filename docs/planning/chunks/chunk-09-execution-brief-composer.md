@@ -31,6 +31,7 @@ Assemble the canonical 10-section DeliveryOS Execution Brief — defined in [arc
   - Writes the canonical markdown body to `<workspace>/.deliveryos/memory/execution/<brief-id>.md`.
   - Marks the brief immutable; any subsequent edit creates a **new** brief and links it via `kind: "supersedes"` (memory link semantics from CHUNK-03).
 - Canonical markdown serialiser **and** parser shared with downstream chunks.
+- **Renderers for the four sibling handoff files** (`current-context-package.md`, `current-test-specification.md`, `current-verification-checklist.md`, `memory-summary.md`) that CHUNK-11's `HandoffSnapshot` writes alongside the brief in `.deliveryos-handoff/`. CHUNK-09 owns the derivation; CHUNK-11 owns the filesystem write.
 - Tree view changes: under EXECUTE, render a child per requirement that has briefs; under that, render each brief by id + timestamp + version.
 
 ### Out of scope
@@ -100,11 +101,17 @@ extension/src/brief/
                                      #   produces an in-memory ExecutionBrief draft (no Codebase Context;
                                      #   that section starts blank for the user to paste).
   ├── briefMarkdown.ts               # ⭐ Canonical serialiser + parser. Single source of truth.
-                                     #   Exports: serialise(brief), parse(md), parseSections(md), VERSION.
-                                     #   Imported by CHUNK-10 (rendering) and CHUNK-13 (diff parsing).
+                                     #   Exports: serialise(brief), parse(md), parseSections(md),
+                                     #   renderExpectedOutputSection(), VERSION, BRIEF_SECTION_NAMES,
+                                     #   RESULT_MD_SECTION_NAMES. Imported by CHUNK-10 (rendering),
+                                     #   CHUNK-12 (result.md parsing), and CHUNK-13 (diff parsing).
   ├── briefValidator.ts              # Validates a draft prior to save (10 sections present, Allowed
                                      #   non-empty, frontmatter valid, glob patterns parseable).
   ├── briefIds.ts                    # UUID v4 helper specifically for brief ids (`brief_<uuid>`).
+  ├── handoffSiblings.ts             # Renders the four sibling handoff markdown files that
+                                     #   accompany the brief in `.deliveryos-handoff/`. CHUNK-11
+                                     #   imports these renderers and writes the returned strings
+                                     #   verbatim. See § 6.4.
   └── types.ts                       # ExecutionBrief, BriefSection, BriefAllowedList, BriefForbiddenList,
                                      #   BriefFrontmatter. Re-exports nothing from contracts/ — types here
                                      #   are extension-host-internal; webview types live in contracts/.
@@ -270,6 +277,47 @@ export const BRIEF_SECTION_NAMES: readonly string[] = [
 
 This list is exported and **frozen**. CHUNK-10 and CHUNK-13 import the list, never redefine it.
 
+### 4.5 Canonical `result.md` section names (shared with CHUNK-12)
+
+`briefMarkdown.ts` is **also** the canonical home for the section names CHUNK-12's
+`result.md` parser expects. CHUNK-09's renderer embeds these names verbatim
+into Section 9 of every brief (as instructions to the harness — "your
+`result.md` must contain exactly these six sections in this order"). CHUNK-12's
+parser imports the same constant and uses it to drive section splitting. One
+source of truth, no drift.
+
+```ts
+// extension/src/brief/briefMarkdown.ts
+
+export const RESULT_MD_SECTION_NAMES: readonly string[] = [
+  "Summary of Changes",         //  1
+  "Files Changed",              //  2
+  "Tests Added/Updated",        //  3
+  "Tests Run",                  //  4
+  "Risks",                      //  5
+  "Unresolved Questions",       //  6
+] as const;
+```
+
+The Section 9 ("Expected Output") body of a brief is no longer free-form. The
+serialiser emits a fixed template that lists the six `RESULT_MD_SECTION_NAMES`
+as required headings the harness must produce, with a one-line instruction per
+heading. The brief composer's Section 9 editor is **read-only** in MVP — the
+template is rendered verbatim. Users wanting to customise the expected output
+shape edit the canonical brief schema (a future migration), not Section 9 per
+brief.
+
+CHUNK-12's parser imports the constant:
+
+```ts
+// extension/src/result/parseResult.ts (CHUNK-12)
+import { RESULT_MD_SECTION_NAMES } from "../brief/briefMarkdown";
+```
+
+This locks the brief renderer and the result parser to the same six-section
+schema. Adding a seventh section is a schema-version bump in both modules at
+the same time.
+
 ---
 
 ## 5. Allowed / Forbidden lists — the editable form
@@ -305,7 +353,11 @@ The list contents are **glob patterns matched by `picomatch`** (CHUNK-13's choic
 - `{a,b}` brace expansion is supported.
 - A leading `!` negates a pattern (Allowed: `!src/legacy/**` to exclude legacy). Negation in Forbidden is unusual but legal.
 - Paths are **workspace-relative**, POSIX-style (forward slashes), even on Windows. `picomatch` normalises.
-- Trailing-slash directory shorthand (`src/legacy/`) is rewritten to `src/legacy/**` during serialise; parser accepts both forms.
+- Trailing-slash directory shorthand (`src/legacy/`) is rewritten to `src/legacy/**` **at parse time**. The normalisation happens inside `briefMarkdown.parse` (and inside `parseAllowedForbidden` for the cheap path used by CHUNK-13). The `ExecutionBrief.allowed.globs` and `ExecutionBrief.forbidden.globs` arrays therefore **never** contain a trailing slash; serialise emits whatever is in those arrays verbatim, preserving the normalised form on round-trip.
+
+  **Consumer contract:** CHUNK-13's runtime adapter, hook scripts, and any other consumer of the parsed Allowed/Forbidden lists MUST NOT expect to encounter `dir/` shorthand. The single normalisation site is `briefMarkdown` at parse time. CHUNK-13's hook scripts and diff classifier drop the trailing-slash branch entirely.
+
+  The composer UI accepts either form when the user types (`src/legacy/` or `src/legacy/**`). On every edit, the host re-parses the list, which normalises the typed form to `dir/**` before storing it in the draft. The webview preview then shows the canonical `dir/**` form, making the rewrite visible to the user.
 
 The composer validates each glob with `picomatch.makeRe(pattern)` on save; invalid globs block the save with a per-line error.
 
@@ -399,6 +451,7 @@ export interface BriefValidation {
 ```ts
 export const BRIEF_SCHEMA_VERSION: number;
 export const BRIEF_SECTION_NAMES: readonly string[];
+export const RESULT_MD_SECTION_NAMES: readonly string[];   // shared with CHUNK-12
 
 export class BriefMarkdownParseError extends Error {
   readonly kind: "missing-frontmatter" | "schema-mismatch" | "missing-section"
@@ -410,9 +463,98 @@ export class BriefMarkdownParseError extends Error {
 export function parse(md: string): { brief: ExecutionBrief; warnings: string[] };
 export function serialise(brief: ExecutionBrief): string;
 export function parseAllowedForbidden(md: string): { allowed: string[]; forbidden: string[] };
+
+// Renderer for Section 9 of any brief — emitted verbatim by serialise().
+// CHUNK-12's parser also imports it to confirm the renderer + parser agree.
+export function renderExpectedOutputSection(): string;
 ```
 
-These are the only entry points CHUNK-10 and CHUNK-13 are allowed to call. They MUST NOT re-implement parsing.
+These are the only entry points CHUNK-10, CHUNK-12, and CHUNK-13 are allowed to call. They MUST NOT re-implement parsing or redefine `RESULT_MD_SECTION_NAMES`.
+
+### 6.4 Handoff sibling renderers (`extension/src/brief/handoffSiblings.ts`)
+
+CHUNK-11's `HandoffSnapshot` requires four sibling markdown files in
+`.deliveryos-handoff/` alongside `current-execution-brief.md`:
+
+- `current-context-package.md`
+- `current-test-specification.md`
+- `current-verification-checklist.md`
+- `memory-summary.md`
+
+CHUNK-09 owns deriving these from existing memory; CHUNK-11 only writes the
+returned strings to disk. The contract:
+
+```ts
+// extension/src/brief/handoffSiblings.ts
+
+import type { Requirement } from "../../contracts/src/memory";
+import type { CodebaseMemory } from "../../contracts/src/memory";
+import type { TestSpecMemory } from "../../contracts/src/memory";
+import type { MemoryStore } from "../memory/memoryStore";
+import type { ExecutionBrief } from "./types";
+
+/**
+ * Context Package ← Codebase Memory snapshot for the requirement.
+ * Pulls the same Codebase Memory entry CHUNK-09 reads for Section 5, and
+ * emits a self-contained markdown file with the folder structure, conventions,
+ * and constraints subset. If the requirement has no linked Codebase Memory
+ * (MVP-common case: Section 5 was user-pasted), emit the pasted Section 5
+ * body verbatim under an `## Existing Codebase Context` heading.
+ */
+export function renderContextPackage(
+  req: Requirement,
+  codebase: CodebaseMemory | null,
+  brief: ExecutionBrief
+): string;
+
+/**
+ * Test Specification ← Test Spec memory entry linked to the requirement
+ * (CHUNK-08 output). Renders the test spec body verbatim with a short
+ * preamble pointing back to the requirement id and brief id.
+ */
+export function renderTestSpecification(testSpec: TestSpecMemory): string;
+
+/**
+ * Verification Checklist ← Brief Section 10 ("Completion Criteria") rendered
+ * as a GFM Markdown checklist (`- [ ] <criterion>`). One checkbox per line
+ * of Section 10. Section 10 free-form prose is split on lines; bulleted lines
+ * become checkboxes verbatim, blank/heading lines pass through.
+ */
+export function renderVerificationChecklist(brief: ExecutionBrief): string;
+
+/**
+ * Memory Summary ← thin rollup of `MemoryStore.list()` scoped to the
+ * requirement and its linked entries. Format:
+ *
+ *   # Memory summary
+ *   Requirement: REQ-002 — <title>
+ *   Brief: brief_<id> — <iso-timestamp>
+ *
+ *   ## Linked entries
+ *   - intent:<id> — <title>
+ *   - design:<id> — <title>
+ *   - test-spec:<id> — <title>
+ *   …
+ *
+ * Hard-capped at ≤ 50 lines. If the rollup would exceed 50 lines, the
+ * renderer truncates and appends "- … <N> more (truncated)" as the final
+ * line. Intent: the handoff package stays scannable, not exhaustive.
+ */
+export function renderMemorySummary(
+  store: MemoryStore,
+  brief: ExecutionBrief
+): string;
+```
+
+These four functions are pure: same inputs → byte-identical output. CHUNK-11
+calls all four during `HandoffSnapshot.write` and writes the returned strings
+to the four sibling paths. CHUNK-09 owns the rendering contract; CHUNK-11
+owns the filesystem orchestration.
+
+The Memory Summary's 50-line cap is **deliberately small** — the goal is a
+glanceable rollup, not a complete dump (the canonical store is the source of
+truth). Truncation order: requirement first, then brief, then linked entries
+sorted by `type` then `created_at`.
 
 ---
 
@@ -444,10 +586,22 @@ The body is **the canonical brief** — everything in `payload_json` is denormal
 
 ```
 memory_links:
-  (brief_id, requirement_id, "sourced-from")
-  (brief_id, test_spec_id,    "uses-test-spec")   if test spec exists
-  (brief_id, prior_brief_id,  "supersedes")       if this is a revision
+  (brief_id, requirement_id, "derives-from")     Brief → source Requirement
+  (brief_id, test_spec_id,   "derives-from")     Brief → linked Test Spec (if any)
+  (brief_id, prior_brief_id, "supersedes")       Brief → prior Brief (if revision)
 ```
+
+The link-kind set is owned by CHUNK-03 at `contracts/src/links.ts` (the
+canonical taxonomy). CHUNK-09 uses **only** kinds that exist in that taxonomy:
+`derives-from` and `supersedes`. The earlier draft of this chunk introduced
+`sourced-from` and `uses-test-spec` — both have been retired in favour of
+`derives-from` (matching CHUNK-03's canonical name). The semantic distinction
+between "derives from requirement" and "derives from test spec" is carried by
+the **target row's `type`** (`requirement` vs `test-spec`), not by inventing
+two link kinds.
+
+CHUNK-14's walker can therefore treat both edges uniformly: "follow
+`derives-from` from an execution row, dispatch on target type."
 
 ### 7.3 Immutability rules
 
@@ -531,7 +685,7 @@ The order below mirrors how a session-day might unfold. Each numbered step is in
      - Section 6 Test-First Specification ← rendered from the linked Test Spec (CHUNK-08 output).
      - Section 7 Allowed Changes ← empty (user fills).
      - Section 8 Forbidden Changes ← empty (user fills; serialiser inserts `- (none)` if left empty at save would be blocked, see validator).
-     - Section 9 Expected Output ← a fixed template (the bulleted list from `architecture/execution-briefs.md` § Schema).
+     - Section 9 Expected Output ← a **fixed template** rendered from `RESULT_MD_SECTION_NAMES` (see § 4.5). Lists the six required `result.md` headings the harness must produce, with one-line instructions per heading. Read-only in the composer; CHUNK-12's parser reads back into the same constant.
      - Section 10 Completion Criteria ← empty with a placeholder comment.
    - Returns an `ExecutionBriefDraft` with no `locked_at`.
 
@@ -539,7 +693,9 @@ The order below mirrors how a session-day might unfold. Each numbered step is in
    - Register the `deliveryos.brief.compose` command.
    - On invoke (`requirementId` arg), call `briefBuilder.assembleDraft`, open a webview panel, post `brief.draftReady` to the webview.
    - Subscribe to webview messages: `brief.editSection`, `brief.editList`, `brief.save`.
+   - **Host-side immutability guard (load-bearing).** Before processing `brief.editSection` or `brief.editList` for an existing brief, the host MUST look up the brief's `memory_entries` row and reject the message if `locked_at` is set. The host replies with `{ command: "brief.saveResult", ok: false, errors: ["Brief is locked; create a new version via Compose new version."] }` (re-using the save-result envelope so the webview surfaces the error in one place). Webview-only enforcement (disabling controls) is treated as a UX courtesy, **not** a security boundary — a webview can be tampered with via devtools, so the host is the authoritative gate. The check is a single `SELECT locked_at FROM memory_entries WHERE id = ?` per edit message; cheap.
    - On `brief.save`: run `briefValidator.validate(draft)`. If invalid, return `{ command: "brief.saveResult", ok: false, errors }`. If valid: assign id (`briefIds.next()`), set `locked_at`, call `briefMarkdown.serialise`, `vscode.workspace.fs.writeFile`, then `MemoryStore.create("execution", …)` + `MemoryStore.link(…)`, then refresh the tree.
+   - The `brief.save` handler MUST also re-check the (`memory_entries`) row at write time: if the row already exists and has `locked_at` set (race against a concurrent open of the same brief id, or a malicious webview reusing a stale id), reject the save.
 
 7. **Webview composer panel** (~1 day).
    - `main.tsx` mounts `<BriefComposerApp/>` and connects `vscode-messenger`.
@@ -649,6 +805,26 @@ Choice: store `- (none)` in the markdown when Forbidden is empty. Alternative: o
 
 `brief_<uuid-v4>` — flat across the workspace, no per-project prefix. The frontmatter `project_id` ties it to a project. Picking flat ids keeps the file system layout flat: `.deliveryos/memory/execution/brief_xxxx.md`. CHUNK-03's memory store schema already supports this.
 
+### 11.5a Immutability enforcement — host is authoritative
+
+Brief immutability is a **load-bearing audit guarantee**, not a UX
+nicety: the brief is the contract the harness ran against, and CHUNK-12's
+result attribution + CHUNK-13's diff classification + CHUNK-14's release
+evidence all assume a locked brief stays byte-identical from save through
+release.
+
+The webview disables editable controls when `locked_at` is set, but a
+webview is just an iframe-equivalent — a curious user with devtools can
+re-enable a button. That makes webview-only enforcement insufficient.
+**The host-side guard in step 6** (rejecting `brief.editSection` and
+`brief.editList` when `locked_at` is set on the targeted brief's
+`memory_entries` row) is the actual boundary. Treat the webview
+disabled-state as a hint to the well-behaved user; treat the host check
+as the contract.
+
+The same guard runs at `brief.save` time, defending against a stale-id
+attack where a webview holds an old draft id from before a save.
+
 ### 11.6 Concurrent edit during compose
 
 The composer doesn't lock anything during draft. If the user opens two composer panels for the same requirement, they end up with two separate drafts and two separate saved briefs (different ids, both valid, both linked back to the requirement). This is a degenerate but acceptable outcome for MVP.
@@ -679,7 +855,7 @@ For MVP, no — the composer requires a `requirementId` arg. A standalone "blank
 ### 12.2 Downstream (CHUNKs that depend on CHUNK-09)
 
 - **CHUNK-10 — Harness profiles.** Imports `briefMarkdown.parse` to read a saved brief and `briefMarkdown.serialise` (or a profile-aware wrapper around it) to re-emit it under each profile's conventions. Reads the canonical 10-section structure; profile rendering is presentation, not schema.
-- **CHUNK-11 — File handoff.** Reads the saved brief markdown verbatim and writes it to `.deliveryos-handoff/current-execution-brief.md`. Does **not** re-serialise — the canonical markdown on disk is the canonical artefact.
+- **CHUNK-11 — File handoff.** Reads the saved brief markdown verbatim and writes it to `.deliveryos-handoff/current-execution-brief.md`. Does **not** re-serialise — the canonical markdown on disk is the canonical artefact. Also calls CHUNK-09's `handoffSiblings.ts` renderers (`renderContextPackage`, `renderTestSpecification`, `renderVerificationChecklist`, `renderMemorySummary`) and writes their output to the four sibling paths in `.deliveryos-handoff/`. CHUNK-11 owns the writes; CHUNK-09 owns the renderers.
 - **CHUNK-13 — Allowed/Forbidden diff.** Imports `briefMarkdown.parseAllowedForbidden` to extract Sections 7 + 8 as glob arrays; uses `picomatch` (same syntax documented here in § 5.2). Generates the Claude Code PreToolUse hook by reading the same brief, same parser.
 
 ### 12.3 What this chunk exposes (frozen exports)
@@ -690,7 +866,8 @@ For MVP, no — the composer requires a `requirementId` arg. A standalone "blank
 - `ExecutionBrief`, `BriefSection`, `BriefAllowedList`, `BriefForbiddenList`, `BriefFrontmatter` types from `extension/src/brief/types.ts`.
 - The webview message contract (`brief.generateDraft`, `brief.editSection`, `brief.editList`, `brief.save`) from `contracts/src/brief.ts`.
 - The on-disk path convention `<workspace>/.deliveryos/memory/execution/<brief-id>.md`.
-- The memory link kinds `sourced-from`, `uses-test-spec`, `supersedes`.
+- The four handoff sibling renderers from `extension/src/brief/handoffSiblings.ts`: `renderContextPackage`, `renderTestSpecification`, `renderVerificationChecklist`, `renderMemorySummary`. CHUNK-11 imports these; no other chunk re-implements them.
+- The memory link kinds **used by** this chunk: `derives-from` (Brief → Requirement; Brief → Test Spec) and `supersedes` (Brief → prior Brief). The kinds themselves are defined in `contracts/src/links.ts` (owned by CHUNK-03); CHUNK-09 imports them, does not invent them.
 
 These are the **only** brief-related exports. Downstream chunks must import them, not re-implement them.
 
@@ -699,7 +876,54 @@ These are the **only** brief-related exports. Downstream chunks must import them
 ## 13. Shared cross-chunk contracts honoured
 
 - **Memory schema (CHUNK-03):** `memory_entries(id, type="execution", title, payload_json, created_at, updated_at)` + `memory_links(from, to, kind)`. No new tables.
+- **Link-kind taxonomy (CHUNK-03):** `contracts/src/links.ts` is the canonical home for `LINK_KINDS`. CHUNK-09 imports `derives-from` and `supersedes`; does **not** define new kinds.
 - **Webview message contracts (CHUNK-02):** all webview ↔ extension messages for the composer live in `contracts/src/brief.ts`. No duplicate message types.
 - **`.deliveryos/` memory directory layout (CHUNK-03):** brief markdown bodies under `<workspace>/.deliveryos/memory/execution/`. No new top-level dirs.
 - **Workspace trust capability (CHUNK-01):** composer disables Save when untrusted.
 - **Schema source of truth:** [docs/architecture/execution-briefs.md](../../architecture/execution-briefs.md) for the 10-section schema and the immutability rule. This chunk implements it; it does not extend it.
+
+---
+
+## 14. Definition of done
+
+CHUNK-09 is done when **all** of the following are true. Mirrors the
+`part-1-plan.md` done-when row for CHUNK-09 and resolves the audit's m16
+finding (criteria scattered in Test plan → consolidated here).
+
+- [ ] The brief composer renders **all ten canonical sections** with the
+      exact headings listed in § 2 and § 4.4, in numeric order, with no
+      missing or extra sections.
+- [ ] **Round-trip stability:** for every committed fixture brief in
+      `extension/src/brief/__fixtures__/`, `serialise(parse(x)) === x`
+      byte-for-byte (with LF endings). At least one fixture covers each
+      lenient-parse case (CRLF, case-insensitive H1) and the empty-Forbidden
+      sentinel.
+- [ ] **Immutability gate works end-to-end.** A saved brief's `locked_at`
+      is set in `memory_entries`; both the webview disables edit controls
+      AND the host rejects `brief.editSection` / `brief.editList` /
+      `brief.save` for that brief id (per § 11.5a). A unit test asserts the
+      host rejection with `locked_at` set; an integration test asserts the
+      webview disabled state.
+- [ ] **Sibling handoff files render.** Calling each of the four exports
+      from `handoffSiblings.ts` (`renderContextPackage`,
+      `renderTestSpecification`, `renderVerificationChecklist`,
+      `renderMemorySummary`) against a fixture brief returns a non-empty
+      markdown string that parses as valid markdown. `renderMemorySummary`
+      output is `≤ 50` lines.
+- [ ] **CHUNK-12's `RESULT_MD_SECTION_NAMES` is embedded in every brief's
+      Section 9.** Saving a brief and reading Section 9 back yields a body
+      that contains all six canonical `result.md` section names from the
+      shared constant. CHUNK-12's parser, imported in a co-located test,
+      finds all six headings when handed the brief's Section 9 expansion.
+- [ ] **Glob parse-time normalisation** is in place: a brief with a
+      trailing-slash glob (`src/legacy/`) round-trips to `src/legacy/**`.
+      The parsed `ExecutionBrief.allowed.globs` array never contains a
+      trailing-slash entry.
+- [ ] **Link kinds match the canonical taxonomy.** A saved brief writes
+      `derives-from` edges to its Requirement and (if present) Test Spec,
+      and a `supersedes` edge if it replaces a prior brief. No other link
+      kinds are written. The kinds are imported from
+      `contracts/src/links.ts`, never inlined as string literals.
+- [ ] **Manual smoke (§ 10.1) passes end-to-end** on a real workspace
+      against a CHUNK-08 test-spec fixture: compose → save → reopen →
+      read-only → "Compose new version" → revised draft has `supersedes`.

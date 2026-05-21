@@ -14,7 +14,7 @@ Close the SDLC loop. Given a captured Result (CHUNK-12) and a diff outcome (CHUN
 
 - Verification workflow webview that reads Test Spec, Result Memory, and the Diff Outcome side-by-side.
 - A single "Approve" / "Reject" decision recorded as a `VerificationMemory` entry. **No auto-evaluation of test outcomes** — the user makes the call.
-- A mandatory Memory Update form (Design, Codebase, Requirement memories) shown before Release Evidence can be exported. "Skip" is allowed but recorded as a `BypassRecord` per `architecture/stage-configuration.md` § Stage gates.
+- A mandatory Memory Update form (Design, Codebase, Requirement memories) shown before Release Evidence can be exported. "Skip" is allowed but recorded as a `BypassRecord` per `architecture/stage-configuration.md` § Stage gates. Bypasses are stored **inline in `VerificationMemory.payload.bypasses[]`** — not as a separate memory type.
 - Release Evidence walker: traverses Memory Links backwards from the `VerificationMemory` entry and assembles a single `<workspace>/.deliveryos/releases/<release-id>.md` document. Halts on cycles. Surfaces missing-link gaps as inline warnings.
 - A `ReleaseMemory` entry persisted at the same time as the markdown export, with links back through the chain.
 - Optional zip export of all referenced markdown files (the "Release Evidence Package") via `vscode.window.showSaveDialog`.
@@ -43,9 +43,9 @@ When this chunk lands, the end-to-end happy path through CHUNK-05 → CHUNK-14 m
 
 The Verification panel reads three memory entries via the `MemoryStore` (CHUNK-03):
 
-1. **Test Spec** — `VerificationMemory` subtype `test-spec` (CHUNK-08 output), linked to the Requirement via Memory Links of kind `verifies`.
-2. **Result Memory** — the most recent `ResultMemory` entry linked to the current `ExecutionMemory` (CHUNK-12).
-3. **Diff Outcome** — `ResultMemory.diff` payload populated by CHUNK-13: `pass | fail`, `allowed-and-touched[]`, `allowed-but-not-touched[]`, `forbidden-but-touched[]`.
+1. **Test Spec** — `MemoryEntry` of canonical `type='test-spec'` (CHUNK-08 output), linked to the Requirement via Memory Links of kind `has-test-spec`.
+2. **Result Memory** — the most recent `MemoryEntry` of `type='result'` linked to the current Execution entry (CHUNK-12) via `produced`.
+3. **Diff Outcome** — `Result.payload.diffOutcome` populated by CHUNK-13: `pass | fail`, `allowed-and-touched[]`, `allowed-but-not-touched[]`, `forbidden-but-touched[]`.
 
 ### 2.2 Manual approval UX
 
@@ -53,11 +53,11 @@ The Verification panel reads three memory entries via the `MemoryStore` (CHUNK-0
   - **Approve** — sets verdict `pass`, opens the Memory Update form.
   - **Reject** — sets verdict `fail`, prompts for `failedCriteria[]` (multi-select against the Test Spec's verification criteria list) and `defects[]` (free-text, one per entry), then opens the Memory Update form (still mandatory — rejection also counts as a "release-grade decision" worth preserving).
   - **Request rework** — sets verdict `rework`, prompts for `reworkNotes` (markdown), and exits the Verification flow without writing a Release Evidence document. (Rework cycles produce a new Result → new Verification per `memory-layers.md` § 7.)
-- The Diff verdict (CHUNK-13) is **surfaced** for the user but **not enforced**. The user can override a `fail` diff verdict and still approve — but the override is logged in the `VerificationMemory` entry as `diffOverride: true` and surfaced in the Release Evidence document.
+- The Diff verdict (CHUNK-13, read from `Result.payload.diffOutcome`) is **surfaced** for the user but **not enforced**. The user can override a `fail` diff verdict and still approve — but the override is logged in the `VerificationMemory` entry as `diffOverride: true` and surfaced in the Release Evidence document.
 
 ### 2.3 Persistence
 
-On any of the three button clicks, the panel writes a `VerificationMemory` entry:
+On any of the three button clicks, the panel writes a `MemoryEntry` of `type='verification'`:
 
 ```ts
 {
@@ -75,14 +75,16 @@ On any of the three button clicks, the panel writes a `VerificationMemory` entry
     testSpecRef: MemoryRef,
     resultRef: MemoryRef,
     diffSummary: { pass: boolean, forbiddenTouched: string[] },
+    bypasses: BypassRecord[],                 // inline; no separate memory type
   },
 }
 ```
 
-And links (memory_links rows):
+And links (`memory_links` rows, using only canonical kinds from `contracts/src/links.ts`):
 
-- `verification` ──`verifies`──▶ `result`
+- `verification` ──`evaluates`──▶ `result`
 - `verification` ──`evaluates`──▶ `test-spec`
+- `verification` ──`verifies`──▶ `requirement`
 - `verification` ──`subject-of-decision`──▶ `requirement`
 
 ### 2.4 Tree view side-effects
@@ -144,9 +146,9 @@ Both paths produce an audit record. There is **no third option** that lets the u
 
 For each non-empty field:
 
-- **Design** → append a new `DesignMemory` entry, linked back to the Verification via `derived-from-verification`. (Append-only — never edits the existing Design entry, so the chain stays audit-clean.)
-- **Codebase** → append a new `CodebaseMemory` entry with title `Update after <requirement title>`, linked via `derived-from-verification`.
-- **Requirement** → emit a `RequirementMemory` "assumption update" entry (new entry, not an edit of the source requirement — keeps the original requirement immutable in the chain).
+- **Design** → append a new `MemoryEntry` of `type='design'`, linked back to the Verification via `derived-from-verification`. (Append-only — never edits the existing Design entry, so the chain stays audit-clean.)
+- **Codebase** → append a new `MemoryEntry` of `type='codebase'` with title `Update after <requirement title>`, linked via `derived-from-verification`.
+- **Requirement** → emit a new `MemoryEntry` of `type='requirement'` "assumption update" entry, linked via `derived-from-verification` (new entry, not an edit of the source requirement — keeps the original requirement immutable in the chain).
 
 Empty fields are recorded as `{ field: 'design', note: 'nothing-to-add' }` in the `VerificationMemory.payload.memoryUpdateForm` so the audit trail is explicit about "I considered this and had nothing to say".
 
@@ -156,7 +158,7 @@ Per `architecture/stage-configuration.md` § Stage gates:
 
 > Gates can be bypassed (with a recorded justification) for prototype or research work. Bypasses are visible in Release Evidence.
 
-The Verification panel writes a `BypassRecord`:
+The Verification panel appends a `BypassRecord` to `VerificationMemory.payload.bypasses[]`:
 
 ```ts
 {
@@ -170,7 +172,7 @@ The Verification panel writes a `BypassRecord`:
 }
 ```
 
-`BypassRecord` is stored as a `memory_entries` row of `type='bypass'` for uniform graph traversal. The Release Evidence document surfaces all bypasses in a dedicated "Bypasses & gaps" section.
+Bypasses live **inline on the Verification entry** (per B05 resolution — no separate `'bypass'` memory type, no `has-bypass` link). The Release Evidence document surfaces them in a dedicated "Bypasses & gaps" section by reading `verification.payload.bypasses`.
 
 ---
 
@@ -178,21 +180,27 @@ The Verification panel writes a `BypassRecord`:
 
 ### 4.1 Walker behaviour
 
-The walker is a recursive backwards traversal over `memory_links`, starting from the just-written `VerificationMemory` entry and following the canonical chain:
+The walker is a recursive backwards traversal over `memory_links`, starting from the just-written `verification` entry and following the canonical chain using only canonical link kinds from `contracts/src/links.ts`:
 
 ```
-Verification ─→ Result ─→ Execution ─→ Test Spec
-                                  │
-                                  ├─→ Codebase (snapshot ref)
-                                  └─→ Requirement ─→ Design ─→ PRD (or PRD section ref) ─→ Discovery ─→ Intent
+Verification ─evaluates──▶ Result ─targets──▶ Requirement ─derives-from──▶ Requirement(kind='prd')
+              evaluates──▶ Test Spec                        has-test-spec──▶ Test Spec
+                           Result ─references-codebase──▶ Codebase           derives-from──▶ Intent
+                           Result ◀──produced── Execution ─targets──▶ Requirement
+                                                          references-codebase──▶ Codebase
 ```
+
+In plain terms: from Verification we hop to Result and Test Spec; from Result we hop to Execution (reverse `produced`), and from Execution to Requirement (`targets`) and Codebase (`references-codebase`); from Requirement we hop to its PRD-tagged sibling (`derives-from`, a `requirement` row whose `payload.kind === 'prd'`); from Requirement and Codebase we also collect any `derived-from-verification` entries from prior runs. **Discovery is not a hop** — it is read from `intent.payload.discovery`. **PRD is not a separate type** — it is a `requirement` row discriminated by `payload.kind === 'prd'`.
 
 Walker rules:
 
 - Uses `MemoryStore.walk(fromId, kind)` (CHUNK-03) — never reaches into SQLite directly.
+- Reads ONLY canonical link kinds from `contracts/src/links.ts`: `derives-from`, `verifies`, `evaluates`, `produced`, `targets`, `references-codebase`, `supersedes`, `includes`, `reworks`, `has-test-spec`, `subject-of-decision`, `derived-from-verification`, `releases`. Every kind the walker reads has a writer in CHUNK-03 / CHUNK-05–CHUNK-13.
 - **Cycle detection.** Maintains a `visited: Set<MemoryId>`; if the next node is already in `visited`, skip and emit a warning `"cycle detected at <id> via <kind>"` into the document's "Bypasses & gaps" section.
 - **Missing-link tolerance.** If a `walk` returns nothing for an expected `kind`, emit a warning `"missing link: <fromType> ──<kind>──▶ <expectedToType>"` and continue. The document is generated even when the chain is incomplete; the gaps are explicit.
-- **Bypass surfacing.** Any `BypassRecord` linked to any node in the walk is collected into the "Bypasses & gaps" section verbatim.
+- **Bypass surfacing.** Bypasses are read from `verification.payload.bypasses[]` (inline). No `has-bypass` link, no `'bypass'` memory type.
+- **Discovery surfacing.** Discovery is read from `intent.payload.discovery` (CHUNK-05's `IntentPayload`). No `'discovery'` memory type, no hop.
+- **PRD surfacing.** The PRD node is found by walking `requirement ──derives-from──▶ requirement` and filtering for `payload.kind === 'prd'`. Its body lives at `.deliveryos/memory/requirement/<prd-id>.md`.
 
 ### 4.2 Output document
 
@@ -215,12 +223,12 @@ Document shape:
 - Link: `.deliveryos/memory/intent/<id>.md`
 
 ## 2. Discovery
-> Discovery summary, lifted from Discovery Memory.
-- Link: `.deliveryos/memory/discovery/<id>.md`
+> Discovery summary, read from `intent.payload.discovery` (no separate file — the on-disk body for Intent contains the discovery record).
+- Source: `.deliveryos/memory/intent/<id>.md` (Discovery section)
 
 ## 3. PRD section
-> PRD section that backs this requirement.
-- Link: `.deliveryos/memory/prd/<id>.md#section-N`
+> PRD section that backs this requirement. The PRD is a `requirement` row whose `payload.kind === 'prd'`.
+- Link: `.deliveryos/memory/requirement/<prd-id>.md#section-N`
 
 ## 4. Requirement
 > The requirement statement + verification criteria.
@@ -246,7 +254,7 @@ Document shape:
 - Link: `.deliveryos/memory/result/<id>.md`
 - Files changed: <list>
 - Tests added: <list>
-- Diff verdict: pass | fail
+- Diff verdict: pass | fail (read from `result.payload.diffOutcome.verdict`)
 
 ## 9. Verification
 > Verdict + failed criteria + defects + rework notes.
@@ -255,11 +263,11 @@ Document shape:
 - Link: `.deliveryos/memory/verification/<id>.md`
 
 ## 10. Release
-> This document. Linked back as the canonical Release Memory entry.
+> This document. Linked back as the canonical `release` Memory entry.
 
 ## Bypasses & gaps
 - BYPASS: memory-update gate skipped — "<justification>" (recorded at <timestamp>)
-- WARNING: missing link Requirement ──refines-from──▶ PRD (chain incomplete)
+- WARNING: missing link Requirement ──derives-from──▶ Requirement(kind='prd') (chain incomplete)
 - WARNING: cycle detected at <id> via <kind>
 ```
 
@@ -288,11 +296,12 @@ Written at the same time as the markdown file:
 }
 ```
 
-Links:
+Links (canonical kinds only):
 
-- `release` ──`releases`──▶ `requirement`
-- `release` ──`derives-from`──▶ `verification`
-- One `release` ──`includes`──▶ each `bypass`
+- `release` ──`releases`──▶ `verification`
+- `release` ──`includes`──▶ `requirement` (the requirement this release ships)
+
+(Bypasses are inline on the Verification — no separate link kind. Earlier drafts used `has-bypass`; that's been dropped per B05.)
 
 ### 4.4 Optional zip export
 
@@ -302,15 +311,15 @@ A "Export package (zip)" button on the Release Evidence preview opens `vscode.wi
 release-<id>.zip
 ├── release-<id>.md
 └── referenced/
-    ├── intent-<id>.md
-    ├── discovery-<id>.md
-    ├── prd-<id>.md
-    ├── requirement-<id>.md
+    ├── intent-<id>.md          # includes the embedded Discovery record
+    ├── requirement-<prd-id>.md # the PRD-tagged requirement row (payload.kind === 'prd')
+    ├── requirement-<id>.md     # the requirement under release
     ├── design-<id>.md
     ├── test-spec-<id>.md
+    ├── codebase-<id>.md
     ├── execution-<id>.md
     ├── result-<id>.md
-    └── verification-<id>.md
+    └── verification-<id>.md    # bypasses inline in payload, no separate file
 ```
 
 Zipping uses a small dependency (`adm-zip` or `archiver`); decision deferred to implementation but `archiver` is preferred (stream-friendly, smaller surface). The zip itself is **not** stored in memory — it's a one-shot user export.
@@ -396,7 +405,8 @@ export interface VerificationMemoryPayload {
     forbiddenTouched: string[];
     allowedNotTouched: string[];
   };
-  memoryUpdateForm: MemoryUpdateFormRecord; // see below
+  memoryUpdateForm: MemoryUpdateFormRecord;
+  bypasses: BypassRecord[];         // inline; no separate memory type, no `has-bypass` link
 }
 
 export interface Defect {
@@ -445,17 +455,16 @@ export interface ReleaseMemoryPayload {
 }
 
 export interface ChainGraph {
-  intent?: MemoryNode;
-  discovery?: MemoryNode;
-  prd?: MemoryNode;
-  requirement?: MemoryNode;
+  intent?: MemoryNode;               // discovery is inline at intent.payload.discovery
+  prd?: MemoryNode;                  // a `requirement` row whose payload.kind === 'prd'
+  requirement?: MemoryNode;          // payload.kind === 'requirement'
   design?: MemoryNode;
   testSpec?: MemoryNode;
   codebase?: MemoryNode;
   execution?: MemoryNode;
   result?: MemoryNode;
   verification: MemoryNode;          // required — the walker anchor
-  bypasses: BypassRecord[];
+  bypasses: BypassRecord[];          // sourced from verification.payload.bypasses
   warnings: string[];
 }
 
@@ -488,15 +497,14 @@ All messages flow through the `Messenger` runtime from CHUNK-02. No new transpor
 
 ## 7. Data model touched
 
-This chunk lands new payload shapes on the **existing** polymorphic schema from CHUNK-03 — no new tables, no new migrations.
+This chunk lands new payload shapes on the **existing** polymorphic schema from CHUNK-03 — no new tables, no new migrations, **no new memory types**.
 
-- **VerificationMemory** entries — new payload shape per § 6.
-- **ReleaseMemory** entries — new payload shape per § 6.
-- **DesignMemory / CodebaseMemory / RequirementMemory** — append-only new entries written by the Memory Update form, never edits in place.
-- **`memory_entries` rows with `type='bypass'`** — new logical type, same table; surfaced via `MemoryStore.list('bypass')`.
-- **`memory_links` rows** — new link kinds: `verifies`, `evaluates`, `subject-of-decision`, `derived-from-verification`, `releases`, `derives-from`, `includes`.
+- **`verification` entries** — new payload shape per § 6. Bypasses live inline in `payload.bypasses[]`.
+- **`release` entries** — new payload shape per § 6.
+- **`design` / `codebase` / `requirement` entries** — append-only new entries written by the Memory Update form, never edits in place. Linked back to the originating Verification via `derived-from-verification`.
+- **`memory_links` rows** — uses ONLY canonical kinds defined in `contracts/src/links.ts` (owned by CHUNK-03 per M02 resolution). The kinds this chunk writes: `evaluates`, `verifies`, `subject-of-decision`, `derived-from-verification`, `releases`, `includes`. The kinds the walker reads include the writes above plus `derives-from`, `produced`, `targets`, `references-codebase`, `has-test-spec` (all written by earlier chunks).
 
-The link kinds are not enforced by the schema (the table is `(from_id, to_id, kind)` open-ended per CHUNK-03 § "Polymorphic schema") but are constants in `contracts/src/links.ts` (to be added — small file, ~20 lines, shared with the walker and any future visualiser).
+The link kinds are not enforced by the schema (the table is `(from_id, to_id, kind)` open-ended per CHUNK-03 § "Polymorphic schema") but are constants in `contracts/src/links.ts` — owned and exported by CHUNK-03, consumed here. **This chunk does not invent kinds.**
 
 ---
 
@@ -522,19 +530,28 @@ The walker is the load-bearing piece of the export. It must be (a) cycle-safe, (
 ### 9.1 Algorithm
 
 ```ts
+import { LINK_KINDS } from '@deliveryos/contracts/links';
+
 function walkChain(verificationId: string, store: MemoryStore): ChainGraph {
   const visited = new Set<string>();
   const warnings: string[] = [];
-  const bypasses: BypassRecord[] = [];
 
-  function follow(fromId: string, kind: string, expectedToType: string): MemoryNode | undefined {
-    if (visited.has(fromId)) return undefined;
+  function follow(
+    fromId: string,
+    kind: typeof LINK_KINDS[number],
+    expectedToType: string,
+    filter?: (node: MemoryNode) => boolean,
+  ): MemoryNode | undefined {
     const nexts = store.walk(fromId, kind);
-    if (nexts.length === 0) {
+    const candidates = filter ? nexts.filter(filter) : nexts;
+    if (candidates.length === 0) {
       warnings.push(`missing link: ${fromId} ──${kind}──▶ ${expectedToType}`);
       return undefined;
     }
-    const node = nexts[0];                    // MVP: first match wins (one-to-one)
+    if (candidates.length > 1) {
+      warnings.push(`multiple-results: ${candidates.length} via ${kind} from ${fromId}`);
+    }
+    const node = candidates[0];               // MVP: first match wins
     if (visited.has(node.id)) {
       warnings.push(`cycle detected at ${node.id} via ${kind}`);
       return undefined;
@@ -546,32 +563,45 @@ function walkChain(verificationId: string, store: MemoryStore): ChainGraph {
   const verification = store.read(verificationId)!;
   visited.add(verification.id);
 
-  const result        = follow(verification.id, 'verifies',          'result');
-  const testSpec      = follow(verification.id, 'evaluates',         'test-spec');
-  const execution     = result        && follow(result.id,        'produced-by',     'execution');
-  const codebase      = execution     && follow(execution.id,     'snapshot-of',     'codebase');
-  const requirement   = execution     && follow(execution.id,     'fulfills',        'requirement');
-  const design        = requirement   && follow(requirement.id,   'designed-by',     'design');
-  const prd           = requirement   && follow(requirement.id,   'refines-from',    'prd');
-  const discovery     = prd           && follow(prd.id,           'derived-from',    'discovery');
-  const intent        = discovery     && follow(discovery.id,     'derived-from',    'intent');
+  // Walker uses ONLY canonical kinds from contracts/src/links.ts.
+  const result      = follow(verification.id, 'evaluates',           'result',
+                              n => n.type === 'result');
+  const testSpec    = follow(verification.id, 'evaluates',           'test-spec',
+                              n => n.type === 'test-spec');
+  // Reverse hop: Execution ──produced──▶ Result. Find the Execution that produced this Result.
+  const execution   = result      && (store.walkReverse(result.id, 'produced')[0]);
+  if (result && !execution) warnings.push(`missing link: execution ──produced──▶ ${result.id}`);
+  else if (execution) visited.add(execution.id);
 
-  // Collect any bypasses attached anywhere in the chain.
-  for (const node of [verification, result, execution, requirement, design, prd, discovery, intent]) {
-    if (!node) continue;
-    bypasses.push(...store.walk(node.id, 'has-bypass').map(b => b.payload as BypassRecord));
-  }
+  const codebase    = execution   && follow(execution.id,   'references-codebase', 'codebase');
+  const requirement = execution   && follow(execution.id,   'targets',             'requirement',
+                                             n => n.type === 'requirement' && n.payload?.kind !== 'prd');
+  const design      = requirement && follow(requirement.id, 'derives-from',        'design',
+                                             n => n.type === 'design');
+  // PRD is a `requirement` row whose payload.kind === 'prd' (per CHUNK-06/07).
+  const prd         = requirement && follow(requirement.id, 'derives-from',        'requirement(kind=prd)',
+                                             n => n.type === 'requirement' && n.payload?.kind === 'prd');
+  // Intent is reached from the PRD-tagged requirement.
+  const intent      = prd         && follow(prd.id,         'derives-from',        'intent',
+                                             n => n.type === 'intent');
 
+  // Bypasses are inline on the Verification — no traversal needed.
+  const bypasses: BypassRecord[] = verification.payload.bypasses ?? [];
+
+  // Discovery is inline on Intent — surfaced from intent.payload.discovery, not a separate node.
   return { verification, result, testSpec, execution, codebase, requirement,
-           design, prd, discovery, intent, bypasses, warnings };
+           design, prd, intent, bypasses, warnings };
 }
 ```
 
 Notes:
 
-- The walker depends **only** on `MemoryStore.walk(fromId, kind)` and `read(id)` (CHUNK-03 surface). No raw SQL.
-- The link-kind constants are exported from `contracts/src/links.ts` and used here directly (no string literals in production code; the snippet above is for spec clarity).
-- For MVP, each `kind` is treated as one-to-one — `walk()` returns potentially many, we take the first. The walker logs `multiple-results: <count>` warnings if `nexts.length > 1` so multi-edge cases are visible even though we don't render them yet.
+- The walker depends **only** on `MemoryStore.walk(fromId, kind)`, `MemoryStore.walkReverse(toId, kind)` (incoming edges), and `read(id)` (CHUNK-03 surface). No raw SQL.
+- The link-kind constants are exported from `contracts/src/links.ts` (owned by CHUNK-03 post-M02) and used here directly — no string literals in production code; the snippet above is for spec clarity.
+- Every kind the walker reads (`evaluates`, `produced`, `references-codebase`, `targets`, `derives-from`) is in CHUNK-03's canonical `LINK_KINDS` tuple AND is written by an earlier chunk. No reads against undeclared kinds.
+- For PRD discrimination, the walker filters `requirement` rows by `payload.kind === 'prd'` vs `'requirement'`. Both PRD and Requirement live under `.deliveryos/memory/requirement/<id>.md`.
+- For Discovery, the walker reads `intent.payload.discovery` (CHUNK-05's `IntentPayload`) when rendering — there is no `discovery` node in the `ChainGraph`.
+- For each canonical `kind`, `walk()` may return multiple — the walker takes the first match satisfying the type/payload filter and warns on `multiple-results` so multi-edge cases are visible.
 
 ### 9.2 Performance budget
 
@@ -707,13 +737,17 @@ Users will sometimes export Release Evidence before completing the full chain (e
 
 The user can rubber-stamp `fail` diffs into `pass` verifications. The release document loudly says so. This is intentional — the meta-harness records human decisions, it doesn't override them.
 
-### 12.5 Open questions to flag for Prompt 3 cohesion audit
+### 12.5 Resolved-in-Prompt-4 questions (audit residue)
 
-1. **Link-kind taxonomy** — § 7 introduces `verifies`, `evaluates`, `subject-of-decision`, `derived-from-verification`, `releases`, `derives-from`, `includes`, `has-bypass`. Do the earlier chunks (especially CHUNK-12 producing `produced-by`, `fulfills`, `snapshot-of` and CHUNK-08 producing `evaluates`-style links) agree on these strings? Prompt 3 should reconcile a single canonical link-kind list in `contracts/src/links.ts` across all chunks.
-2. **Test-Spec memory type** — CHUNK-08 says "subtype of Verification Memory or its own type — defer to CHUNK-09 schema". This chunk assumes `test-spec` is its own `type` field value. Prompt 3 to confirm.
-3. **Discovery memory type** — `memory-layers.md` lists 8 types and doesn't name "Discovery"; Discovery is folded into Intent. The walker treats Discovery as a separate hop (per § 4.2). Decide: keep Discovery as a `type='discovery'` row that links to Intent, or fold it into the Intent payload and skip the hop. Recommend: keep Discovery separate for chain readability.
-4. **Release ID format** — `release-YYYYMMDD-<shortuuid>` is human-readable but loses chronological precision intra-day. Acceptable for MVP; revisit if multi-release-per-day becomes common.
-5. **Zip dependency** — `archiver` or `adm-zip`. Defer to implementation, but lock the choice on Day 5 to keep the dependency footprint small.
+These were flagged as open during Prompt 2 and resolved by the Prompt 3 cohesion audit + Prompt 4 fixes:
+
+1. **Link-kind taxonomy** — RESOLVED. `contracts/src/links.ts` is owned by CHUNK-03. CHUNK-14's walker reads ONLY canonical kinds: `evaluates`, `produced` (reverse), `references-codebase`, `targets`, `derives-from`, `has-test-spec`. CHUNK-14 writes ONLY: `evaluates`, `verifies`, `subject-of-decision`, `derived-from-verification`, `releases`, `includes`. Old kinds (`produced-by`, `fulfills`, `designed-by`, `refines-from`, `snapshot-of`, `has-bypass`) are eliminated.
+2. **Test-Spec memory type** — RESOLVED. `test-spec` is added to CHUNK-03's canonical `MEMORY_TYPES` (9 types total).
+3. **Discovery memory type** — RESOLVED. Discovery is folded into `IntentPayload.discovery` (CHUNK-05's model). No `discovery` memory type. Walker reads `intent.payload.discovery` directly.
+4. **PRD memory type** — RESOLVED. PRD is a `requirement` row with `payload.kind === 'prd'`. No `prd` memory type. PRD body lives at `.deliveryos/memory/requirement/<prd-id>.md`.
+5. **Bypass memory type** — RESOLVED. Bypasses are inline at `VerificationMemory.payload.bypasses[]`. No `bypass` memory type, no `has-bypass` link.
+6. **Release ID format** — `release-YYYYMMDD-<shortuuid>` is human-readable but loses chronological precision intra-day. Acceptable for MVP; revisit if multi-release-per-day becomes common. CHUNK-15 adopts this same path/ID format (per M13).
+7. **Zip dependency** — `archiver` or `adm-zip`. Defer to implementation, but lock the choice on Day 5 to keep the dependency footprint small.
 
 ### 12.6 Defensive coding notes
 
@@ -727,7 +761,7 @@ The user can rubber-stamp `fail` diffs into `pass` verifications. The release do
 
 ### Depends on
 
-- **CHUNK-13** — diff outcome on `ResultMemory.diff`. Read-only consumer.
+- **CHUNK-13** — diff outcome on `Result.payload.diffOutcome` (canonical field name per M05). Read-only consumer.
 - **CHUNK-12** — `ResultMemory` parsed from `result.md`. Read-only consumer.
 - **CHUNK-11** — handoff layout (only indirectly, because Result is keyed to handoff).
 - **CHUNK-09** — immutable Execution Brief markdown referenced in the release document.

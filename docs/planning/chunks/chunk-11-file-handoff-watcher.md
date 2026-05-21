@@ -275,6 +275,7 @@ Public API:
 export interface ResultWatchEvent {
   workspace: vscode.WorkspaceFolder;
   resultUri: vscode.Uri;
+  briefId: string;                // memory entry id of the brief this result pairs with (M01/M03 contract)
   briefHistoryUri: vscode.Uri;   // the audit-trail brief this result is paired with (from launch)
   handoffTimestamp: string;       // the timestamp used at write-time
   contentBytes: Uint8Array;       // raw bytes, parsing is CHUNK-12's job
@@ -285,7 +286,7 @@ export interface ResultWatchEvent {
 
 export class ResultWatcher {
   constructor(private workspace: vscode.WorkspaceFolder);
-  registerExpectedHandoff(timestamp: string, briefHistoryUri: vscode.Uri): void;
+  registerExpectedHandoff(timestamp: string, briefHistoryUri: vscode.Uri, briefId: string): void;
   readonly onResult: vscode.Event<ResultWatchEvent>;
   dispose(): void;
 }
@@ -320,32 +321,42 @@ Template (markdown comment block + gitignore rules):
 Responsibilities:
 
 - Read the workspace's `.gitignore` (if it exists; `workspace.fs.readFile` → catch ENOENT → empty string).
-- Detect whether DeliveryOS's managed block (delimited by `# DELIVERYOS:BEGIN` / `# DELIVERYOS:END`, mirroring the CHUNK-10 `<!-- DELIVERYOS:BEGIN -->` convention but using `#` since `.gitignore` doesn't support HTML comments) is already present.
-  - If present and identical → no-op.
-  - If present but differs → show a diff (re-use CHUNK-10's diff renderer) and let the user apply or skip.
-  - If absent → show a notification prompt: *"DeliveryOS suggests adding 8 lines to your `.gitignore`. \[Apply] \[Skip] \[Show diff]"*.
+- Call `applyManagedBlock(existing, body, 'gitignore')` from CHUNK-10's `extension/src/profiles/managedBlock.ts` — the **canonical** managed-block engine. **CHUNK-11 does NOT implement its own hash-marker logic** (M09). CHUNK-10's `managedBlock.ts` now supports a `'gitignore'` format (third format alongside `'md'` and `'json'`) using hash-prefixed `# DELIVERYOS:BEGIN <id>` / `# DELIVERYOS:END <id>` markers; CHUNK-11 consumes it.
+- Action dispatch (from `applyManagedBlock`'s `SuggestedUpdate['action']`):
+  - `'noop'` (block present and identical) → no-op.
+  - `'replace'` (block present but differs) → show a diff (re-use CHUNK-10's diff renderer) and let the user apply or skip.
+  - `'insert'` (block absent) → show a notification prompt: *"DeliveryOS suggests adding 8 lines to your `.gitignore`. \[Apply] \[Skip] \[Show diff]"*.
 - Triggered once per project on first handoff write (gated by a flag in cross-project storage, see CHUNK-03).
 - Triggered on demand via the `handoff.applyGitignoreTemplate` webview message (from a button on the brief composer).
 
-Public API:
+Public API (thin wrappers over CHUNK-10's `applyManagedBlock`):
 
 ```ts
-export function buildGitignoreBlock(): string;
+export function buildGitignoreBlock(): string;     // returns the body that gets wrapped by managedBlock
 export async function gitignoreState(workspace: vscode.WorkspaceFolder):
   Promise<{ state: 'absent' | 'present-matching' | 'present-differs'; existing?: string }>;
 export async function applyGitignoreBlock(workspace: vscode.WorkspaceFolder): Promise<void>;
 ```
 
-### Delimiter syntax
+`applyGitignoreBlock` internally is roughly:
+
+```ts
+const existing = await readGitignore(workspace);
+const body = buildGitignoreBlock();
+const { next } = applyManagedBlock(existing, body, 'gitignore');  // CHUNK-10
+await writeGitignore(workspace, next);
+```
+
+### Delimiter syntax (CHUNK-10 owns this; reproduced here for clarity)
 
 ```
-# DELIVERYOS:BEGIN
+# DELIVERYOS:BEGIN deliveryos-handoff
 # DeliveryOS handoff — auto-managed, regenerated each handoff
 ... rules ...
-# DELIVERYOS:END
+# DELIVERYOS:END deliveryos-handoff
 ```
 
-This mirrors the `<!-- DELIVERYOS:BEGIN --> ... <!-- DELIVERYOS:END -->` convention CHUNK-10 establishes for `CLAUDE.md` / `AGENTS.md` (per shared cross-chunk contract in part-1-plan.md). `.gitignore` uses `#` comments, but the BEGIN/END token shape is identical so it visually rhymes for the user.
+The `'gitignore'` format in CHUNK-10's `managedBlock.ts` uses hash-prefixed markers (since `.gitignore` doesn't support HTML comments), but the BEGIN/END/`<id>` shape is identical to the `'md'` format CHUNK-10 establishes for `CLAUDE.md` / `AGENTS.md`. One engine, three formats (`'md'`, `'json'`, `'gitignore'`) — no parallel implementations.
 
 ---
 
@@ -439,6 +450,7 @@ The payload the brief composer (CHUNK-09) passes to the writer. Pure markdown st
 export interface ResultWatchEvent {
   workspace: vscode.WorkspaceFolder;
   resultUri: vscode.Uri;
+  briefId: string;                // memory entry id of the paired brief (carries through to CHUNK-12 history snapshot)
   briefHistoryUri: vscode.Uri;
   handoffTimestamp: string;
   contentBytes: Uint8Array;
@@ -484,19 +496,39 @@ Per research findings #2 and #12, the launcher follows a strict, audit-friendly 
 
 ### Command shape (per profile)
 
-The launcher reads `profile.command_template` from the `HarnessProfile` record CHUNK-10 defines. For MVP the templates are hard-coded fallbacks:
+The launcher **always** reads `profile.command_template` from the `HarnessProfile` record CHUNK-10 defines (M04). CHUNK-10's canonical schema now declares `command_template: string` as a required field on every profile. CHUNK-11 does NOT hard-code commands per harness id — it substitutes a fixed set of placeholders into the profile's template.
+
+**Allowed substitutions** (canonical contract with CHUNK-10):
+
+- `${BRIEF_PATH}` — absolute path to `.deliveryos-handoff/current-execution-brief.md`.
+- `${RESULT_PATH}` — absolute path to `.deliveryos-handoff/result.md` (where the harness is expected to write).
+- `${WORKSPACE}` — absolute path to the active workspace folder root.
+
+No other interpolation is permitted (keeps the audit story clean — every command shipped is reproducible from `profile.command_template` + the three substitutions).
 
 ```ts
-const COMMANDS: Record<HarnessId, string> = {
-  'claude-code':
-    `claude --add-dir . "Run the brief at ${CURRENT_EXECUTION_BRIEF} ` +
-    `and write result to ${RESULT}"`,
-  'codex':
-    `codex exec -o ${RESULT} "Run the brief at ${CURRENT_EXECUTION_BRIEF}"`,
-};
+// extension/src/handoff/terminalLauncher.ts
+function buildCommand(profile: HarnessProfile, workspace: vscode.WorkspaceFolder): string {
+  const briefPath = path.join(workspace.uri.fsPath, '.deliveryos-handoff', 'current-execution-brief.md');
+  const resultPath = path.join(workspace.uri.fsPath, '.deliveryos-handoff', 'result.md');
+  return profile.command_template
+    .replace(/\$\{BRIEF_PATH\}/g, shellQuote(briefPath))
+    .replace(/\$\{RESULT_PATH\}/g, shellQuote(resultPath))
+    .replace(/\$\{WORKSPACE\}/g, shellQuote(workspace.uri.fsPath));
+}
 ```
 
-If CHUNK-10's profile record provides a `command_template`, that wins (with `${RESULT}` and `${CURRENT_EXECUTION_BRIEF}` as the only allowed substitutions — no other interpolation, to keep the audit story clean).
+The built-in Claude Code and Codex profiles (declared in CHUNK-10) ship with templates like:
+
+```sh
+# claude-code profile.command_template:
+claude --add-dir ${WORKSPACE} "Run the brief at ${BRIEF_PATH} and write result to ${RESULT_PATH}"
+
+# codex profile.command_template:
+codex exec -o ${RESULT_PATH} "Run the brief at ${BRIEF_PATH}"
+```
+
+But CHUNK-11 reads them from the profile record at runtime — it never inlines them.
 
 ### Why no `Terminal.shellIntegration` for MVP
 

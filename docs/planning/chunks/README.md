@@ -54,7 +54,32 @@ chunk. No chunk redefines.
 
 - **Polymorphic SQLite tables**: `memory_entries(id, type, title, payload_json, created_at, updated_at)`, `memory_links(from_id, to_id, kind)`, `_schema_version(v)`.
 - **Bundle**: `sql.js` (WASM) shipped inside the VSIX. Not `better-sqlite3` (native ABI breakage across editor forks — research finding #1).
-- **Memory types** as a discriminated union: Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release. **CHUNK-08 adds a 9th**: TestSpec (decided in chunk-08 spec; folds into the same polymorphic table at zero cost — flagged for Prompt 4 to reconcile against `architecture/memory-layers.md`).
+- **Canonical `MEMORY_TYPES`** (9-entry discriminated union, owned by CHUNK-03 via `contracts/src/memory.ts`):
+  1. `intent` — also carries Discovery (folded into payload).
+  2. `requirement` — also carries the PRD (when `payload.kind === 'prd'`).
+  3. `design`
+  4. `codebase`
+  5. `execution`
+  6. `result` — payload includes optional `diffOutcome` slot (populated by CHUNK-13).
+  7. `verification` — payload includes `bypasses[]` (no separate `bypass` type).
+  8. `release`
+  9. `test-spec` (CHUNK-08-defined, declared in CHUNK-03's tuple).
+
+  There are **no** separate `discovery`, `prd`, or `bypass` memory types. CHUNK-14's walker reads `intent` rows for discovery answers and reads `requirement` rows discriminating on `payload.kind` for PRDs.
+- **Canonical `MemoryLink.kind` taxonomy** (owned by CHUNK-03 via `contracts/src/links.ts`):
+  - `derives-from` — present-tense spelling (e.g. Requirement → PRD section). **Not** `derived-from`.
+  - `verifies` — Verification → Requirement.
+  - `evaluates` — Verification → Test Spec; Verification → Result.
+  - `produced` — Execution → Result. **Not** `result-of`.
+  - `targets` — Execution → Requirement.
+  - `references-codebase` — Execution → Codebase.
+  - `supersedes` — versioned memory → predecessor (e.g. brief versioning).
+  - `includes` — Release → Requirement.
+  - `reworks` — Result → prior Result.
+  - `has-test-spec` — Requirement → Test Spec.
+  - `subject-of-decision` — Verification → Requirement.
+  - `derived-from-verification` — Design/Codebase/Requirement updates → Verification.
+  - `releases` — Release → Verification.
 - **`MemoryStore` API**: `create`, `read`, `update`, `list(type)`, `link(from, to, kind)`, `walk(from, kind)`.
 - **Workspace memory layout**: `<workspace>/.deliveryos/memory.sqlite` + `<workspace>/.deliveryos/memory/<type>/<id>.md` (markdown bodies side-by-side with the indexed SQLite).
 - **Cross-project store** (stubbed in CHUNK-03; deferred): `globalStorageUri/harness.sqlite`.
@@ -90,6 +115,11 @@ Consumers: every UI chunk.
 - **Cheap entry-point** `parseAllowedForbidden(md)` for CHUNK-13's diff (skips full validation).
 - **Allowed / Forbidden glob syntax**: `picomatch` semantics — `**`, `?`, `[…]`, `{…}`, leading `!` negation, POSIX paths workspace-relative. Empty Forbidden uses the `- (none)` sentinel.
 - **Brief is immutable once saved.** New versions = new IDs linked via `memory_links` kind `"supersedes"`.
+- **CHUNK-13 diff classifies every touched file into one of four buckets** (owned by CHUNK-13; listed here so consumers know the contract):
+  - `allowed-and-touched` — OK.
+  - `allowed-but-not-touched` — informational; brief possibly over-scoped (not a failure).
+  - `forbidden-but-touched` — FAIL.
+  - `unclassified-but-touched` — WARNING; touched file is in neither Allowed nor Forbidden. Fail-open with a visible warning rather than a hard fail.
 
 Consumers: CHUNK-10 (profile rendering), CHUNK-11 (handoff write), CHUNK-13 (diff parsing).
 
@@ -97,6 +127,9 @@ Consumers: CHUNK-10 (profile rendering), CHUNK-11 (handoff write), CHUNK-13 (dif
 
 - YAML/TS shape from `docs/architecture/harness-profiles.md`:
   `name, display_name, instruction_file, handoff_dir, brief_style, include_test_commands, include_lint_commands, include_forbidden_changes, output_format, mcp_capable`.
+- **Added in iteration 1** (still owned by CHUNK-10):
+  - `command_template?: string` — interpolated launch command with placeholders `${BRIEF_PATH}`, `${RESULT_PATH}`, `${WORKSPACE}`.
+  - `harness_version_pin?: string` — optional version pin so a profile can record which CLI version it was validated against.
 - **Two MVP profile literals**: `claude-code` (`instruction_file: CLAUDE.md`, `handoff_dir: .deliveryos-handoff/`, `mcp_capable: true`) and `codex` (`instruction_file: AGENTS.md`, `handoff_dir: .deliveryos-handoff/`, `mcp_capable: true`).
 - **Codex command shape** uses `-o .deliveryos-handoff/result.md` (research finding #4).
 - **Claude Code result.md**: instruction-driven (CLAUDE.md tells Claude Code to write the file; no native `-o` flag exists).
@@ -105,29 +138,34 @@ Consumers: CHUNK-11 (handoff), CHUNK-13 (PreToolUse hook installer), CHUNK-15 (d
 
 ### 5. Managed delimiter block syntax (defined by CHUNK-10)
 
-- **Markdown files** (`CLAUDE.md` / `AGENTS.md`):
+Three formats supported by the idempotent applier:
+
+- **`md`** — Markdown files (`CLAUDE.md` / `AGENTS.md`):
   `<!-- DELIVERYOS:BEGIN --> ... <!-- DELIVERYOS:END -->`
-- **JSON files** (`.claude/settings.json`):
+- **`json`** — JSON files (`.claude/settings.json`):
   sentinel key `"deliveryos.managed": { ... }` (rejected line-comment markers; rationale in chunk-10 spec).
+- **`gitignore`** — `.gitignore` files:
+  `# DELIVERYOS:BEGIN ... # DELIVERYOS:END`
 - **Idempotent applier** (`extension/src/profiles/managedBlock.ts`): `create` / `append-block` / `replace-block` / `noop` actions; byte-preservation outside the block; atomic write. Never silently rewrites a hand-edit inside the block — diff + Apply button.
 
-Consumers: CHUNK-11 (CLAUDE.md/AGENTS.md update on first run), CHUNK-13 (`.claude/settings.json` PreToolUse hook registration).
+Consumers: CHUNK-11 (CLAUDE.md/AGENTS.md update on first run), CHUNK-13 (`.claude/settings.json` PreToolUse hook registration), CHUNK-11/14 (`.gitignore` updates for `.deliveryos-handoff/current-*` etc.).
 
 ### 6. Handoff directory layout (defined by CHUNK-11)
 
-- **Dotfile root**: `.deliveryos-handoff/` (research finding #6 — standardise; PRD § 18.Y has `/deliveryos-handoff/` to fold in Prompt 4).
-- **`current-*` files** (regenerated each session, gitignorable):
-  - `current-execution-brief.md`
-  - `current-context-package.md`
-  - `current-test-specification.md`
-  - `current-verification-checklist.md`
-  - `memory-summary.md`
-  - `result.md` (NOT created upfront)
+- **Dotfile root**: `.deliveryos-handoff/` (research finding #6 — standardised; PRD § 18.Y reconciled in Prompt 4).
+- **Layout is FLAT** — `current-*` and `result.md` are siblings inside `.deliveryos-handoff/`. There is **no** `current/` subdirectory.
+- **`current-*` files and siblings** (regenerated each session, gitignorable):
+  - `.deliveryos-handoff/current-execution-brief.md`
+  - `.deliveryos-handoff/current-context-package.md`
+  - `.deliveryos-handoff/current-test-specification.md`
+  - `.deliveryos-handoff/current-verification-checklist.md`
+  - `.deliveryos-handoff/memory-summary.md`
+  - `.deliveryos-handoff/result.md` (NOT created upfront — harness writes it)
 - **`history/<timestamp>-*` files** (committed audit trail per finding #8):
-  - `history/<timestamp>-execution-brief.md`
-  - `history/<timestamp>-result.md`
+  - `.deliveryos-handoff/history/<timestamp>-execution-brief.md`
+  - `.deliveryos-handoff/history/<timestamp>-result.md`
 - **Constants** live in `extension/src/handoff/paths.ts` — all chunks import.
-- **Result-watcher event**: `FileSystemWatcher` on `current/result.md`, `onDidCreate` + `onDidChange`, 250ms debounce.
+- **Result-watcher event**: `FileSystemWatcher` on `.deliveryos-handoff/result.md`, `onDidCreate` + `onDidChange`, 250ms debounce.
 - **`onDidWriteTerminalData` not used** (research finding #12 — proposed-only API). `FileSystemWatcher` is the load-bearing completion signal.
 
 Consumers: CHUNK-09 (writes brief into `current-*`), CHUNK-12 (consumes watcher event + reads `result.md`), CHUNK-13 (PreToolUse hook reads `current-execution-brief.md`), CHUNK-15 (demo flow).
@@ -149,19 +187,23 @@ The **canonical "files actually changed" list** comes from `git diff --name-only
 
 ## Notes from the fan-out
 
-Decisions surfaced during Prompt 2 that downstream consumers should
-know about (and that Prompt 3's cohesion audit will verify):
+Decisions surfaced during Prompt 2 and how they resolved during the
+Prompt 3 audit + Prompt 4 iteration-1 reconciliation:
 
-1. **TestSpec memory type.** CHUNK-08 declared it a **9th memory type** (not a subtype of Verification Memory). `docs/architecture/memory-layers.md` lists 8 — Prompt 4 should reconcile.
-2. **Test-case form.** CHUNK-08 picked **markdown bullets with inline `Given:/When:/Then:` labels** for MVP. Revisit at CHUNK-13 start if the diff parser needs structured atoms.
+1. **TestSpec memory type.** **RESOLVED in iteration 1** — `test-spec` is declared as the 9th entry of CHUNK-03's canonical `MEMORY_TYPES` tuple. `docs/architecture/memory-layers.md` reconciled in the Prompt 4 doc-update pass.
+2. **Test-case form.** CHUNK-08 picked **markdown bullets with inline `Given:/When:/Then:` labels** for MVP. Carries forward — revisit at CHUNK-13 start if the diff parser needs structured atoms.
 3. **`@vscode/webview-ui-toolkit` rejected.** Replaced by Radix UI + Tailwind + Lucide React (CHUNK-02). Radix usage starts at CHUNK-05.
 4. **`sql.js` flush strategy.** CHUNK-03 went with explicit flush per mutation (simpler reasoning). Revisit if profiling flags write latency.
 5. **JSON sentinel-key over line-comment markers** for `.claude/settings.json` managed block (CHUNK-10). Rationale: cleaner JSON, no JSONC dependency.
-6. **PRD § 18.Y handoff-path inconsistency.** Folded into CHUNK-11 spec as `.deliveryos-handoff/` (dotfile). PRD itself needs the same fix in Prompt 4.
+6. **PRD § 18.Y handoff-path inconsistency.** **RESOLVED in iteration 1** (Prompt 4 doc-update pass) — PRD now standardised on `.deliveryos-handoff/` matching CHUNK-11.
 7. **No Monaco for the diff renderer.** CHUNK-10 and CHUNK-13 use the small `diff` package + a ~80-LOC unified-diff renderer. Reused twice.
 8. **Memory updates are append-only** (CHUNK-14). Design / Codebase / Requirement updates create new entries linked via `derived-from-verification`, never edit in place. Keeps the audit chain clean.
-9. **Diff-override flag** (CHUNK-14). User can override a FAIL verdict at verification time; the override is recorded as a `BypassRecord` requiring ≥10-char justification.
-10. **Result Memory link kind**: CHUNK-12 stores `kind: "result-of"` from Result → Execution. Other link kinds surfaced: `"derived-from"` (Requirement → PRD section), `"supersedes"` (brief versioning), `"derived-from-verification"` (memory updates post-verification). Prompt 3 should verify the link-kind taxonomy is internally consistent.
+9. **Diff-override flag** (CHUNK-14). User can override a FAIL verdict at verification time; the override is recorded inside the Verification payload's `bypasses[]` array (no separate `bypass` memory type) and requires ≥10-char justification.
+10. **Link-kind taxonomy.** **RESOLVED in iteration 1** — canonical set lives in `contracts/src/links.ts` (owned by CHUNK-03). See § 1 above for the full 13-entry taxonomy. The drifted strings (`result-of`, `derived-from`) have been replaced by their canonical equivalents (`produced`, `derives-from`).
+
+### Out of scope, explicitly deferred
+
+- **Memory Workspace UI panel** (PRD § 21) — deferred post-MVP. The canonical Memory store + per-stage tree-view rows are sufficient for the trimmed demo; a dedicated workspace panel is not on the Phase 0–4 path.
 
 ---
 

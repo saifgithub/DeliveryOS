@@ -251,7 +251,7 @@ The granular v0.2 stages (Raw Idea, Discovery Interview, Draft PRD, Specialist E
 
 - **DISCOVER** contains: Raw Idea, Discovery Interview, Draft PRD, Stage Configuration.
 - **DEFINE** contains: Specialist Expansion (only the specialists the project actually needs), Consolidated PRD, Requirement Analysis, Solution Design, Codebase Memory Preparation, Test Specification, Execution Brief generation.
-- **EXECUTE** contains: Handoff via `/deliveryos-handoff/`, External Coding Harness work, Result Capture.
+- **EXECUTE** contains: Handoff via `.deliveryos-handoff/`, External Coding Harness work, Result Capture.
 - **VERIFY** contains: Verification against test spec, Memory Update, Release Evidence.
 
 The detailed sub-step descriptions from v0.2 are unchanged and described in `docs/deprecated/PRD-v0.1.md` and in the architecture references. Below are the updated and new stages with the configurable-mid-stage mechanic applied.
@@ -316,7 +316,7 @@ Output:
 
 ### 10.11 Stage 11: Result Capture
 
-The output from the external coding harness is captured back into DeliveryOS, either through paste, file ingestion from `/deliveryos-handoff/`, or (later) MCP exchange.
+The output from the external coding harness is captured back into DeliveryOS, either through paste, file ingestion from `.deliveryos-handoff/`, or (later) MCP exchange.
 
 Captured:
 
@@ -459,7 +459,7 @@ Priority: Must have
 
 **FR22 (new): File-based handoff**
 
-The system must be able to write a `/deliveryos-handoff/` directory containing execution-brief.md, context-package.md, test-specification.md, verification-checklist.md, and memory-summary.md.
+The system must be able to write a `.deliveryos-handoff/` directory containing execution-brief.md, context-package.md, test-specification.md, verification-checklist.md, and memory-summary.md.
 
 Priority: Must have
 
@@ -541,7 +541,7 @@ The memory graph must survive app restarts and project re-opens. Local-first sto
 - test specification generation
 - Execution Brief generation
 - harness profile selection (Claude Code, Codex, Generic)
-- file-based handoff via `/deliveryos-handoff/`
+- file-based handoff via `.deliveryos-handoff/`
 - result capture (paste mode)
 - verification summary
 - memory update on verification
@@ -585,11 +585,11 @@ The user selects a target harness profile (e.g., Claude Code). DeliveryOS render
 
 **Step 11: File-based handoff**
 
-DeliveryOS writes `/deliveryos-handoff/` into the project repo containing the execution brief, context package, test specification, verification checklist, and memory summary.
+DeliveryOS writes `.deliveryos-handoff/` into the project repo containing the execution brief, context package, test specification, verification checklist, and memory summary.
 
 **Step 12: External harness execution**
 
-The user invokes Claude Code (or Codex / Cursor / etc.) and instructs it to read `/deliveryos-handoff/current-execution-brief.md` and execute only that work. For harnesses with their own conventions (AGENTS.md, CLAUDE.md), DeliveryOS can also produce a suggested update to those files.
+The user invokes Claude Code (or Codex / Cursor / etc.) and instructs it to read `.deliveryos-handoff/current-execution-brief.md` and execute only that work. For harnesses with their own conventions (AGENTS.md, CLAUDE.md), DeliveryOS can also produce a suggested update to those files.
 
 **Step 13: Result capture**
 
@@ -663,19 +663,24 @@ Define what must be true before the work is considered complete.
 
 **Mode 1: Manual copy-paste.** DeliveryOS renders the brief, user copies it into the harness, pastes the result back. Simplest MVP, low integration cost.
 
-**Mode 2: File-based handoff.** DeliveryOS writes a `/deliveryos-handoff/` directory into the user's repo:
+**Mode 2: File-based handoff.** DeliveryOS writes a `.deliveryos-handoff/` directory (dotfile, workspace-relative) into the user's repo:
 
 ```text
-/deliveryos-handoff/
-  current-execution-brief.md
-  current-context-package.md
-  current-test-specification.md
-  current-verification-checklist.md
-  memory-summary.md
-  result.md (written back by the harness or the user)
+.deliveryos-handoff/
+  current-execution-brief.md          # regenerated each session
+  current-context-package.md          # regenerated each session
+  current-test-specification.md       # regenerated each session
+  current-verification-checklist.md   # regenerated each session
+  memory-summary.md                   # regenerated each session
+  result.md                           # written back by the harness or the user
+  history/
+    <timestamp>-execution-brief.md    # committed audit trail
+    <timestamp>-result.md             # committed audit trail
 ```
 
-The user instructs the harness: "Read /deliveryos-handoff/current-execution-brief.md and execute only that work." Codex reads AGENTS.md, Claude Code reads CLAUDE.md, both can be pointed at the handoff directory by convention or by an entry in their respective config files.
+The `current-*` files are working files, regenerated on every session (typically gitignored). The `history/<timestamp>-*` snapshots are the committed audit trail — they resolve the tension between auditability (success criterion in § 24) and diff noise. This mirrors how Claude Code itself splits `CLAUDE.md` (shared) from `CLAUDE.local.md` (user-only). The dotfile root (`.deliveryos-handoff/`) matches `.vscode/`, `.claude/`, `.codex/` — the conventional shape for tool sidecars.
+
+The user instructs the harness: "Read .deliveryos-handoff/current-execution-brief.md and execute only that work." Codex reads AGENTS.md, Claude Code reads CLAUDE.md, both can be pointed at the handoff directory by convention or by an entry in their respective config files.
 
 **Mode 3: MCP server (future).** DeliveryOS exposes memory through MCP so harnesses can query approved requirements, design decisions, and constraints in-session. Not in MVP.
 
@@ -697,7 +702,7 @@ Each profile customises the rendering of the Execution Brief.
 
 ## 19. Public Demo Scenario
 
-Unchanged from v0.1: Bug Triage Assistant. With the v0.2 architecture, the demo additionally shows DeliveryOS producing an Execution Brief, handing off to Claude Code (or Codex) via `/deliveryos-handoff/`, capturing the result, verifying, and updating memory.
+Unchanged from v0.1: Bug Triage Assistant. With the v0.2 architecture, the demo additionally shows DeliveryOS producing an Execution Brief, handing off to Claude Code (or Codex) via `.deliveryos-handoff/`, capturing the result, verifying, and updating memory.
 
 ---
 
@@ -717,7 +722,7 @@ Unchanged from v0.1: Bug Triage Assistant. With the v0.2 architecture, the demo 
 
 Mostly unchanged from v0.1. Renamed and added:
 
-- **Memory Workspace** (new): browse Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release memories.
+- **Memory Workspace** (deferred post-MVP): browse Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release memories. The trimmed MVP relies on the canonical SQLite store plus per-stage tree-view rows surfacing each artefact under its parent stage; the dedicated Memory Workspace panel lands in a later build.
 - **Execution Brief Composer** (renamed from Implementation Capture): renders the brief, lets the user pick the harness profile, exports the handoff directory.
 - **Harness Profile Manager** (new): edit Claude Code / Codex / Cursor / Generic profiles.
 - **Result Capture** (new): paste or import the harness output, link to brief, compute diff against expected output.
@@ -779,18 +784,28 @@ Capturing structured bug reports is the prerequisite to AI-assisted triage.
 - src/frontend/
 
 ## 9. Expected Output
-Return:
-- summary of changes
-- files changed
-- tests added
-- tests run with results
-- risks
-- unresolved questions
+Write your result summary to `.deliveryos-handoff/result.md` as structured
+markdown with the following six H2 sections (in this order):
+
+1. Summary of Changes
+2. Files Changed
+3. Tests Added/Updated
+4. Tests Run
+5. Risks
+6. Unresolved Questions
+
+Claude Code has no native result-file flag in 2026; the instruction above is
+how the file gets written. For the Codex profile the equivalent command is
+`codex exec -o .deliveryos-handoff/result.md "Run the brief at
+.deliveryos-handoff/current-execution-brief.md"` — Codex's `-o /
+--output-last-message <file>` flag writes the final assistant message to
+the same path natively.
 
 ## 10. Completion Criteria
 - All four test cases above pass
 - ruff and mypy clean
 - No changes outside the Allowed Changes list
+- `.deliveryos-handoff/result.md` exists with all six sections populated
 ```
 
 ---
@@ -830,13 +845,13 @@ Two known constraints, both minor for a prototype: sideloaded VSIX files do not 
 
 ### 25.2 Technical Stack
 
-**Extension shell.** TypeScript VS Code extension. Native surfaces: activity-bar icon, sidebar tree view (the four stages), commands, status bar, terminal integration.
+**Extension shell.** TypeScript VS Code extension. Native surfaces: activity-bar icon, sidebar tree view (the four stages), commands, status bar, terminal integration. The extension declares `capabilities.untrustedWorkspaces.supported: false` and `capabilities.virtualWorkspaces.supported: false` in `package.json`: DeliveryOS reads and writes `.deliveryos-handoff/` and `.deliveryos/`, runs terminals against the workspace, and reads source files for Codebase Memory — it cannot safely run on untrusted code or against virtual filesystems.
 
-**Rich UI.** React + Tailwind rendered inside VS Code webview panels (PRD workspace, memory viewer, Execution Brief composer, verification dashboard). Webviews give full visual control independent of the host editor's theme.
+**Rich UI.** Radix UI primitives + Tailwind + Lucide React icons rendered inside Vite-built React webview panels (PRD workspace, Execution Brief composer, verification dashboard). The memory viewer / Memory Workspace key screen is **deferred post-MVP** — the canonical SQLite store + per-stage tree-view artefact rows are sufficient for the trimmed demo. `@vscode/webview-ui-toolkit` is deliberately rejected: Microsoft sunset the toolkit on 2025-01-01 (repo archived 2025-01-06). Webviews give full visual control independent of the host editor's theme. **Hybrid theming:** the DeliveryOS palette is the primary visual identity; a small set of chrome-level tokens (focus rings, panel borders, body background) is anchored to VS Code CSS variables such as `--vscode-editor-background` and `--vscode-focusBorder` so the extension reads correctly against any host theme.
 
 **Backend logic.** Runs in the extension host (Node.js). No separate server process.
 
-**Memory store.** SQLite file (typed tables per memory type) plus a markdown documents directory, stored in the workspace or in extension storage.
+**Memory store.** `sql.js` (SQLite compiled to WebAssembly) plus a markdown documents directory, stored in the workspace under `.deliveryos/`. Rationale: a native SQLite binding such as `better-sqlite3` would be compiled against a specific Electron-Node ABI, and VS Code, Cursor, Windsurf, Antigravity, and VSCodium each ship slightly different Electron versions. A sideloaded `.vsix` cannot rebuild on the user's machine, so the matrix of prebuilt binaries explodes — historically the single biggest cause of extension breakage on editor upgrades. `sql.js` ships one `.wasm` blob, has zero ABI concerns, and is more than fast enough for the memory-graph workload. Polymorphic schema in MVP: one `memory_entries` table keyed by `type`, plus a `memory_links` edge table. The full discriminated-union types live in `contracts/src/memory.ts`.
 
 **AI integration for MVP.** Manual mode for specialist AI work (generate prompt, user runs it in their harness, pastes back). No API calls in MVP.
 
@@ -872,7 +887,7 @@ Scope deliberately deferred to a later build: the remaining MVP specialists, the
 
 **Risk 2: Harness profiles diverge fast.** Claude Code, Codex, and Cursor change frequently. Mitigation: keep profiles as small, declarative templates; document the version they target.
 
-**Risk 3: File-based handoff is leaky.** Agents may ignore the brief or modify forbidden areas. Mitigation: explicit Allowed/Forbidden Changes sections in the brief, post-execution diff checks during Result Capture.
+**Risk 3: File-based handoff is leaky.** Agents may ignore the brief or modify forbidden areas. Mitigation: explicit Allowed/Forbidden Changes sections in the brief, post-execution diff checks during Result Capture (universal across harnesses — the load-bearing backstop). Additionally, for the **Claude Code profile**, DeliveryOS generates a `PreToolUse` hook inside a managed block in `.claude/settings.json` that reads the Forbidden list from `.deliveryos-handoff/current-execution-brief.md` and exits non-zero on any matching `Edit` / `Write` / `MultiEdit` attempt. Critically, `PreToolUse` fires *before* permission-mode checks; it cannot be bypassed by `--dangerously-skip-permissions`. This is real-time enforcement, not after-the-fact diffing. Codex has no equivalent in 2026, so the post-hoc diff remains the universal backstop on every other profile.
 
 **Risk 4: Memory becomes write-only.** Memory entries get created but never updated. Mitigation: Stage 13 Memory Update is mandatory before release evidence.
 

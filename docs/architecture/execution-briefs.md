@@ -36,7 +36,13 @@ Define what the coding harness may change.
 Define what it must not touch.
 
 ## 9. Expected Output
-Ask for: summary of changes, files changed, tests added or updated, tests run, risks, unresolved questions.
+Instruct the harness to write a structured `.deliveryos-handoff/result.md`
+with the canonical six H2 sections (in this order): Summary of Changes,
+Files Changed, Tests Added/Updated, Tests Run, Risks, Unresolved
+Questions. CHUNK-09 owns rendering this instruction into Section 9.
+CHUNK-12 owns parsing the resulting `result.md` back into Result Memory.
+Both chunks share the same `RESULT_MD_SECTION_NAMES` constant — Section 9
+is not free-form markdown; it embeds the canonical schema verbatim.
 
 ## 10. Completion Criteria
 Define what must be true before the work is considered complete.
@@ -46,7 +52,7 @@ Define what must be true before the work is considered complete.
 
 1. The Execution Brief is generated after the Test Specification stage.
 2. It is rendered through a Harness Profile (see `harness-profiles.md`).
-3. It is written to `/deliveryos-handoff/current-execution-brief.md` in the user's repo (file-based mode) or copied to clipboard (manual mode).
+3. It is written to `.deliveryos-handoff/current-execution-brief.md` (dotfile, workspace-relative) in the user's repo for file-based mode, or copied to clipboard for manual mode. A timestamped snapshot is also written to `.deliveryos-handoff/history/<timestamp>-execution-brief.md` as the committed audit trail.
 4. The external coding harness consumes it.
 5. The harness output is captured back into DeliveryOS via Result Capture.
 6. The brief is preserved as Execution Memory for traceability.
@@ -57,4 +63,4 @@ These two sections are load-bearing. They define the contract between DeliveryOS
 
 ## Versioning
 
-Each brief is immutable once generated. If the requirement changes, a new brief is generated and linked to the previous one. This produces an auditable chain.
+Each brief is **immutable once saved**. The host enforces this — any webview message that would mutate a brief whose `locked_at` is set is rejected. If the requirement changes, a new brief is generated with a new ID and linked to the previous one via a `supersedes` link in the memory graph. This produces an auditable chain.

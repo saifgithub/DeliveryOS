@@ -84,29 +84,31 @@ All paths relative to repo root.
   - No I/O, no VS Code APIs. Unit-testable in isolation.
 
 - **`extension/src/result/resultStore.ts`** (new)
-  - Bridge to CHUNK-03's memory store. Writes a `ResultMemoryEntry` linked (via `kind: "result-of"`) to its source Execution Memory entry.
-  - Atomic-ish: parser first → git probe → single SQL insert + raw-text blob on disk under `.deliveryos/results/<uuid>.md`.
+  - Bridge to CHUNK-03's `MemoryStore`. Writes one `memory_entries` row with `type='result'` (via `MemoryStore.create({ type: 'result', title, body, payload })`) and one `memory_links` row with `kind='produced'` from the originating Execution entry to the new Result entry (via `MemoryStore.link({ from_id: briefId, to_id: resultId, kind: 'produced' })`).
+  - The row's `body` field IS the raw harness markdown. `MemoryStore` persists it to `.deliveryos/memory/result/<id>.md`; CHUNK-12 does not write that path directly.
+  - Atomic-ish: parser first → git probe → `MemoryStore.create(...)` → `MemoryStore.link(...)`. Errors at any step short-circuit; the entry is only considered "captured" after both calls succeed.
 
 - **`extension/src/result/gitChanges.ts`** (new)
   - Probes `git diff --name-only HEAD` in the workspace root via `child_process.execFile` (NOT `exec` — no shell, no injection surface).
-  - Returns `FilesChangedList` (a `{ path, status }[]` plus a top-level `gitAvailable: boolean` flag).
-  - Also runs `git status --porcelain=v1 -z` to catch untracked files the harness created (untracked files do not show in `diff --name-only HEAD`).
-  - If `git` is not on PATH or the workspace is not a git repo, returns `{ gitAvailable: false, files: [] }`. Result capture proceeds with a warning surfaced in the Result Detail panel.
+  - Emits the canonical `FilesChangedList` shape consumed by CHUNK-13's `DiffInput`: `{ gitAvailable: boolean; fromGit: GitFileChange[]; fromHarness: ClaimedFileChange[] }`, where `GitFileChange = { path: string; status: "modified" | "added" | "deleted" | "untracked" | "renamed" }`. Paths are workspace-relative and forward-slash normalised (CHUNK-13 expects exactly this).
+  - Also runs `git status --porcelain=v1 -z` to catch untracked files the harness created (untracked files do not show in `diff --name-only HEAD`) and detects renames via `diff --diff-filter=R` to populate the `"renamed"` status.
+  - If `git` is not on PATH or the workspace is not a git repo, returns `{ gitAvailable: false, fromGit: [], fromHarness: [] }`. Result capture proceeds with a warning surfaced in the Result Detail panel; CHUNK-13's verdict will be annotated "advisory" when `gitAvailable === false`.
 
 - **`extension/src/panels/result/resultHost.ts`** (new)
   - Owns the Result Detail webview panel (one panel per result; reuses existing panels on re-show).
   - Owns the Paste-fallback webview panel (singleton; reopened on demand).
   - Handles webview ↔ extension messages: `result.show`, `result.pasteFallback`, `result.acknowledge`.
-  - Subscribes to CHUNK-11's `onResultMdReady` event (an `EventEmitter<ResultMdReadyEvent>` exported from the handoff watcher). On fire, runs `extension/src/result/captureFlow.ts`.
+  - Subscribes to CHUNK-11's `onResultMdReady` event (an `EventEmitter<ResultWatchEvent>` exported from the handoff watcher; the event carries `briefId`, `briefHistoryUri`, `handoffTimestamp`, and the `result.md` URI per CHUNK-11's revised contract). On fire, runs `extension/src/result/captureFlow.ts`.
 
 - **`extension/src/result/captureFlow.ts`** (new)
-  - The end-to-end capture pipeline (read file → parse → git probe → persist → reveal in tree → open Result Detail panel).
-  - Exposed as `captureFromHandoff(briefId, resultMdUri)` and `captureFromPaste(briefId, rawText, harnessIdentityHint)`.
+  - The end-to-end capture pipeline (read file → parse → git probe → persist → **snapshot to handoff history** → reveal in tree → open Result Detail panel).
+  - Exposed as `captureFromHandoff(event: ResultWatchEvent)` (the full event carries `briefId`, `briefHistoryUri`, `handoffTimestamp`, and the `result.md` URI — see CHUNK-11's revised contract) and `captureFromPaste(briefId, rawText, harnessIdentityHint)`.
   - Reads `result.md` via `vscode.workspace.fs.readFile` (NOT `fs.promises.readFile` — workspace.fs handles virtual workspaces and remote dev).
+  - **History snapshot.** Immediately after `MemoryStore.create(...)` succeeds, the watcher-driven path copies the just-read `result.md` bytes to `.deliveryos-handoff/history/<handoffTimestamp>-result.md`. The path is built from `HANDOFF_HISTORY_DIR` (constant exported by CHUNK-11's `extension/src/handoff/paths.ts`) plus `${event.handoffTimestamp}-result.md`. The paste-mode path also writes this snapshot, deriving `handoffTimestamp` from `new Date().toISOString().replace(/[:.]/g, "-")` when no watcher event is present. This is the committed audit trail CHUNK-11 reserves and that PRD § 24 promises.
   - The same function path handles paste — so the paste fallback is genuinely identical, not a near-duplicate.
 
-- **`extension/src/tree/executeTreeProvider.ts`** (extended, owned by CHUNK-11)
-  - **Coordination ask:** CHUNK-11's tree provider must accept child-node contributions from CHUNK-12. CHUNK-12 registers a `ResultTreeContributor` that, when expanded under a brief node, queries Result Memory entries linked to that brief and yields one tree item per result. Sort: newest first. Icon: `pass` / `partial` / `fail-parse` (the last for low-confidence parses; CHUNK-13 will repaint these once the diff verdict exists).
+- **`extension/src/tree/stageTreeProvider.ts`** (extended; CHUNK-12 contributes a Result child-builder function per CHUNK-02's canonical "one tree-provider file" contract — there is no separate `executeTreeProvider.ts`)
+  - CHUNK-12 adds a `resultChildBuilder(briefNode): ResultTreeItem[]` function imported by `stageTreeProvider.ts`. When a Brief node is expanded, the provider calls this builder; it queries Result Memory entries linked to that brief and yields one tree item per result. Sort: newest first. Icon: `pass` / `partial` / `fail-parse` (the last for low-confidence parses; CHUNK-13 will repaint these once the diff verdict exists).
 
 ### Webview
 
@@ -131,7 +133,7 @@ All paths relative to repo root.
 
 - **`contracts/src/result.ts`** (new)
   - Defines all wire types and the three message names shared between extension and webview (see § 5).
-  - Re-exports `ResultMemoryEntry` from `contracts/src/memory.ts` (which CHUNK-03 owns; CHUNK-12 does not redefine memory schemas).
+  - Re-exports `MemoryEntryOfType<'result'>` (aliased as `ResultMemoryRecord`) and `ResultPayload` from `contracts/src/memory.ts` (which CHUNK-03 owns; CHUNK-12 does not redefine memory schemas).
 
 ---
 
@@ -152,24 +154,32 @@ All paths relative to repo root.
 
 ### Section-header regex
 
-The parser walks the markdown line by line and groups by detected H1/H2 boundaries. The matching is generous on whitespace, ordinal numbers, and the canonical noun:
+The parser walks the markdown line by line and groups by detected H1/H2 boundaries. The matching is generous on whitespace, ordinal numbers, and the canonical noun.
+
+**Canonical header names are imported, not duplicated.** The six section names live in CHUNK-09's `extension/src/brief/briefMarkdown.ts` as `RESULT_MD_SECTION_NAMES` (a tuple of `["Summary of Changes", "Files Changed", "Tests Added or Updated", "Tests Run", "Risks", "Unresolved Questions"]`). CHUNK-09's composer renders these into the brief's Section 9 ("Expected Output") instructions to the harness; CHUNK-12's parser uses the same constant to build its matchers. One source, two consumers — no drift possible.
 
 ```ts
+import { RESULT_MD_SECTION_NAMES } from "../brief/briefMarkdown";
+
 // Match "## 1. Summary of Changes", "## Summary of Changes",
 // "## Summary", "## 1.  Summary  of  changes", etc.
 const SECTION_HEADER = /^#{1,3}\s+(?:\d+\.\s+)?(?<title>.+?)\s*$/;
 
-// Each canonical section maps to a set of fuzzy title patterns
+// Each canonical section id maps to a set of fuzzy title patterns
 // (lowercased, whitespace-normalised, accent-stripped before comparison).
+// The first pattern is derived mechanically from RESULT_MD_SECTION_NAMES;
+// the remaining patterns are tolerated synonyms.
 const CANONICAL_SECTIONS = [
-  { id: "summary",     patterns: [/^summary(\s+of\s+changes)?$/] },
-  { id: "filesChanged", patterns: [/^files\s+changed$/, /^files$/, /^changed\s+files$/] },
-  { id: "testsAdded",  patterns: [/^tests?\s+added(\s+or\s+updated)?$/, /^new\s+tests?$/] },
-  { id: "testsRun",    patterns: [/^tests?\s+run$/, /^test\s+results?$/] },
-  { id: "risks",       patterns: [/^risks?$/, /^known\s+risks?$/] },
-  { id: "questions",   patterns: [/^unresolved\s+questions?$/, /^open\s+questions?$/, /^questions?$/] },
+  { id: "summary",      canonical: RESULT_MD_SECTION_NAMES[0], patterns: [/^summary(\s+of\s+changes)?$/] },
+  { id: "filesChanged", canonical: RESULT_MD_SECTION_NAMES[1], patterns: [/^files\s+changed$/, /^files$/, /^changed\s+files$/] },
+  { id: "testsAdded",   canonical: RESULT_MD_SECTION_NAMES[2], patterns: [/^tests?\s+added(\s+or\s+updated)?$/, /^new\s+tests?$/] },
+  { id: "testsRun",     canonical: RESULT_MD_SECTION_NAMES[3], patterns: [/^tests?\s+run$/, /^test\s+results?$/] },
+  { id: "risks",        canonical: RESULT_MD_SECTION_NAMES[4], patterns: [/^risks?$/, /^known\s+risks?$/] },
+  { id: "questions",    canonical: RESULT_MD_SECTION_NAMES[5], patterns: [/^unresolved\s+questions?$/, /^open\s+questions?$/, /^questions?$/] },
 ];
 ```
+
+The parser's strict-match pass first tries `RESULT_MD_SECTION_NAMES[i]` exactly (case-insensitive, whitespace-normalised); if that fails it falls back to the synonym regexes. This guarantees that if CHUNK-09 ever amends the canonical names, both the brief instruction and the parser pick up the change in lockstep — without a manual edit to CHUNK-12.
 
 The parser never *requires* H2 specifically — `# Summary` and `### Summary` both work. The brief tells the harness to use H2; the parser is forgiving so a single off-by-one in the harness's output does not blow up capture.
 
@@ -212,7 +222,7 @@ All types live in `contracts/src/result.ts` (or its memory-schema imports from C
 ```ts
 // contracts/src/result.ts
 
-import type { ResultMemoryEntry } from "./memory"; // owned by CHUNK-03
+import type { MemoryEntryOfType, ResultPayload } from "./memory"; // owned by CHUNK-03
 
 export type ParseConfidence = "high" | "medium" | "low";
 
@@ -237,7 +247,8 @@ export interface ClaimedFileChange {
 
 export interface GitFileChange {
   path: string;
-  status: "added" | "modified" | "deleted" | "renamed" | "untracked";
+  // Union mirrors CHUNK-13's DiffInput.filesChanged.fromGit shape exactly.
+  status: "modified" | "added" | "deleted" | "untracked" | "renamed";
 }
 
 export interface FilesChangedList {
@@ -248,16 +259,28 @@ export interface FilesChangedList {
 
 export type HarnessIdentity = "claude-code" | "codex" | "other";
 
-// Persisted shape (extends CHUNK-03's ResultMemoryEntry)
-export interface ResultMemoryRecord extends ResultMemoryEntry {
+// Persisted shape — the typed envelope CHUNK-03 owns. The body markdown
+// (raw harness output) lives at .deliveryos/memory/result/<id>.md and is
+// reached via MemoryStore.read(id).body. There is no rawTextPath.
+//
+// ResultPayload (defined in contracts/src/memory.ts by CHUNK-03) carries
+// briefId, harnessIdentity, capturedAt, source, parsed, filesChanged,
+// acknowledgedAt?, and the optional diffOutcome? slot populated by CHUNK-13.
+export type ResultMemoryRecord = MemoryEntryOfType<"result">;
+
+// The payload shape CHUNK-12 writes into MemoryEntryOfType<'result'>.payload.
+// CHUNK-12 sets every field below EXCEPT diffOutcome, which CHUNK-13 fills in
+// later via MemoryStore.update(resultId, { payload: { ..., diffOutcome } }).
+export interface CapturedResultPayload extends ResultPayload {
   briefId: string;                  // FK → Execution Memory entry
   harnessIdentity: HarnessIdentity;
   capturedAt: string;               // ISO-8601
   source: "watcher" | "paste";
   parsed: ParsedResult;
   filesChanged: FilesChangedList;
-  rawTextPath: string;              // .deliveryos/results/<uuid>.md
   acknowledgedAt?: string;
+  // diffOutcome?: DiffOutcome  — declared on ResultPayload in CHUNK-03,
+  // written by CHUNK-13 after capture. CHUNK-12 leaves it unset.
 }
 
 // Webview ↔ extension messages (extends contracts/src/messages.ts from CHUNK-02)
@@ -274,23 +297,26 @@ These three message names are the **only** new contracts CHUNK-12 introduces. CH
 
 ## 6. Data model touched
 
-- **Result Memory** (CHUNK-03 schema). One new row per capture. Linked to its **Execution Memory** entry via `links: [{ kind: "result-of", targetId: briefId }]` — the link type CHUNK-03 reserves for this edge.
-- **Execution Memory** (CHUNK-03 schema). Read-only here. The capture flow looks up the brief by `briefId` to confirm it exists; CHUNK-12 never mutates Execution Memory.
-- **No new tables.** CHUNK-12 reuses CHUNK-03's `result_memory` table and the shared `links` edge table.
-- **On-disk artefact.** Raw harness text persisted at `.deliveryos/results/<uuid>.md` (under the workspace memory directory CHUNK-03 owns). `ResultMemoryRecord.rawTextPath` points to it. This keeps SQL rows small.
+CHUNK-03 owns the canonical polymorphic memory store. CHUNK-12 writes through it; it defines no tables of its own.
 
-> Coordination ask. CHUNK-03 must reserve `.deliveryos/results/` as part of the memory directory layout it owns. If CHUNK-03's spec lands without this subdirectory, CHUNK-12's Prompt 3 audit must flag it.
+- **`memory_entries` (`type='result'`).** One new row per capture. The typed envelope `MemoryEntryOfType<'result'>` from `contracts/src/memory.ts` (CHUNK-03) is the only persisted shape. The row's `payload_json` is a `ResultPayload` (CHUNK-03 schema). Its `body` (markdown) is the raw harness output verbatim.
+- **`memory_links` (`kind='produced'`).** A single edge `Execution → Result` is inserted via `MemoryStore.link({ from_id: briefId, to_id: resultId, kind: 'produced' })`. This is the **canonical link kind** per CHUNK-03's link taxonomy. CHUNK-12 does NOT write `result-of`, `produced-by`, or any other variant.
+- **Execution Memory.** Read-only here. The capture flow calls `MemoryStore.read(briefId)` to confirm the brief exists; CHUNK-12 never mutates Execution Memory.
+- **No new tables, no `result_memory` table, no `links` table.** CHUNK-12 uses only `memory_entries`, `memory_links`, and `_schema_version` — the three tables CHUNK-03 defines.
+- **On-disk body.** The markdown body is persisted by `MemoryStore` at `.deliveryos/memory/result/<id>.md` (CHUNK-03's frozen layout). CHUNK-12 does NOT write to `.deliveryos/results/`; that path is no longer used. The body IS the raw harness output — accessible to downstream chunks via `MemoryStore.read(id).body`. There is no separate `rawTextPath`.
+
+The `diffOutcome` slot on `ResultPayload` (CHUNK-03) is **left unset** by CHUNK-12. CHUNK-13 writes it via a follow-up `MemoryStore.update(resultId, { payload: { ..., diffOutcome } })` once its diff engine has run. CHUNK-12 must not pre-populate it (even with `null`) — absence means "diff not yet computed".
 
 ---
 
 ## 7. VS Code APIs used
 
 - `vscode.workspace.fs.readFile(uri)` — read `result.md` content. Preferred over `node:fs` for virtual / remote workspaces.
-- `vscode.workspace.workspaceFolders[0].uri` — to locate the workspace root for the git probe and for resolving `.deliveryos/results/`.
+- `vscode.workspace.workspaceFolders[0].uri` — to locate the workspace root for the git probe and for resolving `.deliveryos-handoff/history/` (history snapshot target). The body markdown path under `.deliveryos/memory/result/` is resolved by `MemoryStore`; CHUNK-12 never composes it directly.
 - `child_process.execFile("git", ["diff", "--name-only", "HEAD"], { cwd })` — git ground truth. **`execFile`, not `exec`** — no shell interposed, no quoting bugs.
 - `child_process.execFile("git", ["status", "--porcelain=v1", "-z"], { cwd })` — pick up untracked files.
 - `vscode.window.createWebviewPanel(...)` — both Result Detail and Paste-fallback panels. Reuses the CSP + messenger plumbing from CHUNK-02.
-- `vscode.EventEmitter<ResultMdReadyEvent>` — consumes the event CHUNK-11 fires from its `FileSystemWatcher`. CHUNK-12 does not own a watcher.
+- `vscode.EventEmitter<ResultWatchEvent>` — consumes the event CHUNK-11 fires from its `FileSystemWatcher`. CHUNK-12 does not own a watcher.
 - `vscode.commands.registerCommand("deliveryos.result.openPasteFallback", ...)` — surfaces the paste panel from the command palette and from a button on the brief node's context menu.
 - `vscode.window.showWarningMessage(...)` — surfaces "git not available" warnings.
 - No use of `vscode.tasks` — we want stdout, not task lifecycle.
@@ -307,13 +333,13 @@ These three message names are the **only** new contracts CHUNK-12 introduces. CH
    - A real Codex output captured during CHUNK-11 dogfooding.
    - A degenerate output (single paragraph, no headers) — must return `confidence: "low"` and a non-empty `rawText`.
 3. **Git probe.** Implement `extension/src/result/gitChanges.ts`. Unit tests using a fixture repo (jest's `tmp` dir + `git init` + a couple of synthetic commits and an unstaged change).
-4. **Result store.** Implement `extension/src/result/resultStore.ts`. Writes one row via CHUNK-03's memory store API + writes the raw text blob under `.deliveryos/results/`.
-5. **Capture flow.** Implement `extension/src/result/captureFlow.ts` — orchestrates parser → git probe → store → fire `onResultCaptured` event for the tree provider.
-6. **Wire the watcher.** Subscribe `captureFlow.captureFromHandoff` to CHUNK-11's `onResultMdReady` event during extension activation.
+4. **Result store.** Implement `extension/src/result/resultStore.ts`. Calls `MemoryStore.create({ type: 'result', title, body, payload })` where `body` is the raw harness text (verbatim) and `payload` is a `CapturedResultPayload`. Then calls `MemoryStore.link({ from_id: briefId, to_id: resultId, kind: 'produced' })`. No direct fs writes — `MemoryStore` handles the on-disk body at `.deliveryos/memory/result/<id>.md`.
+5. **Capture flow.** Implement `extension/src/result/captureFlow.ts` — orchestrates parser → git probe → `MemoryStore.create` → `MemoryStore.link({ kind: 'produced' })` → **handoff history snapshot** → fire `onResultCaptured` event for the tree provider. The history-snapshot step writes the raw bytes of the captured `result.md` to `${HANDOFF_HISTORY_DIR}/${handoffTimestamp}-result.md` (path constants imported from CHUNK-11's `extension/src/handoff/paths.ts`). Failure to write the snapshot is logged but does not roll back the memory entry (capture succeeded; auditability is best-effort, not blocking).
+6. **Wire the watcher.** Subscribe `captureFlow.captureFromHandoff` to CHUNK-11's `ResultWatchEvent` (emitted by `onResultMdReady`) during extension activation. The full event payload — `briefId`, `briefHistoryUri`, `handoffTimestamp`, and the `result.md` URI — is passed straight through; the capture flow consumes `handoffTimestamp` for the history snapshot filename.
 7. **Result Detail webview.** Build `webview/src/panels/result/{main.tsx,ResultApp.tsx,ResultDetail.tsx}`. Render the parsed sections + the two file lists + a collapsible raw-text view. Use the CSP and messenger from CHUNK-02.
 8. **Paste-fallback webview.** Build `PasteFallback.tsx`. Add a command-palette command and a context-menu action on brief nodes. Wire `result.pasteFallback` to `captureFlow.captureFromPaste`.
 9. **Host panel.** Implement `extension/src/panels/result/resultHost.ts` — singleton paste panel, per-result detail panel, message routing.
-10. **Tree integration.** Register a Result child contributor with CHUNK-11's `executeTreeProvider`. On `onResultCaptured`, call `treeProvider.refresh(briefNode)` so the new result appears under its brief without a window reload.
+10. **Tree integration.** Import the `resultChildBuilder` function from `extension/src/tree/stageTreeProvider.ts` (the canonical single tree-provider file). On `onResultCaptured`, call `treeProvider.refresh(briefNode)` so the new result appears under its brief without a window reload.
 11. **End-to-end smoke test.**
     - Run the Bug Triage demo project's brief through `claude` in the integrated terminal.
     - Watch for the result to appear in the tree.
@@ -343,8 +369,8 @@ These three message names are the **only** new contracts CHUNK-12 introduces. CH
 
 ### Integration
 
-- `resultStore.test.ts` — round-trip: parse → persist → re-read; verify link edge exists in CHUNK-03's `links` table with `kind: "result-of"`.
-- `captureFlow.test.ts` — full pipeline with a fake `result.md` URI; asserts that the tree refresh event fires.
+- `resultStore.test.ts` — round-trip: parse → `MemoryStore.create({ type: 'result', ... })` → `MemoryStore.link({ from_id: briefId, to_id: resultId, kind: 'produced' })` → re-read; verify the `memory_entries` row exists with `type='result'`, the `memory_links` row exists with `kind='produced'`, and `MemoryStore.read(id).body` round-trips the raw harness text. The body file at `.deliveryos/memory/result/<id>.md` is asserted on disk.
+- `captureFlow.test.ts` — full pipeline with a fake `ResultWatchEvent`; asserts (a) tree-refresh event fires, (b) the file `.deliveryos-handoff/history/<handoffTimestamp>-result.md` exists with bytes identical to the input, and (c) `payload.diffOutcome` is `undefined` (CHUNK-13's responsibility, not CHUNK-12's).
 
 ### End-to-end (manual)
 
@@ -355,9 +381,12 @@ These three message names are the **only** new contracts CHUNK-12 introduces. CH
 
 ### Verification (the chunk's "Done when")
 
-- A harness run writing `result.md` produces a stored, parsed Result Memory entry linked to its brief.
-- The paste-mode fallback writes the same shape.
-- The "files actually changed" list is sourced from `git diff --name-only HEAD` (plus `git status --porcelain` for untracked) — NOT from the harness's self-report alone.
+- A harness run writing `result.md` produces a stored, parsed `memory_entries` row with `type='result'`, plus a `memory_links` row with `kind='produced'` from the originating Execution entry to the new Result entry.
+- The Result entry's body markdown is reachable via `MemoryStore.read(id).body` and on disk at `.deliveryos/memory/result/<id>.md`.
+- A copy of the raw `result.md` is written to `.deliveryos-handoff/history/<handoffTimestamp>-result.md` (committed audit trail).
+- The paste-mode fallback writes the same shape (modulo `payload.source: 'paste'`).
+- The "files actually changed" list is sourced from `git diff --name-only HEAD` (plus `git status --porcelain` for untracked) — NOT from the harness's self-report alone — and stored as a `FilesChangedList` whose `fromGit` is a `GitFileChange[]` with `status` ∈ `{ "modified" | "added" | "deleted" | "untracked" | "renamed" }`.
+- `payload.diffOutcome` is **not** set by CHUNK-12 (CHUNK-13 fills it in later via `MemoryStore.update`).
 
 ---
 
@@ -404,7 +433,7 @@ These three message names are the **only** new contracts CHUNK-12 introduces. CH
 
 - **CHUNK-11** — emits the `onResultMdReady` event from the `FileSystemWatcher`. Provides `.deliveryos-handoff/result.md` path constants. Owns the EXECUTE tree provider that CHUNK-12 extends.
 - **CHUNK-09** — defines the Execution Brief markdown schema, including Section 9's instruction to the harness that fixes the canonical result.md headers. CHUNK-12's parser targets exactly this schema.
-- **CHUNK-03** — Memory store, Result Memory table, `links` edge table with `kind: "result-of"`. CHUNK-12 imports the schema; never redefines it. Reserves `.deliveryos/results/` subdirectory.
+- **CHUNK-03** — Polymorphic `memory_entries` table, `memory_links` edge table, and the typed envelope `MemoryEntryOfType<'result'>` + `ResultPayload` (including its optional `diffOutcome` slot). CHUNK-12 writes rows with `type='result'` and a single `memory_links` edge with `kind='produced'` (Execution → Result). Body markdown is stored under `.deliveryos/memory/result/<id>.md` per CHUNK-03's frozen layout. CHUNK-12 imports schemas; never redefines them.
 - **CHUNK-02** — Webview foundation: Vite + React + Tailwind + CSP + messenger. CHUNK-12's two webviews (Result Detail + Paste fallback) are plain consumers of this foundation. `contracts/` package conventions for message types.
 
 ### Outbound (exposes)
@@ -419,7 +448,7 @@ These three message names are the **only** new contracts CHUNK-12 introduces. CH
 - **Webview message contracts** — added as a slice in `contracts/src/result.ts`. Three new message types only.
 - **Execution Brief markdown schema** — CHUNK-09's; CHUNK-12 reads Section 9's text via the persisted brief but does not parse it (the brief's parser is CHUNK-09's; CHUNK-12 parses only `result.md`).
 - **Handoff directory layout** — CHUNK-11's. CHUNK-12 reads `.deliveryos-handoff/result.md` only.
-- **`.deliveryos/` memory directory layout** — CHUNK-03's. CHUNK-12 writes only inside `.deliveryos/results/`.
+- **`.deliveryos/` memory directory layout** — CHUNK-03's. CHUNK-12 writes only inside `.deliveryos/memory/result/` (via `MemoryStore` — never by direct fs writes).
 - **Managed delimiter block syntax** — not used in CHUNK-12 (no CLAUDE.md/AGENTS.md edits here).
 
 ---

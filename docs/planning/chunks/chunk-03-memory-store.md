@@ -22,9 +22,9 @@ Stand up the durable memory layer that every later chunk reads from and writes t
 - `sql.js` integration in the extension host. The `.wasm` blob is shipped inside the VSIX (no network fetch at runtime).
 - Concrete on-disk layout under `<workspace>/.deliveryos/`.
 - Polymorphic single-table schema (`memory_entries`, `memory_links`, `_schema_version`) plus a tiny migration runner.
-- TypeScript discriminated-union types covering all 8 memory types from [`memory-layers.md`](../../architecture/memory-layers.md) (Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release).
+- TypeScript discriminated-union types covering all 9 memory types from [`memory-layers.md`](../../architecture/memory-layers.md) (Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release, Test Spec).
 - `MemoryStore` class with CRUD + link/walk graph operations, exposed via a singleton owned by `extension.ts`.
-- Shared `contracts/src/memory.ts` slice containing the **types only** (no runtime imports) so webviews can typecheck against the same shapes.
+- Shared `contracts/src/memory.ts` + `contracts/src/links.ts` slices containing the **types only** (no runtime imports) so webviews can typecheck against the same shapes. CHUNK-03 owns the canonical memory-type tuple AND the canonical link-kind tuple — no downstream chunk redefines either.
 - `.deliveryos/README.md` template generated on first project creation, explaining the on-disk layout to humans.
 - "Create project" command from CHUNK-01 upgraded to persist via `MemoryStore` and write an Intent Memory entry (replacing the in-memory stub).
 - Stub-only path for the future cross-project store at `context.globalStorageUri/harness.sqlite` — path constant defined and exported, but no DB opened yet.
@@ -90,9 +90,17 @@ If steps 2–4 throw, the catch block runs `db.exec('ROLLBACK')` and the partial
 
 The canonical TypeScript shape for memory entries that **both** the extension host and the React webviews import. Defined here so the webview ↔ extension message contracts (CHUNK-02's `vscode-messenger` setup) can carry typed memory payloads without either side redefining the shape.
 
-Contains exclusively `type` and `interface` declarations plus the `MEMORY_TYPES` and `LINK_KINDS` `as const` tuples. No runtime imports (`sql.js`, `vscode`, `fs`, etc.) so the file is webview-safe.
+Contains exclusively `type` and `interface` declarations plus the `MEMORY_TYPES` `as const` tuple. No runtime imports (`sql.js`, `vscode`, `fs`, etc.) so the file is webview-safe. **Link kinds live in `contracts/src/links.ts` (see next subsection) — `memory.ts` re-exports them so consumers can `import { LINK_KINDS, LinkKind, MemoryLink } from '@deliveryos/contracts/memory'` as before.**
 
-> CHUNK-02 owns the `contracts/` package. CHUNK-03 contributes the `memory.ts` slice. Slot it into `contracts/src/index.ts` alongside whatever CHUNK-02 exports.
+> CHUNK-02 owns the `contracts/` package. CHUNK-03 contributes the `memory.ts` and `links.ts` slices. Slot both into `contracts/src/index.ts` alongside whatever CHUNK-02 exports.
+
+### 2.6a `contracts/src/links.ts` — NEW (canonical link-kind vocabulary)
+
+Sibling slice to `memory.ts`. **Single source of truth for link kinds across all 16 chunks.** Exports the `LINK_KINDS` `as const` tuple, the `LinkKind` type, the `MemoryLink` interface, and the canonical from-type → to-type table as a typed `LINK_KIND_EDGES` constant (used by CHUNK-14's walker for typed traversal and by lint checks). No runtime imports — webview-safe.
+
+Promoted to its own file (rather than buried inside `memory.ts`) because the link-kind taxonomy is consumed by every chunk that writes or reads graph edges — CHUNK-07 (Requirement ← PRD), CHUNK-08 (Requirement → Test Spec), CHUNK-09 (Brief sourcing), CHUNK-12 (Execution → Result), CHUNK-13 (verification-triggered updates), CHUNK-14 (release walks). A single file means one rename refactor moves the vocabulary; a downstream consumer inventing a new kind is a TS error, not silent drift.
+
+Re-exported from `contracts/src/index.ts` and re-exported from `contracts/src/memory.ts` for backwards-compatible import paths.
 
 ### 2.7 `extension/src/memory/ids.ts` — NEW
 
@@ -165,7 +173,14 @@ Not committed to the DeliveryOS repo. Written into the user's workspace by the u
       result/         <id>.md
       verification/   <id>.md
       release/        <id>.md
+      test-spec/      <id>.md              # One per Test Spec entry (CHUNK-08 owns payload)
 ```
+
+> **Folders that are deliberately NOT created here:**
+>
+> - **No `memory/discovery/`** — Discovery is folded into `IntentPayload.discovery` (see § 5.3). The walker in CHUNK-14 must not hop through a `discovery` type.
+> - **No `memory/prd/`** — PRD is tagged inside `requirement` via `payload.kind === 'prd'` (CHUNK-06/07 own the shape). The walker discriminates on `payload.kind`, not on a separate type.
+> - **No `memory/bypass/`** — Bypasses are stored inside `VerificationPayload.bypasses[]` (see § 5.3). One fewer type to manage; the bypass list rides with the verification it was approved under.
 
 Notes:
 
@@ -200,7 +215,7 @@ CREATE TABLE IF NOT EXISTS _schema_version (
 CREATE TABLE IF NOT EXISTS memory_entries (
   id           TEXT PRIMARY KEY,           -- e.g. 'intent-7a3f9b2c'
   type         TEXT NOT NULL,              -- one of: intent | requirement | design | codebase
-                                           --         execution | result | verification | release
+                                           --         execution | result | verification | release | test-spec
   title        TEXT NOT NULL,              -- short human-facing label, denormalised for list views
   payload_json TEXT NOT NULL,              -- JSON string; shape determined by `type` (see § 5 union)
   created_at   INTEGER NOT NULL,           -- unix millis
@@ -235,7 +250,7 @@ INSERT INTO _schema_version (v) VALUES (1);
 
 ### 4.3 Why one big polymorphic table
 
-- The whole *point* of the chunk break-down's "do not design the rich per-type ER schema" instruction is to avoid premature schema rigidity. The 8 memory types from [`memory-layers.md`](../../architecture/memory-layers.md) are described in prose; their per-type fields are still evolving as the MVP gets built.
+- The whole *point* of the chunk break-down's "do not design the rich per-type ER schema" instruction is to avoid premature schema rigidity. The 9 memory types from [`memory-layers.md`](../../architecture/memory-layers.md) are described in prose; their per-type fields are still evolving as the MVP gets built.
 - `payload_json` carries the typed payload (validated by the discriminated union in TypeScript before insert, see [§ 5](#5-memorystore-class-api)). When per-type tables become necessary (e.g. for SQL filtering on requirement priority), a migration extracts them out — straightforward future work.
 - Markdown bodies stay on disk, not in the DB, so the SQLite file is small and the markdown is human-readable / git-diffable.
 
@@ -257,10 +272,20 @@ export const MEMORY_TYPES = [
   'result',
   'verification',
   'release',
+  'test-spec',
 ] as const;
 
 export type MemoryType = (typeof MEMORY_TYPES)[number];
 ```
+
+**Type-count rationale (reconciled with the cohesion audit B05):**
+
+- `'test-spec'` is **in** the tuple. CHUNK-08 (Test Designer) needs first-class memory entries with their own bodies, links, and tree-view rows; folding it into Requirement payload would lose the typed identity.
+- `'discovery'` is **deliberately not** in the tuple. Discovery answers ride inside `IntentPayload.discovery` (see § 5.3). One Intent ↔ one Discovery is a 1:1 relationship; an entire memory type for it would be ceremony.
+- `'prd'` is **deliberately not** in the tuple. The PRD landed in CHUNK-06/07 as `RequirementPayload.kind === 'prd'` (a per-requirement discriminator on its inner shape). The CHUNK-14 walker discriminates on `payload.kind` when traversing requirements, not on a separate memory type.
+- `'bypass'` is **deliberately not** in the tuple. Bypasses live inside `VerificationPayload.bypasses[]` — they're an attribute of the verification verdict that granted them, not standalone entries. Total count stays at 9.
+
+> **Net result:** 9 memory types — the 8 from the original spec plus `test-spec`. CHUNK-14's walker must not hop through `discovery`, `prd`, or `bypass` "types" (they do not exist).
 
 ### 5.2 Base envelope
 
@@ -284,15 +309,31 @@ Each payload shape is sketched from [`memory-layers.md`](../../architecture/memo
 
 ```ts
 // 1. Intent Memory — what the user originally wanted
+//    (reconciled with CHUNK-05's richer shape per audit M15)
+export interface RawIdea {
+  text: string;                          // the original idea text the user typed
+  capturedAt: number;                    // unix millis — when the user first hit save
+}
+
+export interface DiscoveryAnswer {
+  question: string;
+  answer: string;
+}
+
+export interface DiscoveryRecord {
+  promptSnapshot: string;                // the exact discovery prompt CHUNK-05 used (for replay)
+  answers: DiscoveryAnswer[];
+  completedAt: number;                   // unix millis
+}
+
 export interface IntentPayload {
-  rawIdea: string;                       // the original idea text the user typed
-  discoveryAnswers?: DiscoveryAnswer[];  // populated by CHUNK-05; optional at create-time
+  rawIdea: RawIdea;                              // value object — not a bare string
+  discovery: DiscoveryRecord | null;             // null until CHUNK-05 finishes the discovery flow
   problemStatement?: string;
   userGoals?: string[];
   nonGoals?: string[];
   successCriteria?: string[];
 }
-export interface DiscoveryAnswer { question: string; answer: string; }
 
 // 2. Requirement Memory — what the system agreed to build
 export interface RequirementPayload {
@@ -345,9 +386,20 @@ export interface ResultPayload {
   unresolvedQuestions?: string[];
   harness: 'claude-code' | 'codex' | 'cursor' | 'generic';
   parseConfidence: 'high' | 'low';       // CHUNK-12 sets 'low' on fallback parse
+  diffOutcome?: DiffOutcome;             // CHUNK-13's diff engine writes this after the Result is captured.
+                                         // CHUNK-13 owns the `DiffOutcome` type definition (verdict + per-file
+                                         // classifications); CHUNK-03 declares the optional slot so CHUNK-14's
+                                         // walker can read `result.payload.diffOutcome` from the canonical shape.
+                                         // Field name is `diffOutcome` (not `diff` — audit M05 collapsed the drift).
 }
 
 // 7. Verification Memory — whether the work passed
+export interface VerificationBypass {
+  requirementId: string;                 // which requirement the user chose to bypass
+  reason: string;                        // user-supplied justification
+  approvedAt: number;                    // unix millis
+}
+
 export interface VerificationPayload {
   verdict: 'pass' | 'fail';
   failedCriteria?: string[];
@@ -355,6 +407,9 @@ export interface VerificationPayload {
   reworkNotes?: string;
   approvedBy?: string;                   // user identifier; MVP just records "user"
   approvedAt?: number;                   // unix millis
+  bypasses?: VerificationBypass[];       // per audit B05 — bypasses ride with the verification verdict
+                                         // that granted them. CHUNK-14 reads `verification.payload.bypasses`
+                                         // rather than walking a `has-bypass` edge to a separate type.
 }
 
 // 8. Release Memory — what was released and why
@@ -365,6 +420,29 @@ export interface ReleasePayload {
   deferredItems?: string[];
   finalSignOffAt: number;
   evidencePackagePath?: string;          // path to release-evidence markdown (CHUNK-14)
+}
+
+// 9. Test Spec Memory — the executable verification contract for a Requirement
+//    CHUNK-08 (Test Designer) owns the rich payload shape (test steps, fixtures,
+//    expected outputs, harness directives, etc.). CHUNK-03 declares the discriminator
+//    arm + on-disk folder; the inner fields below are the minimum stable surface
+//    that downstream chunks (CHUNK-09 brief render, CHUNK-12 result match, CHUNK-14
+//    walker) can rely on. CHUNK-08 may extend with additional optional fields
+//    non-breakingly.
+export interface TestSpecPayload {
+  requirementId: string;                 // the Requirement this spec verifies
+  scenarios: TestScenario[];             // ordered list of executable scenarios
+  fixtures?: string[];                   // pasted/seed data references
+  setupSteps?: string[];
+  teardownSteps?: string[];
+  notes?: string;
+}
+
+export interface TestScenario {
+  id: string;                            // short stable id within the spec, e.g. 's1'
+  description: string;                   // human-readable scenario summary
+  steps: string[];                       // ordered actions
+  expected: string[];                    // observable post-conditions
 }
 ```
 
@@ -379,7 +457,8 @@ export type MemoryEntry =
   | MemoryEntryBase<'execution',    ExecutionPayload>
   | MemoryEntryBase<'result',       ResultPayload>
   | MemoryEntryBase<'verification', VerificationPayload>
-  | MemoryEntryBase<'release',      ReleasePayload>;
+  | MemoryEntryBase<'release',      ReleasePayload>
+  | MemoryEntryBase<'test-spec',    TestSpecPayload>;
 
 export type MemoryEntryOfType<T extends MemoryType> =
   Extract<MemoryEntry, { type: T }>;
@@ -388,20 +467,27 @@ export type MemoryPayloadOfType<T extends MemoryType> =
   MemoryEntryOfType<T>['payload'];
 ```
 
-### 5.5 Link kinds (initial vocabulary, frozen for v1)
+### 5.5 Link kinds (canonical vocabulary, frozen for v1)
 
-These cover all 8 memory types' relationships from [`memory-layers.md` § Relationships](../../architecture/memory-layers.md). Later chunks may add more — additions are non-breaking because `kind` is `TEXT`.
+> **Ownership note (per audit M02):** the link-kind vocabulary lives in `contracts/src/links.ts` (see § 2.6a). `memory.ts` re-exports it so legacy imports keep working, but the file-level source of truth is `links.ts`. **No other chunk may introduce a new kind without amending this list.** Downstream chunks that need a missing edge type must escalate back to CHUNK-03 — adding a kind here is the only legal path.
+
+The canonical set below covers every edge that the 16 chunk specs actually need. Spellings reconciled: it is **`derives-from`** (with an `-s-`), never `derived-from`. The audit found ~24 distinct strings invented downstream — the table below collapses them to **13**.
 
 ```ts
 export const LINK_KINDS = [
-  'derives-from',          // Requirement ← Intent; Design ← Requirement; etc.
-  'verifies',              // Verification → Requirement
-  'produced',              // Execution → Result
-  'targets',               // Execution → Requirement
-  'references-codebase',   // Execution → Codebase
-  'supersedes',            // newer Execution → older Execution (rework)
-  'includes',              // Release → Requirement
-  'reworks',               // Result → Result (rework cycles)
+  'derives-from',
+  'verifies',
+  'evaluates',
+  'produced',
+  'targets',
+  'references-codebase',
+  'supersedes',
+  'includes',
+  'reworks',
+  'has-test-spec',
+  'subject-of-decision',
+  'derived-from-verification',
+  'releases',
 ] as const;
 
 export type LinkKind = (typeof LINK_KINDS)[number];
@@ -412,6 +498,51 @@ export interface MemoryLink {
   kind: LinkKind;
 }
 ```
+
+The canonical from-type → to-type table. Every consumer chunk writes/reads strictly within these rows; anything else is drift.
+
+| Kind | From type | To type | Purpose |
+|---|---|---|---|
+| `derives-from` | `requirement` (`payload.kind === 'requirement-item'`) | `requirement` (`payload.kind === 'prd'`) | Requirement decomposed from a PRD-tagged Requirement (CHUNK-07). |
+| `derives-from` | `requirement` (`payload.kind === 'prd'`) | `intent` | The PRD traces back to the original Intent / raw idea (CHUNK-06). Walker uses this hop. |
+| `derives-from` | `design` | `requirement` | Design rationale traces to the requirement it serves (CHUNK-09 / CHUNK-14). |
+| `derives-from` | `design` | `design` | A newer design builds on an earlier one. |
+| `derives-from` | `execution` | `requirement` | Brief sourced its content from the requirement(s) it targets (replaces the dropped `sourced-from`). |
+| `derives-from` | `execution` | `test-spec` | Brief embedded this Test Spec into Section 6 (CHUNK-09). Alternative path: walker traverses Requirement → `has-test-spec` → Test Spec; both edges are canonical. |
+| `verifies` | `verification` | `requirement` | Verification verdict applies to this requirement. Strictly Verification → **Requirement** (the Verification → Result edge is `evaluates`, not `verifies` — audit collapsed the overload). |
+| `evaluates` | `verification` | `test-spec` | Verification consulted this Test Spec when forming its verdict. |
+| `evaluates` | `verification` | `result` | Verification reviewed this Result when forming its verdict (the "did the run pass?" edge). |
+| `produced` | `execution` | `result` | The execution produced this result. Canonical name; **replaces** `result-of` and `produced-by` (both dropped). |
+| `targets` | `execution` | `requirement` | The execution was scoped to deliver this requirement. |
+| `references-codebase` | `execution` | `codebase` | The execution brief embedded this codebase memory snapshot. |
+| `supersedes` | `execution` | `execution` | Newer brief replaces an older brief for the same requirement (versioning). |
+| `supersedes` | any versioned memory | same type | Generic "newer entry replaces older entry" within a single type. |
+| `includes` | `release` | `requirement` | This release ships this requirement. |
+| `reworks` | `result` | `result` | A re-run result reworks a prior result (rework cycle). |
+| `has-test-spec` | `requirement` | `test-spec` | Test Designer attached this Test Spec to this Requirement (CHUNK-08). |
+| `subject-of-decision` | `verification` | `requirement` | A verification decision was made about this requirement (distinct from `verifies`: this records the "we made a verdict here" history edge; `verifies` records the active verdict's scope). |
+| `derived-from-verification` | `design` | `verification` | A design update was triggered by this verification (CHUNK-14 rework cycle). |
+| `derived-from-verification` | `codebase` | `verification` | A codebase memory update was triggered by this verification. |
+| `derived-from-verification` | `requirement` | `verification` | A requirement edit was triggered by this verification (new acceptance criteria, etc.). |
+| `releases` | `release` | `verification` | The release's quality bar — the verifications that approved it. (Chosen over `Release → Result` because the Verification carries the verdict + bypasses; chasing one more hop to Result is via the existing `evaluates` edge.) |
+
+**Explicitly removed from the vocabulary** (with the canonical replacement to use instead):
+
+| Removed kind | Use instead | Reason |
+|---|---|---|
+| `derived-from` | `derives-from` | Hyphenation drift (audit M02). Was breaking CHUNK-14's walker. |
+| `result-of` | `produced` (reverse the direction) | CHUNK-12 was writing `result-of` Result → Execution; canonical edge is Execution → Result via `produced`. |
+| `produced-by` | `produced` (reverse the direction) | Same reason. CHUNK-14 walker queried `produced-by`; rewrite to query `produced` incoming. |
+| `sourced-from` | `derives-from` (Execution → Requirement) | One-edge-per-relationship; the brief "sourcing" relationship is the same shape as other `derives-from` edges. |
+| `uses-test-spec` | `has-test-spec` (reverse the direction) | One canonical edge for Requirement ↔ Test Spec; brief consumers query the Requirement's outgoing `has-test-spec`. |
+| `fulfills` | (drop) | CHUNK-14 walker read it; no chunk ever wrote it. Replace with `verifies` if the intent was Verification → Requirement. |
+| `designed-by` | (drop) | Read by walker, never written. Replace with `derives-from` (Design → Requirement) if needed. |
+| `refines-from` | (drop) | Read by walker, never written. Use `supersedes` for versioning or `derives-from` for parentage. |
+| `snapshot-of` | (drop) | Read by walker, never written. Replace with `references-codebase` if the intent was Execution → Codebase. |
+| `has-bypass` | (drop) | No longer needed — bypasses live in `VerificationPayload.bypasses[]`, not as a separate type/edge. |
+| `belongs-to` | (drop) | Mentioned in CHUNK-06 prose but never landed in code. |
+
+> **Walker contract for CHUNK-14:** the multi-hop walker must construct its queries from `LINK_KINDS` constants imported from `@deliveryos/contracts/links` — never as string literals. A `LinkKind` typo becomes a TS compile error.
 
 ### 5.6 Raw row type (extension-only)
 
@@ -615,7 +746,7 @@ Created: **{{ isoTimestamp }}**
 Suggested order — small commits per step:
 
 1. **Add `sql.js` dependency** in `extension/package.json`; add the `dist/sql-wasm.wasm` copy step to the existing build script. Confirm `npm run build` produces `extension/dist/sql-wasm.wasm`.
-2. **Define types** in `contracts/src/memory.ts` (all of [§ 5](#5-typescript-types--canonical-memory-contract)). Re-export from `contracts/src/index.ts`. Mirror-import in `extension/src/memory/types.ts`.
+2. **Define types** in `contracts/src/memory.ts` and `contracts/src/links.ts` (all of [§ 5](#5-typescript-types--canonical-memory-contract)). Re-export both from `contracts/src/index.ts`. `memory.ts` also re-exports from `links.ts` for the legacy import path. Mirror-import in `extension/src/memory/types.ts`.
 3. **Write `paths.ts`** — pure constants + helpers. Cheap, foundational, no I/O.
 4. **Write `schema.ts`** — the DDL strings, the `MIGRATIONS` map, `CURRENT_SCHEMA_VERSION = 1`.
 5. **Write `migrations.ts`** — the 8-line runner.
@@ -683,7 +814,7 @@ Ship `sql.js` (WASM), not `better-sqlite3`. Native modules break across editor f
 
 Rationale:
 - Simplest reasoning. After every API call returns, disk = memory. Crash safety is trivial: at worst we lose the in-flight mutation.
-- Write volume is tiny in MVP. The 8-memory-types graph for one project is dozens-to-low-hundreds of rows. Flushing the whole DB (a few KB) per mutation is well under the human-perception threshold.
+- Write volume is tiny in MVP. The 9-memory-types graph for one project is dozens-to-low-hundreds of rows. Flushing the whole DB (a few KB) per mutation is well under the human-perception threshold.
 
 ### 12.3 Future tuning seam
 
@@ -759,15 +890,15 @@ Both are explicitly *out of scope* for CHUNK-03 — the simple strategy is the r
 ### 14.1 What this chunk depends on
 
 - **[CHUNK-01](./chunk-01-extension-scaffold.md)** — the extension activates, the `deliveryos.project.create` command exists, `context.extensionUri` and `context.globalStorageUri` are accessible. CHUNK-03 *replaces* the stub persistence inside `project.create`.
-- **[CHUNK-02](./chunk-02-webview-foundation.md)** — owns the `contracts/` package. CHUNK-03 contributes the `contracts/src/memory.ts` slice; CHUNK-02's `contracts/src/index.ts` must export it. CHUNK-02's `vscode-messenger` contracts can carry typed memory payloads using these types from this point forward.
+- **[CHUNK-02](./chunk-02-webview-foundation.md)** — owns the `contracts/` package. CHUNK-03 contributes the `contracts/src/memory.ts` AND `contracts/src/links.ts` slices; CHUNK-02's `contracts/src/index.ts` must export both. CHUNK-02's `vscode-messenger` contracts can carry typed memory payloads and link kinds using these types from this point forward.
 
 ### 14.2 What this chunk exposes (and freezes)
 
 | Exposed contract | Consumers |
 |---|---|
-| `MEMORY_TYPES` + `MemoryType` | All later chunks. |
-| `MemoryEntry` discriminated union and all 8 payload interfaces | CHUNK-05 (Intent.discoveryAnswers), CHUNK-06–CHUNK-08 (Requirement), CHUNK-09 (Execution), CHUNK-11 (Execution + Codebase), CHUNK-12 (Result), CHUNK-13 (Result.filesChanged), CHUNK-14 (Verification + Release). |
-| `LINK_KINDS` + `MemoryLink` | CHUNK-07, CHUNK-09, CHUNK-12, CHUNK-13, CHUNK-14. |
+| `MEMORY_TYPES` (9 entries) + `MemoryType` | All later chunks. CHUNK-14's walker imports the tuple and may not add memory types of its own. |
+| `MemoryEntry` discriminated union and all 9 payload interfaces (`IntentPayload`, `RequirementPayload`, `DesignPayload`, `CodebasePayload`, `ExecutionPayload`, `ResultPayload`, `VerificationPayload`, `ReleasePayload`, `TestSpecPayload`) plus value objects (`RawIdea`, `DiscoveryRecord`, `DiscoveryAnswer`, `VerificationBypass`, `TestScenario`) | CHUNK-05 (Intent: `RawIdea` + `DiscoveryRecord`), CHUNK-06–CHUNK-08 (Requirement + Test Spec), CHUNK-09 (Execution), CHUNK-11 (Execution + Codebase), CHUNK-12 (Result), CHUNK-13 (Result.diffOutcome), CHUNK-14 (Verification.bypasses + Release). |
+| `LINK_KINDS` (13 canonical kinds) + `LinkKind` + `MemoryLink` — single source of truth in `contracts/src/links.ts` | CHUNK-07, CHUNK-08, CHUNK-09, CHUNK-12, CHUNK-13, CHUNK-14. No downstream chunk may invent a new kind; additions land here via spec amendment. |
 | `MemoryStore` class (open/close/CRUD/link/walk/backlinks) | Every chunk from CHUNK-05 onwards. |
 | On-disk layout: `<workspace>/.deliveryos/memory.sqlite`, `<workspace>/.deliveryos/memory/<type>/<id>.md`, `<workspace>/.deliveryos/README.md` | CHUNK-09 (writes Execution bodies), CHUNK-12 (writes Result bodies), CHUNK-14 (writes Release bodies + `releases/` sibling — adds, doesn't conflict). |
 | Cross-project stub path `<globalStorageUri>/harness.sqlite` | Reserved name; later chunk implements the DB. |
@@ -792,7 +923,8 @@ Per [`part-1-plan.md` "Shared cross-chunk contracts"](../part-1-plan.md):
 - [ ] Opening `memory.sqlite` with the host's `sqlite3` CLI shows the schema (`memory_entries`, `memory_links`, `_schema_version`, the three indexes) and the Intent row.
 - [ ] The migration runner runs cleanly on first init and is a no-op on re-init.
 - [ ] Unit tests in `extension/test/memory.test.ts` pass headlessly (`npm test`).
-- [ ] `contracts/src/memory.ts` exports the discriminated union; the webview side can `import type { MemoryEntry } from '@deliveryos/contracts/memory'` with no runtime dependency on `vscode` or `sql.js`.
+- [ ] `contracts/src/memory.ts` exports the discriminated union (9 arms including `test-spec`); the webview side can `import type { MemoryEntry } from '@deliveryos/contracts/memory'` with no runtime dependency on `vscode` or `sql.js`.
+- [ ] `contracts/src/links.ts` exports `LINK_KINDS` (13 canonical kinds) + `LinkKind` + `MemoryLink`; importable from `@deliveryos/contracts/links` (and re-exported via `@deliveryos/contracts/memory` for the legacy path).
 
 ---
 
