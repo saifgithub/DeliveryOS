@@ -10,7 +10,8 @@ Added the build process, separate from the product spec.
 - Added `docs/commands/fix-bugs.md`: the DeliveryOS bug-fix command, adapted from the AMI version. Bug tracking is a version-controlled JSON file (`docs/build/bugs.json`) instead of a remote PostgreSQL `bug_reports` table, since DeliveryOS is a solo build with no distributed testers. Copy command sources from `docs/commands/` into `.claude/commands/` for Claude Code to use.
 - Added `docs/build/bugs.json` (empty bug list).
 - Fixed `.gitignore`: the `build/` rule was root-anchored to `/build/` so the tracked `docs/build/` folder is not silently ignored; added `*.vsix` and `.claude/worktrees/` plus `.claude/active-track`.
-- Project promoted from `Eval/DeliveryOS` to the drive root at `/Volumes/Extreme Pro/DeliveryOS`.
+- Session model: two tracks, O (Docs, runs Phase A planning) and R (Development, runs Phase B build), wrapped by `/start-fresh` and `/handover`. Recorded in `MULTI_AGENT_BUILD_PROCESS.md` section 12.
+- Project promoted from `Eval/DeliveryOS` to the drive root at `/Volumes/Extreme Pro/DeliveryOS`, and initialised as a git repo (first commit on `main`).
 
 ## v0.3 (2026-05-20, delivery decisions added 2026-05-21)
 

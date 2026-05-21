@@ -20,9 +20,9 @@ Default execution is serial. Parallel chunk builds are possible only for chunks 
 
 ## 1. Two phases
 
-**Phase A, Planning.** Already defined in `docs/planning/claude-code-build-prompts.md`. A four-prompt loop (break into chunks, expand each chunk, validate cohesion, iterate) produces validated chunk specs in `docs/planning/chunks/` and a `docs/planning/READY.md` that lists the chunks in dependency order. Phase A writes no implementation code.
+**Phase A, Planning.** Already defined in `docs/planning/claude-code-build-prompts.md`. A four-prompt loop (break into chunks, expand each chunk, validate cohesion, iterate) produces validated chunk specs in `docs/planning/chunks/` and a `docs/planning/READY.md` that lists the chunks in dependency order. Phase A writes no implementation code. It runs under track O (Docs); see section 12.
 
-**Phase B, Build.** This document. It consumes the validated chunk specs and ships them one chunk at a time.
+**Phase B, Build.** This document. It consumes the validated chunk specs and ships them one chunk at a time. It runs under track R (Development); see section 12.
 
 The chunk specs are the contract between the two phases. A chunk spec that turns out wrong during Phase B is a BLOCKER: the architect fixes the chunk spec before continuing.
 
@@ -291,11 +291,18 @@ When something non-obvious is learned, the architect saves it as feedback and ad
 
 Sessions are managed by the config-driven `.claude` commands (`/session-setup`, `/start-fresh`, `/handover`), the same skills used on the AMI project.
 
-**One-time setup.** Copy the command files into the DeliveryOS repo at `.claude/commands/` and run `/session-setup`. Suggested config: a project prefix (for example `DOS`), a single development track `R`, and `handover_path` pointed at `docs/build/BUILD_STATUS.md`. DeliveryOS is greenfield, so the bug-list block can stay disabled until there is a shipped product.
+**Two tracks.** DeliveryOS runs two tracks:
 
-**Each architect session.** Open with `/start-fresh`, which reads `BUILD_STATUS.md`, surfaces the next chunk, and enters plan mode. Wrap with `/handover`, which rotates state, runs a consistency scan, and leaves a clean tree for the next session.
+- **Track O (Docs).** Phase A planning (the four-prompt loop) plus all ongoing documentation: PRD revisions, architecture notes, ADRs, chunk-spec fixes. Handover doc: `docs/planning/PLANNING_STATUS.md`.
+- **Track R (Development).** Phase B, the chunk build cycle. Handover doc: `docs/build/BUILD_STATUS.md`.
 
-**When the architect saturates.** The stakeholder runs `/handover` to wrap, then `/start-fresh` to open a fresh architect that resumes from `BUILD_STATUS.md` and `NEXT_SESSION.md`.
+Sessions are tagged `DOS:O<N>` and `DOS:R<N>`. Separate handover docs keep planning narratives and build narratives from interleaving. Track O leads, since it produces the chunk specs; track R follows. Once the build is underway the two can run in either order, because O is then mostly doc maintenance. A chunk-spec fix raised by a BLOCKER during an R session touches O-track files but is made by the architect in-session; it does not require switching tracks.
+
+**One-time setup.** Install the command sources (`cp docs/commands/*.md .claude/commands/`) and run `/session-setup`: prefix `DOS`, two tracks (O = Docs, R = Development), handover paths as above. DeliveryOS is greenfield, so the bug-list block stays disabled until there is a shipped product.
+
+**Each session.** Open with `/start-fresh <track>` and wrap with `/handover <track>`. `/start-fresh` reads that track's handover doc, surfaces what is next, and enters plan mode. `/handover` rotates state, runs a consistency scan, and leaves a clean tree.
+
+**When the architect saturates.** Wrap with `/handover <track>`, then `/start-fresh <track>` opens a fresh architect that resumes from the track's handover doc and `NEXT_SESSION.md`.
 
 ---
 
