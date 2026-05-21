@@ -66,20 +66,19 @@ chunk. No chunk redefines.
   9. `test-spec` (CHUNK-08-defined, declared in CHUNK-03's tuple).
 
   There are **no** separate `discovery`, `prd`, or `bypass` memory types. CHUNK-14's walker reads `intent` rows for discovery answers and reads `requirement` rows discriminating on `payload.kind` for PRDs.
-- **Canonical `MemoryLink.kind` taxonomy** (owned by CHUNK-03 via `contracts/src/links.ts`):
-  - `derives-from` — present-tense spelling (e.g. Requirement → PRD section). **Not** `derived-from`.
-  - `verifies` — Verification → Requirement.
+- **Canonical `MemoryLink.kind` taxonomy** (owned by CHUNK-03 via `contracts/src/links.ts`) — 10 kinds (reduced from 13 in DOS:O4 iteration-3 audit):
+  - `derives-from` — present-tense spelling (e.g. Requirement → PRD section; Execution → Requirement, replacing the dropped `targets`). **Not** `derived-from`.
+  - `verifies` — Verification → Requirement. Covers both the active-verdict scope and the "we made a verdict here" history edge (the previously separate `subject-of-decision` was collapsed).
   - `evaluates` — Verification → Test Spec; Verification → Result.
   - `produced` — Execution → Result. **Not** `result-of`.
-  - `targets` — Execution → Requirement.
-  - `references-codebase` — Execution → Codebase.
   - `supersedes` — versioned memory → predecessor (e.g. brief versioning).
   - `includes` — Release → Requirement.
   - `reworks` — Result → prior Result.
   - `has-test-spec` — Requirement → Test Spec.
-  - `subject-of-decision` — Verification → Requirement.
   - `derived-from-verification` — Design/Codebase/Requirement updates → Verification.
   - `releases` — Release → Verification.
+
+  Retired in DOS:O4 iteration-3 audit: `targets` (Execution → Requirement is now a `derives-from` hop), `references-codebase` (no Codebase Memory writer exists in v1), `subject-of-decision` (folded into `verifies`).
 - **`MemoryStore` API**: `create`, `read`, `update`, `list(type)`, `link(from, to, kind)`, `walk(from, kind)`.
 - **Workspace memory layout**: `<workspace>/.deliveryos/memory.sqlite` + `<workspace>/.deliveryos/memory/<type>/<id>.md` (markdown bodies side-by-side with the indexed SQLite).
 - **Cross-project store** (stubbed in CHUNK-03; deferred): `globalStorageUri/harness.sqlite`.
@@ -199,7 +198,7 @@ Prompt 3 audit + Prompt 4 iteration-1 reconciliation:
 7. **No Monaco for the diff renderer.** CHUNK-10 and CHUNK-13 use the small `diff` package + a ~80-LOC unified-diff renderer. Reused twice.
 8. **Memory updates are append-only** (CHUNK-14). Design / Codebase / Requirement updates create new entries linked via `derived-from-verification`, never edit in place. Keeps the audit chain clean.
 9. **Diff-override flag** (CHUNK-14). User can override a FAIL verdict at verification time; the override is recorded inside the Verification payload's `bypasses[]` array (no separate `bypass` memory type) and requires ≥10-char justification.
-10. **Link-kind taxonomy.** **RESOLVED in iteration 1** — canonical set lives in `contracts/src/links.ts` (owned by CHUNK-03). See § 1 above for the full 13-entry taxonomy. The drifted strings (`result-of`, `derived-from`) have been replaced by their canonical equivalents (`produced`, `derives-from`).
+10. **Link-kind taxonomy.** **RESOLVED in iteration 1; further reduced in DOS:O4 iteration-3 audit.** Canonical set lives in `contracts/src/links.ts` (owned by CHUNK-03). 10 canonical kinds (reduced from 13 — `targets`, `references-codebase`, `subject-of-decision` retired as zero-writer or redundant). The drifted strings (`result-of`, `derived-from`) have been replaced by their canonical equivalents (`produced`, `derives-from`).
 
 ### Out of scope, explicitly deferred
 

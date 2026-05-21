@@ -3,7 +3,7 @@
 **Status:** spec (Prompt 2 output, DOS:O3)
 **Phase:** 0, Week 2 first half (2026-06-01)
 **Effort:** 3–5 session-days
-**Depends on:** [CHUNK-01](./chunk-01-extension-scaffold.md) (extension package + activity bar + tree view exist; `npm run package` produces a `.vsix`).
+**Depends on:** [CHUNK-01](./chunk-01-scaffold.md) (extension package + activity bar + tree view exist; `npm run package` produces a `.vsix`).
 **Exposes contract to:** CHUNK-05, 06, 07, 08, 09, 10, 12, 13, 14 (every webview-bearing chunk).
 **Source-of-truth refs:** [part-1-plan.md § CHUNK-02](../part-1-plan.md), [PRD § 25.2](../../PRD.md), [BUILD-PLAN Phase 0 Week 2](../../BUILD-PLAN.md), research findings #2 (deprecated webview-ui-toolkit) and #7 (Workspace Trust).
 
@@ -191,6 +191,16 @@ scripts/**
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  // Subpath exports are mandatory — CHUNK-03+ imports domain types
+  // via `@deliveryos/contracts/memory` and `@deliveryos/contracts/links`.
+  // The `./panels/*` glob lets per-panel slices be imported by name
+  // (e.g. `@deliveryos/contracts/panels/discover`) when needed.
+  "exports": {
+    ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
+    "./memory": { "import": "./dist/memory.js", "types": "./dist/memory.d.ts" },
+    "./links": { "import": "./dist/links.js", "types": "./dist/links.d.ts" },
+    "./panels/*": { "import": "./dist/panels/*.js", "types": "./dist/panels/*.d.ts" }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch"
@@ -200,6 +210,15 @@ scripts/**
   }
 }
 ```
+
+The `exports` map distinguishes:
+
+- `@deliveryos/contracts` — the barrel; namespaced re-exports (`Memory`, `Links`, `Hello`, …).
+- `@deliveryos/contracts/memory` — domain types owned by CHUNK-03 (`MemoryEntry`, `MEMORY_TYPES`, payload types, plus the per-type aliases `IntentMemory`, `RequirementMemory`, `DesignMemory`, etc. — see CHUNK-03 § 5.3).
+- `@deliveryos/contracts/links` — link-kind taxonomy owned by CHUNK-03 (`LINK_KINDS`, `LinkKind`, `MemoryLink`).
+- `@deliveryos/contracts/panels/<panel>` — per-panel webview message slices owned by the panel's chunk.
+
+**Note (added DOS:O4 iteration-3):** CHUNK-03's contract slices live at top level (`src/memory.ts`, `src/links.ts`), NOT under `panels/`. Only webview-message types live under `panels/`. The convention: domain types at root, panel-message types under `panels/`.
 
 #### `contracts/tsconfig.json`
 
@@ -976,6 +995,8 @@ export function deactivate(): void {
 
 This chunk's package split is the moment we lock the canonical post-monorepo paths for every file CHUNK-01 created at the repo root. Every later chunk references these paths, never CHUNK-01's pre-monorepo ones.
 
+**Header rule (DOS:O4 iteration-3 audit):** every CHUNK-01 path under `src/stages/` moves to `src/tree/` (under `extension/`). After this chunk, no `stages/` directory exists in the extension package; the four-stage data structure lives in `extension/src/tree/*`. The `.vsix` path inspection moves too — `unzip -l deliveryos-*.vsix` now shows entries with the `extension/` prefix; pre-monorepo paths are flat.
+
 | CHUNK-01 path (pre-monorepo) | CHUNK-02 path (canonical, post-monorepo) | Owner | Notes |
 |---|---|---|---|
 | `src/extension.ts` | `extension/src/extension.ts` | this chunk | Updated to wire the host messenger + serializer; same `activate` / `deactivate` shape. |
@@ -1089,6 +1110,8 @@ Surface used in CHUNK-02:
 | Both | `vscode-messenger-common` | `RequestType<P, R>`, `NotificationType<P>` | Type-only carriers. |
 
 API stability call: the `vscode-messenger` 0.4.x line is the API surface CHUNK-02 commits to. Any breaking change in 0.5+ requires a contracts-package shim before propagating. **Lock the version with `^0.4.5`** (caret) in `webview/package.json` and `extension/package.json` and revisit in CHUNK-04's verification pass.
+
+**Cross-chunk enforcement (added DOS:O4 iteration-3):** consumer chunks (CHUNK-05/06/07/08/09/10/11/12/13/14) must NOT import `vscode-messenger` or `vscode-messenger-common` directly — they import the singletons (`HostMessenger`, `messenger`) that CHUNK-02 establishes, plus `RequestType` / `NotificationType` type-only carriers via `@deliveryos/contracts`. The vscode-messenger surface used: `RequestType`, `NotificationType`, `HOST_EXTENSION`, `sendRequest`, `registerWebviewPanel`. Pinned by CHUNK-02 to `^0.4.5`; do not upgrade without re-auditing the consumer chunks. An ESLint `no-restricted-imports` rule should enforce this — landed alongside the first consumer panel in CHUNK-05.
 
 ### 4.3 CSP nonce factory signature
 

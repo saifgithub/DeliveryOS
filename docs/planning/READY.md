@@ -43,7 +43,7 @@ The plan is internally consistent and externally aligned with the v0.3 PRD and t
 
 ⭐ = headline / unique feature.
 
-**Parallelisable pairs**: CHUNK-02 and CHUNK-03 can be done in parallel after CHUNK-01 (both depend only on the scaffold). CHUNK-04 depends on both CHUNK-02 and CHUNK-03 because its smoke test exercises both. Everything from CHUNK-05 onwards is strictly sequential.
+**Parallelisable pairs**: CHUNK-03 can be drafted in parallel with CHUNK-02 — CHUNK-03 needs the `contracts/` workspace package CHUNK-02 establishes, but a skeleton `contracts/src/memory.ts` slice can land before CHUNK-02 wires the `vscode-messenger` runtime. CHUNK-04 depends on both CHUNK-02 and CHUNK-03 because its smoke test exercises both. Everything from CHUNK-05 onwards is strictly sequential.
 
 **Critical path**: CHUNK-01 → 02 → 05 → 06 → 07 → 08 → 09 → 10 → 11 → 12 → 13 → 14 → 15 → 16. 14 chunks on the critical path, fits the 14-week schedule when CHUNK-03 and CHUNK-04 land in parallel with CHUNK-02.
 
@@ -62,7 +62,7 @@ The plan is internally consistent and externally aligned with the v0.3 PRD and t
 Every consumer chunk imports — never redefines:
 
 - **Memory schema** (CHUNK-03 via `contracts/src/memory.ts`): polymorphic `memory_entries` + `memory_links` tables; 9 canonical memory types (`intent`, `requirement`, `design`, `codebase`, `execution`, `result`, `verification`, `release`, `test-spec`); `MemoryStore` API. Discovery folds into `IntentPayload.discovery`; PRD is `requirement` with `payload.kind === 'prd'`; bypasses are at `VerificationPayload.bypasses[]`. NO separate `discovery` / `prd` / `bypass` types.
-- **Memory link kinds** (CHUNK-03 via `contracts/src/links.ts`): 13 canonical kinds. Spelling: `derives-from` (with -s), `produced` (NOT `result-of`), `has-test-spec`. The `LINK_KIND_EDGES` table specifies every legal from-type → to-type edge.
+- **Memory link kinds** (CHUNK-03 via `contracts/src/links.ts`): 10 canonical kinds (reduced from 13 in DOS:O4 iteration-3 audit — `targets`, `references-codebase`, `subject-of-decision` retired as zero-writer or redundant; the relationships they expressed are reachable via the surviving edges). Spelling: `derives-from` (with -s), `produced` (NOT `result-of`), `has-test-spec`. The `LINK_KIND_EDGES` table specifies every legal from-type → to-type edge.
 - **Webview message contracts** (CHUNK-02 via `contracts/`): one file per panel; `vscode-messenger` 0.4.x; nonce-based CSP; Radix UI + Tailwind + Lucide React (NOT the deprecated `@vscode/webview-ui-toolkit`).
 - **Execution Brief markdown schema** (CHUNK-09 via `extension/src/brief/briefMarkdown.ts`): 10 H2 sections, frozen; `BRIEF_SCHEMA_VERSION = 1`; `RESULT_MD_SECTION_NAMES` constant embedded into Section 9 and consumed by CHUNK-12's parser; trailing-slash glob normalisation at parse time.
 - **Harness Profile schema** (CHUNK-10): `name, display_name, instruction_file, handoff_dir, brief_style, include_*, output_format, mcp_capable, command_template?, harness_version_pin?` — two MVP profiles (`claude-code`, `codex`).
@@ -108,7 +108,7 @@ The parallelisable pairs (CHUNK-02 + CHUNK-03 in week 2; CHUNK-04 in the polish 
 - **Cross-platform stance** (V2-01, V2-06, V2-10): macOS is primary, Linux opportunistic, Windows opportunistic for v0.1.0. Documented in CHUNK-04 + CHUNK-13; surfaced to users in the README.
 - **Test-plan framing** (V2-03, V2-04, V2-05, V2-08, V2-11, V2-12): the fixtures exist in every relevant spec; the explicit "live AI is non-deterministic; deterministic fixtures are the gate" framing can land alongside the first failing test in each chunk.
 - **Architecture doc nits** (memory-layers.md "one SQLite table per type" leftover prose; CHUNK-08 audit-trail footnote): one-line edits Track-R can absorb during the corresponding chunk's build.
-- **Walker writer gap** (CHUNK-14 reads `targets` + `references-codebase` but no chunk explicitly writes them yet): Track-R should either have CHUNK-09 write these when persisting a brief, or simplify CHUNK-14's walker. Either is correct; the spec leaves the choice to implementation.
+- **Walker writer gap** — **RESOLVED in DOS:O4 iteration-3 audit.** `targets` and `references-codebase` retired from `LINK_KINDS`; CHUNK-14 walker now derives Execution→Requirement from the existing `derives-from` edge; Execution→Codebase deferred until a Codebase Memory writer chunk lands.
 
 ## Methodology note — dogfooding
 

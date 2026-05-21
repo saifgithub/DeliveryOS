@@ -110,3 +110,21 @@ The 16 chunk specs + `chunks/README.md` + source-of-truth docs are **internally 
 - audit-trail prose that does not affect the implementation (S2-08, K2 censuses).
 
 `docs/planning/READY.md` may now be written.
+
+---
+
+## Iteration 3 — DOS:O4 Phase 0 audit (third pass)
+
+**Trigger:** DOS:R1 built CHUNK-01 steps 1–3 (first real-world test of the planning corpus). DOS:O4 ran a focused third audit pass scoped to Phase 0 (CHUNK-01..04 + the source-of-truth docs they reference + the consumer chunks that consume Phase 0 contracts).
+
+**Findings:** 3 blockers + 17 majors + ~34 minors. All blockers + majors fixed in-session; Group A + B minors landed; ~26 verification-framing minors deferred to build with rationale.
+
+The blockers all lived in the producer↔consumer contract surface that iteration-2 didn't trace explicitly:
+
+- **B-01.** `targets` and `references-codebase` link kinds had zero writers; `subject-of-decision` was semantically identical to `verifies`. **Resolution:** `LINK_KINDS` reduced from 13 to 10 — `targets` (subsumed by `derives-from`), `references-codebase` (deferred until a Codebase Memory writer chunk lands), and `subject-of-decision` (collapsed into `verifies`) retired. CHUNK-14 walker simplified accordingly.
+- **B-02.** CHUNK-03's subpath imports (`@deliveryos/contracts/memory`) wouldn't resolve under CHUNK-02's `contracts/package.json` shape. **Resolution:** added `exports` map to CHUNK-02 § 3.1 covering `./memory`, `./links`, `./panels/*`.
+- **B-03.** CHUNK-09 imported `Requirement`, `CodebaseMemory`, `TestSpecMemory` type names that CHUNK-03 didn't export. **Resolution:** added canonical per-type aliases (`IntentMemory`, `RequirementMemory`, `DesignMemory`, …) in CHUNK-03's `contracts/src/memory.ts`.
+
+**Full report:** [`docs/planning/audits/phase-0-audit.md`](audits/phase-0-audit.md) — iteration-2's sign-off above is no longer the latest state of the corpus; iteration-3 is.
+
+`docs/planning/validation-report.md` line 80 ("13-entry `LINK_KINDS` tuple") is **superseded** by iteration-3 — the tuple is now 10 entries; the 11-entry retired-strings list in that same line has grown to 14 (the three iteration-3 retirements are documented in CHUNK-03 § 5.5's "Explicitly removed" table).

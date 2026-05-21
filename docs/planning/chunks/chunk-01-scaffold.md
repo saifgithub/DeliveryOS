@@ -74,7 +74,7 @@ All paths are relative to the extension package root (the directory that holds `
 | `src/commands/stagesRefresh.ts` | The `deliveryos.stages.refresh` command handler. Calls `stageTreeProvider.refresh()`. Useful during development and for a manual refresh button later. | new |
 | `src/contextKeys.ts` | Centralises the context-key string constants (`deliveryos.hasProject`). Avoids string-typos across the tree provider and the welcome view. | new |
 
-**Note on the icon.** Use the Lucide `rocket` SVG (currentColor stroke, no fill). VS Code activity-bar icons are masked monochrome — only the alpha channel matters. The SVG should be 24×24, single path, `stroke="currentColor" fill="none"`. The Lucide source is permissively licensed (ISC). Defer designing a bespoke DeliveryOS icon until Phase 4 polish (CHUNK-16).
+**Note on the icon.** Use the Lucide `rocket` SVG (currentColor stroke, no fill). VS Code activity-bar icons are masked monochrome — only the alpha channel matters. The SVG should be 24×24, single path, `stroke="currentColor" fill="none"`. The Lucide source is permissively licensed (ISC). `media/deliveryos-logo.png` (the Extensions-sidebar icon) is also a placeholder for this chunk — **CHUNK-16 (Phase 4 polish) owns the final bespoke DeliveryOS icon design** and replaces both files in one pass. Don't redesign in this chunk; the placeholder is intentional.
 
 ---
 
@@ -110,7 +110,7 @@ export class InMemoryProjectRegistry implements IProjectRegistry {
 }
 ```
 
-**Contract note.** CHUNK-03 implements a `PersistedProjectRegistry` that satisfies the same `IProjectRegistry` interface, swapping the storage backend without changing `extension.ts` or the tree provider. This is the seam.
+**Contract note.** CHUNK-03 may either implement a `PersistedProjectRegistry` that satisfies the same `IProjectRegistry` interface (swapping the storage backend without changing `extension.ts` or the tree provider) OR rebind the `deliveryos.project.create` command handler directly to call `MemoryStore.createIntent(...)` (skipping the registry indirection). **DOS:O4 iteration-3 audit picked the direct-rebind path** as the simpler shape for the trimmed MVP — CHUNK-03 § 2.11 owns the rebind. The `IProjectRegistry` interface stays defined here so CHUNK-01 can still run standalone with the in-memory stub; CHUNK-03 retires it on first persistence write.
 
 ### 3.2 Stage and artefact tree nodes
 
@@ -452,7 +452,7 @@ Sized for a single dev at 5–10 hrs/week. Each numbered step is roughly half a 
 3. **First package & smoke install.** Add `@vscode/vsce`, `rimraf` devDeps. Add the `package` script. Run `npm run package`. Run `code --install-extension deliveryos-0.0.1.vsix`. Open VS Code, open Output → "Extension Host" log, confirm the `activate` message fires.
 4. **Activity-bar icon + empty tree view.** Add `media/icon-rocket.svg`. Add the `viewsContainers.activitybar` and `views` contributions per §5. Implement a stub `StageTreeProvider` that returns an empty array. Register it in `activate()` via `vscode.window.createTreeView`. Repackage → reinstall → confirm the rocket icon appears in the activity bar and clicking it reveals an empty "Stages" view.
 5. **Static stage nodes.** Implement `src/stages/stageDefinitions.ts` and `src/stages/stageTreeNodes.ts`. Update `StageTreeProvider.getChildren()` to return the four stages at the root. Each stage gets a Codicon (`lightbulb` / `checklist` / `rocket` / `verified`) and a description. Repackage → reinstall → confirm the four rows render in order.
-6. **Capabilities + activation event.** Add `capabilities.untrustedWorkspaces` and `capabilities.virtualWorkspaces` (both `supported: false`) plus `activationEvents: ["onStartupFinished"]` to `package.json`. Repackage → reinstall. Open a workspace flagged as untrusted (toggle via the trust UI) and confirm the extension is disabled with the explanatory message.
+6. **Capabilities + activation event.** Add `capabilities.untrustedWorkspaces` and `capabilities.virtualWorkspaces` (both `supported: false`) plus `activationEvents: ["onStartupFinished"]` to `package.json`. Repackage → reinstall. Open a workspace flagged as untrusted (toggle via the trust UI) and confirm the extension is disabled with the explanatory message. **Ordering note (added DOS:O4 iteration-3):** pre-including `activationEvents: ["onStartupFinished"]` at step 1 is also acceptable — and is in fact preferable when verifying step 3's smoke install (a step-3 scope with no `contributes` has nothing to trigger implicit activation, so the `activate()` log line only fires reliably when `activationEvents` is already in place). DOS:R1 took this path. The capabilities-block half of this step remains here regardless.
 7. **In-memory project registry.** Implement `src/projectRegistry.ts` with the `InMemoryProjectRegistry` class and `EventEmitter<void>`. Construct it in `activate()` and pass it to the tree provider. Tree provider's constructor subscribes to `onDidChange` and calls `refresh()`.
 8. **The `deliveryos.project.create` command.** Implement `src/commands/projectCreate.ts` per §3.4. Register in `activate()`. Set the `deliveryos.hasProject` context key on success.
 9. **`viewsWelcome`.** Add the welcome contribution to `package.json` per §5, gated on `!deliveryos.hasProject`. Repackage → reinstall → confirm the welcome markdown shows when there is no project, and the "Create a project" link works.
@@ -472,8 +472,12 @@ No unit or integration tests at this layer (per the chunk row in part-1-plan.md 
 ### 8.1 Build smoke
 
 - `npm run package` exits 0 and produces `deliveryos-0.0.1.vsix` in the repo root.
-- `unzip -l deliveryos-0.0.1.vsix` shows `extension/dist/extension.js`, `extension/package.json`, `extension/media/icon-rocket.svg`, `extension/media/deliveryos-logo.png`, `extension/README.md`, `extension/LICENSE`. No `.ts` files, no `node_modules/`, no source maps unless intentionally included.
-- The VSIX size is under 1MB (the floor before CHUNK-02 brings in React + Vite, and CHUNK-03 brings in `sql.js`).
+- `unzip -l deliveryos-0.0.1.vsix` content varies by step-slice (DOS:O4 iteration-3 audit annotation — the full 13-step session produces the full list; mid-session smokes verify a subset):
+  - **Steps 1–3 (minimal scaffold):** `dist/extension.js`, `package.json`, `readme.md`. Expected size: ~3–5 KB. This is what DOS:R1 produced.
+  - **Steps 1–6 (with icons + capabilities):** the above plus `media/icon-rocket.svg` (step 4), `media/deliveryos-logo.png` (step 4). Expected size: ~10–20 KB.
+  - **Steps 1–13 (full session):** above plus `README.md` (step 12, expanded), `LICENSE` (step 12). Note: after CHUNK-02 the monorepo split means paths prefix with `extension/` — at CHUNK-01 the package root is still the repo root, so paths are flat. Expected size: ~20–40 KB.
+- Across all slices: no `.ts` files, no `node_modules/`, no source maps unless intentionally included.
+- The VSIX size is under 1MB (the floor before CHUNK-02 brings in React + Vite, and CHUNK-03 brings in `sql.js`). Material drift outside the expected per-slice band indicates a packaging regression (likely a `.vscodeignore` change that bloated or shrank the bundle).
 
 ### 8.2 Install smoke (VS Code only — Cursor / Windsurf land in CHUNK-04)
 

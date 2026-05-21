@@ -458,7 +458,7 @@ A suggested order across 3–4 session-days. Each step ends with a runnable stat
 
 1. **Contracts.** Add `contracts/src/testDesigner.ts` with the value types and message types from §4. Wire it into the contracts barrel (`contracts/src/index.ts`). No host or webview code yet — just the shared package compiles green. *(half day)*
 
-2. **Memory type.** In `extension/src/memory/types.ts`, add `'test-spec'` to the type discriminator and the `TestSpec` payload type. In `extension/src/memory/markdownBodies.ts`, extend the type→folder map. Write a tiny unit test (`memory.create('test-spec', …)` round-trips). *(quarter day)*
+2. **Memory type.** In `extension/src/memory/types.ts`, add `'test-spec'` to the type discriminator and the `TestSpec` payload type. In `extension/src/memory/markdownBodies.ts`, extend the type→folder map. Write a tiny unit test (`memory.create({ type: 'test-spec', title, payload })` round-trips — per CHUNK-03's object-arg API, DOS:O4 iteration-3 audit fix). *(quarter day)*
 
 3. **Prompt builder.** Implement `promptBuilder.ts` against the §3 schema. Add a snapshot test fed by a fixture Requirement to lock the output shape. Make the function pure and deterministic. *(half day)*
 

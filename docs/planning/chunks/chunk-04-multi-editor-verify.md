@@ -430,22 +430,28 @@ All tests are **manual** for this chunk. No automated unit/integration suite is 
 
 ### 11.1 Multi-editor sideload (the "done" bar)
 
-For **each of at least three** editors in {VS Code, Cursor, Windsurf, VSCodium, Antigravity}:
+For **each of at least three** editors — **VS Code (REQUIRED)**, **Cursor (REQUIRED)**, and one of {Windsurf, VSCodium} for open-source-rebuild lineage coverage (Antigravity counts as a bonus 4th editor if its CLI is locatable):
 
-1. From a fresh editor state (no DeliveryOS installed), run the install script OR the manual `<cli> --install-extension` command.
+1. Run the install script (`scripts/install.sh` uses `--force`, so any prior install state is handled; no need to manually uninstall first). Capture stdout — each editor's CLI prints a success line containing the extension ID and version. The sig-warn observation in step 7 reads from this stdout.
 2. Open the editor. The DeliveryOS activity-bar icon must be visible (may need one window reload — note if so).
 3. Click the icon. The sidebar tree from CHUNK-01 must render with the four stages.
-4. Run `deliveryos.openHello`. The CHUNK-02 webview must render without CSP errors (`Developer: Open Webview Developer Tools` to inspect).
+4. Run `deliveryos.openHello`. The CHUNK-02 webview must render cleanly per CHUNK-02 § 10.1 sub-checks (zero `Refused to load…` in Console, CSP meta tag present in Elements, assets load from `vscode-cdn.net` in Network). Open Webview Developer Tools to inspect: `Developer: Open Webview Developer Tools`.
 5. Run `deliveryos.project.create`, give a project name. The Intent Memory entry from CHUNK-03 must be written. Confirm `<workspace>/.deliveryos/memory.sqlite` exists and `<workspace>/.deliveryos/memory/intent/<id>.md` exists with the raw idea text.
-6. Close the editor. Reopen it. Tree view must show the project.
+6. Close the editor. Reopen the **same workspace folder** (the one where `.deliveryos/memory.sqlite` lives). Tree view must show the project.
 
-7. **Signature-verification observation.** Record, per editor, whether any signature-verification warning surfaced during install (per PRD § 25.1; research finding #3 expects none, but the canary lives here). One line in the test log per editor, e.g. `code: no warning`, `cursor: no warning`, `windsurf: warning — "publisher not verified" dialog, dismissed`. This row is mandatory output of the smoke test even when no warnings appear.
+7. **Signature-verification observation.** Record, per editor, whether any signature-verification warning surfaced during install (per PRD § 25.1; research finding #3 expects none, but the canary lives here). One line in the test log per editor, e.g. `code: no warning`, `cursor: no warning`, `windsurf: warning — "publisher not verified" dialog, dismissed`. This row is mandatory output of the smoke test even when no warnings appear. **Warnings are expected behaviour per ADR-0001 / research finding #3 — they are observation data, not failures. Only a warning that *blocks* install (no Install button, no confirm dialog) is a regression.**
 
 **Pass condition.** All six functional steps pass in **VS Code, Cursor, and at least one of {Windsurf, VSCodium, Antigravity}**. VS Code + Cursor are REQUIRED (B04). Record which three (or more) editors were tested AND a single-line signature-verification observation per editor in the test log (commit message or a `docs/planning/chunks/chunk-04-test-results.md` if useful, but not required as a deliverable).
 
+**Failure-mode escalation (added DOS:O4 iteration-3):**
+
+- If a sig-warn *blocks* install on the third editor (one of {Windsurf, VSCodium, Antigravity}): swap to a different third editor. Phase 0 still passes.
+- If a sig-warn *blocks* install on **Cursor** or **VS Code**: Phase 0 does **NOT** pass — escalate to ADR-0001 revision (signature-verification stance needs a stronger mitigation than SHA-256 publication alone).
+
 ### 11.2 Install script behaviour
 
-- **POSIX path probe.** Run `scripts/install.sh` with `code` on PATH, others removed. Expect summary: `code OK, cursor SKIP, …`.
+- **POSIX path probe.** Run `scripts/install.sh` with `code` on PATH, others removed. Expect: `exit 0`; summary block matches the canonical format shown in § 4.5 (one row per editor, with version in parentheses). Assert the summary contains `code: OK` and four `SKIP` rows for the un-pathed editors.
+- **Verbose mode.** Run `scripts/install.sh --verbose`. Expect the underlying `<cli> --install-extension` stdout/stderr to appear interleaved with the per-editor lines.
 - **Idempotency.** Run twice consecutively. Both invocations succeed. The second is a no-op uninstall+install per `--force`.
 - **Missing VSIX argument.** Run `scripts/install.sh /tmp/does-not-exist.vsix`. Expect exit code 2, clear error message.
 - **No editors on PATH.** Temporarily clear PATH of editor CLIs. Run script. Expect exit code 0 + warning summary.
@@ -464,15 +470,30 @@ For **each of at least three** editors in {VS Code, Cursor, Windsurf, VSCodium, 
 
 ### 11.4 In-extension version check
 
+**Preamble (DOS:O4 iteration-3 — V2-02):** this test requires **two tagged releases**. Run § 11.3 first to publish v0.0.1, then proceed with v0.0.2 tagging below. The first-ever tag returns 404 from the GitHub API and silently no-ops; this is expected (chicken-and-egg artefact, accepted residual).
+
 - **Happy path: a newer version exists.** Install v0.0.1, then tag v0.0.2 (no code changes — only a `package.json` version bump and tag push). Open a window with the v0.0.1 install. The notification fires on activation. Click "Open release page" — opens the right URL in browser.
 - **Silence.** Click "Don't show again". Reload the window. No notification fires. Setting now reads `deliveryos.checkForUpdates: false`.
 - **No update.** Reset setting to `true`, install the same version as latest. No notification fires.
 - **Rate limit.** Temporarily point the endpoint at a 403 (mock by editing the URL locally to a known-403 endpoint). No notification fires; no error toast. (This test is the only one that requires temporary code edit; revert before committing.)
 - **Disabled setting.** Set `deliveryos.checkForUpdates` to `false` in user settings. Reload. No network call observed (confirm via `OutputChannel` debug log if added, or by network panel in webview devtools).
 
-### 11.5 Combined sanity check
+### 11.5 Combined sanity check — Phase 0 rehearsal checklist
 
-- After everything is in place, run `scripts/install.sh` against three editors in parallel. Open each. Confirm activity bar + webview + memory in all three. This is the demoable end of Phase 0: *"Here is DeliveryOS installed in VS Code and Cursor (and Windsurf) from the same file."*
+After everything is in place, run `scripts/install.sh` **once** (one invocation; the script detects and installs into every detected editor sequentially — not three concurrent invocations). Then walk this consolidated Phase 0 rehearsal checklist in each tested editor. This is the **boundary check** for Phase 0: with CHUNK-01's activity bar, CHUNK-02's hello webview, CHUNK-03's memory persistence, and CHUNK-04's multi-editor sideload all in place, the demoable bar is *"Here is DeliveryOS installed in VS Code and Cursor (and Windsurf) from the same file."*
+
+Per-editor sub-checks (DOS:O4 iteration-3 consolidation of CHUNK-01 § 8 + CHUNK-02 § 13 + CHUNK-03 § 11.1 + this chunk's § 15):
+
+- [ ] Activity-bar icon (the Lucide `rocket`) is visible and legible at both light + dark themes.
+- [ ] Sidebar tree (`deliveryos.stages`) renders the four stages: DISCOVER, DEFINE, EXECUTE, VERIFY, in that order.
+- [ ] `deliveryos.project.create` opens an input box; typing a project name commits successfully.
+- [ ] After project create, the welcome view disappears and the four stages render with no children (empty stage branches expand cleanly).
+- [ ] `deliveryos.openHello` opens the CHUNK-02 hello webview; it renders with no Console-tab `Refused to load…` CSP errors.
+- [ ] Workspace contains `.deliveryos/memory.sqlite` and `.deliveryos/memory/intent/<id>.md` with the raw idea text.
+- [ ] Close the editor; reopen the same workspace folder. Tree view restores the project — welcome view does NOT reappear.
+- [ ] Sig-warn observation row recorded for this editor per § 11.1 step 7.
+
+Repeat across **VS Code (REQUIRED) + Cursor (REQUIRED) + one of {Windsurf, VSCodium}**. All boxes ticked in all three editors = Phase 0 done.
 
 ---
 
@@ -540,7 +561,7 @@ This chunk is done when **all** of the following are true:
 - [ ] The signature-verification observation row is recorded per tested editor in the smoke-test log (per m04 / PRD § 25.1), regardless of whether a warning surfaced.
 - [ ] `scripts/install.sh` installs into every detected editor on macOS, returning the documented exit codes. (Linux verified opportunistically.)
 - [ ] `scripts/install.ps1` exists with parity behaviour; Windows verification opportunistic.
-- [ ] `.github/workflows/release.yml` triggers on `v*` tag push, runs `vsce package`, reads release notes from `RELEASE_NOTES.md` at the repo root via `gh release create --notes-file`, and creates a GitHub Release with the following attached: `deliveryos-<version>.vsix`, `scripts/install.sh`, `scripts/install.ps1`, `SHA256SUMS.txt` (covering all binary assets), and `demo.mp4` if present at the repo root. (CHUNK-16 owns the v0.1.0 `RELEASE_NOTES.md` content and `demo.mp4`.)
+- [ ] `.github/workflows/release.yml` triggers on `v*` tag push, runs `vsce package`, reads release notes from `RELEASE_NOTES.md` at the repo root via `gh release create --notes-file`, and creates a GitHub Release with the following attached: `deliveryos-<version>.vsix`, `scripts/install.sh`, `scripts/install.ps1`, `SHA256SUMS.txt` (covering all binary assets), and `demo.mp4` if present at the repo root. (CHUNK-16 owns the v0.1.0 `RELEASE_NOTES.md` content and `demo.mp4`.) **Phase-0 fallback (DOS:O4 iteration-3):** for the v0.0.1 verification tag, commit a minimal one-paragraph `RELEASE_NOTES.md` ("DeliveryOS v0.0.1 — Phase 0 scaffold verification release. Installs into VS Code + Cursor; the sidebar appears; no functional features yet."). `demo.mp4` is genuinely optional at this tag; the workflow's `if present` clause handles its absence. CHUNK-16 expands the file for v0.1.0.
 - [ ] `git tag v0.0.1 && git push --tags` produces a working public release artefact.
 - [ ] The in-extension version check fires a notification when run against a newer release (verified by tagging v0.0.2 with a previous v0.0.1 install).
 - [ ] The `deliveryos.checkForUpdates` setting is contributed and respected.

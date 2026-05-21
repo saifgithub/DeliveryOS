@@ -84,8 +84,7 @@ And links (`memory_links` rows, using only canonical kinds from `contracts/src/l
 
 - `verification` ──`evaluates`──▶ `result`
 - `verification` ──`evaluates`──▶ `test-spec`
-- `verification` ──`verifies`──▶ `requirement`
-- `verification` ──`subject-of-decision`──▶ `requirement`
+- `verification` ──`verifies`──▶ `requirement` (covers both the active-verdict scope and the "we made a verdict here" history edge — the previously separate `subject-of-decision` was collapsed in DOS:O4 iteration-3 audit)
 
 ### 2.4 Tree view side-effects
 
@@ -183,19 +182,18 @@ Bypasses live **inline on the Verification entry** (per B05 resolution — no se
 The walker is a recursive backwards traversal over `memory_links`, starting from the just-written `verification` entry and following the canonical chain using only canonical link kinds from `contracts/src/links.ts`:
 
 ```
-Verification ─evaluates──▶ Result ─targets──▶ Requirement ─derives-from──▶ Requirement(kind='prd')
-              evaluates──▶ Test Spec                        has-test-spec──▶ Test Spec
-                           Result ─references-codebase──▶ Codebase           derives-from──▶ Intent
-                           Result ◀──produced── Execution ─targets──▶ Requirement
-                                                          references-codebase──▶ Codebase
+Verification ─evaluates──▶ Result                            derives-from──▶ Requirement(kind='prd')
+              evaluates──▶ Test Spec                         has-test-spec──▶ Test Spec
+                           Result                                            derives-from──▶ Intent
+                           Result ◀──produced── Execution ─derives-from──▶ Requirement
 ```
 
-In plain terms: from Verification we hop to Result and Test Spec; from Result we hop to Execution (reverse `produced`), and from Execution to Requirement (`targets`) and Codebase (`references-codebase`); from Requirement we hop to its PRD-tagged sibling (`derives-from`, a `requirement` row whose `payload.kind === 'prd'`); from Requirement and Codebase we also collect any `derived-from-verification` entries from prior runs. **Discovery is not a hop** — it is read from `intent.payload.discovery`. **PRD is not a separate type** — it is a `requirement` row discriminated by `payload.kind === 'prd'`.
+In plain terms: from Verification we hop to Result and Test Spec; from Result we hop to Execution (reverse `produced`), and from Execution to Requirement (via `derives-from`); from Requirement we hop to its PRD-tagged sibling (`derives-from`, a `requirement` row whose `payload.kind === 'prd'`); from Requirement we also collect any `derived-from-verification` entries from prior runs. **Discovery is not a hop** — it is read from `intent.payload.discovery`. **PRD is not a separate type** — it is a `requirement` row discriminated by `payload.kind === 'prd'`. **Codebase Memory is deferred** — no writer chunk exists in v1; the slot stays for future expansion.
 
 Walker rules:
 
 - Uses `MemoryStore.walk(fromId, kind)` (CHUNK-03) — never reaches into SQLite directly.
-- Reads ONLY canonical link kinds from `contracts/src/links.ts`: `derives-from`, `verifies`, `evaluates`, `produced`, `targets`, `references-codebase`, `supersedes`, `includes`, `reworks`, `has-test-spec`, `subject-of-decision`, `derived-from-verification`, `releases`. Every kind the walker reads has a writer in CHUNK-03 / CHUNK-05–CHUNK-13.
+- Reads ONLY canonical link kinds from `contracts/src/links.ts`: `derives-from`, `verifies`, `evaluates`, `produced`, `supersedes`, `includes`, `reworks`, `has-test-spec`, `derived-from-verification`, `releases` (10 canonical kinds; `targets`/`references-codebase`/`subject-of-decision` retired in DOS:O4 iteration-3 audit). Every kind the walker reads has a writer in CHUNK-03 / CHUNK-05–CHUNK-13.
 - **Cycle detection.** Maintains a `visited: Set<MemoryId>`; if the next node is already in `visited`, skip and emit a warning `"cycle detected at <id> via <kind>"` into the document's "Bypasses & gaps" section.
 - **Missing-link tolerance.** If a `walk` returns nothing for an expected `kind`, emit a warning `"missing link: <fromType> ──<kind>──▶ <expectedToType>"` and continue. The document is generated even when the chain is incomplete; the gaps are explicit.
 - **Bypass surfacing.** Bypasses are read from `verification.payload.bypasses[]` (inline). No `has-bypass` link, no `'bypass'` memory type.
@@ -502,7 +500,7 @@ This chunk lands new payload shapes on the **existing** polymorphic schema from 
 - **`verification` entries** — new payload shape per § 6. Bypasses live inline in `payload.bypasses[]`.
 - **`release` entries** — new payload shape per § 6.
 - **`design` / `codebase` / `requirement` entries** — append-only new entries written by the Memory Update form, never edits in place. Linked back to the originating Verification via `derived-from-verification`.
-- **`memory_links` rows** — uses ONLY canonical kinds defined in `contracts/src/links.ts` (owned by CHUNK-03 per M02 resolution). The kinds this chunk writes: `evaluates`, `verifies`, `subject-of-decision`, `derived-from-verification`, `releases`, `includes`. The kinds the walker reads include the writes above plus `derives-from`, `produced`, `targets`, `references-codebase`, `has-test-spec` (all written by earlier chunks).
+- **`memory_links` rows** — uses ONLY canonical kinds defined in `contracts/src/links.ts` (owned by CHUNK-03 per M02 resolution). The kinds this chunk writes: `evaluates`, `verifies`, `derived-from-verification`, `releases`, `includes`. The kinds the walker reads include the writes above plus `derives-from`, `produced`, `has-test-spec` (all written by earlier chunks). Post-DOS:O4 iteration-3 audit: `subject-of-decision` (collapsed into `verifies`), `targets` and `references-codebase` (retired) no longer appear.
 
 The link kinds are not enforced by the schema (the table is `(from_id, to_id, kind)` open-ended per CHUNK-03 § "Polymorphic schema") but are constants in `contracts/src/links.ts` — owned and exported by CHUNK-03, consumed here. **This chunk does not invent kinds.**
 
@@ -573,8 +571,11 @@ function walkChain(verificationId: string, store: MemoryStore): ChainGraph {
   if (result && !execution) warnings.push(`missing link: execution ──produced──▶ ${result.id}`);
   else if (execution) visited.add(execution.id);
 
-  const codebase    = execution   && follow(execution.id,   'references-codebase', 'codebase');
-  const requirement = execution   && follow(execution.id,   'targets',             'requirement',
+  // Codebase Memory is deferred — no writer chunk exists in v1; the slot stays for future expansion.
+  const codebase    = undefined;
+  // Execution → Requirement is reached via the brief's `derives-from` edge
+  // (the retired `targets` kind was redundant — DOS:O4 iteration-3 audit).
+  const requirement = execution   && follow(execution.id,   'derives-from',        'requirement',
                                              n => n.type === 'requirement' && n.payload?.kind !== 'prd');
   const design      = requirement && follow(requirement.id, 'derives-from',        'design',
                                              n => n.type === 'design');
@@ -598,7 +599,7 @@ Notes:
 
 - The walker depends **only** on `MemoryStore.walk(fromId, kind)`, `MemoryStore.walkReverse(toId, kind)` (incoming edges), and `read(id)` (CHUNK-03 surface). No raw SQL.
 - The link-kind constants are exported from `contracts/src/links.ts` (owned by CHUNK-03 post-M02) and used here directly — no string literals in production code; the snippet above is for spec clarity.
-- Every kind the walker reads (`evaluates`, `produced`, `references-codebase`, `targets`, `derives-from`) is in CHUNK-03's canonical `LINK_KINDS` tuple AND is written by an earlier chunk. No reads against undeclared kinds.
+- Every kind the walker reads (`evaluates`, `produced`, `derives-from`, `has-test-spec`) is in CHUNK-03's canonical `LINK_KINDS` tuple AND is written by an earlier chunk. No reads against undeclared kinds.
 - For PRD discrimination, the walker filters `requirement` rows by `payload.kind === 'prd'` vs `'requirement'`. Both PRD and Requirement live under `.deliveryos/memory/requirement/<id>.md`.
 - For Discovery, the walker reads `intent.payload.discovery` (CHUNK-05's `IntentPayload`) when rendering — there is no `discovery` node in the `ChainGraph`.
 - For each canonical `kind`, `walk()` may return multiple — the walker takes the first match satisfying the type/payload filter and warns on `multiple-results` so multi-edge cases are visible.
@@ -741,7 +742,7 @@ The user can rubber-stamp `fail` diffs into `pass` verifications. The release do
 
 These were flagged as open during Prompt 2 and resolved by the Prompt 3 cohesion audit + Prompt 4 fixes:
 
-1. **Link-kind taxonomy** — RESOLVED. `contracts/src/links.ts` is owned by CHUNK-03. CHUNK-14's walker reads ONLY canonical kinds: `evaluates`, `produced` (reverse), `references-codebase`, `targets`, `derives-from`, `has-test-spec`. CHUNK-14 writes ONLY: `evaluates`, `verifies`, `subject-of-decision`, `derived-from-verification`, `releases`, `includes`. Old kinds (`produced-by`, `fulfills`, `designed-by`, `refines-from`, `snapshot-of`, `has-bypass`) are eliminated.
+1. **Link-kind taxonomy** — RESOLVED. `contracts/src/links.ts` is owned by CHUNK-03. CHUNK-14's walker reads ONLY canonical kinds: `evaluates`, `produced` (reverse), `derives-from`, `has-test-spec`. CHUNK-14 writes ONLY: `evaluates`, `verifies`, `derived-from-verification`, `releases`, `includes`. Old kinds (`produced-by`, `fulfills`, `designed-by`, `refines-from`, `snapshot-of`, `has-bypass`, and — post-DOS:O4 iteration-3 audit — `targets`, `references-codebase`, `subject-of-decision`) are eliminated.
 2. **Test-Spec memory type** — RESOLVED. `test-spec` is added to CHUNK-03's canonical `MEMORY_TYPES` (9 types total).
 3. **Discovery memory type** — RESOLVED. Discovery is folded into `IntentPayload.discovery` (CHUNK-05's model). No `discovery` memory type. Walker reads `intent.payload.discovery` directly.
 4. **PRD memory type** — RESOLVED. PRD is a `requirement` row with `payload.kind === 'prd'`. No `prd` memory type. PRD body lives at `.deliveryos/memory/requirement/<prd-id>.md`.

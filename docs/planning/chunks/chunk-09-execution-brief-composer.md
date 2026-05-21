@@ -487,9 +487,10 @@ returned strings to disk. The contract:
 ```ts
 // extension/src/brief/handoffSiblings.ts
 
-import type { Requirement } from "../../contracts/src/memory";
-import type { CodebaseMemory } from "../../contracts/src/memory";
-import type { TestSpecMemory } from "../../contracts/src/memory";
+// DOS:O4 iteration-3 audit fix: use the canonical per-type aliases
+// exported by CHUNK-03's `contracts/src/memory.ts`. Path uses the subpath
+// import that CHUNK-02's `exports` map resolves to `dist/memory.{js,d.ts}`.
+import type { RequirementMemory, CodebaseMemory, TestSpecMemory } from "@deliveryos/contracts/memory";
 import type { MemoryStore } from "../memory/memoryStore";
 import type { ExecutionBrief } from "./types";
 
@@ -502,7 +503,7 @@ import type { ExecutionBrief } from "./types";
  * body verbatim under an `## Existing Codebase Context` heading.
  */
 export function renderContextPackage(
-  req: Requirement,
+  req: RequirementMemory,
   codebase: CodebaseMemory | null,
   brief: ExecutionBrief
 ): string;
@@ -587,7 +588,6 @@ The body is **the canonical brief** — everything in `payload_json` is denormal
 ```
 memory_links:
   (brief_id, requirement_id, "derives-from")     Brief → source Requirement
-  (brief_id, test_spec_id,   "derives-from")     Brief → linked Test Spec (if any)
   (brief_id, prior_brief_id, "supersedes")       Brief → prior Brief (if revision)
 ```
 
@@ -595,13 +595,15 @@ The link-kind set is owned by CHUNK-03 at `contracts/src/links.ts` (the
 canonical taxonomy). CHUNK-09 uses **only** kinds that exist in that taxonomy:
 `derives-from` and `supersedes`. The earlier draft of this chunk introduced
 `sourced-from` and `uses-test-spec` — both have been retired in favour of
-`derives-from` (matching CHUNK-03's canonical name). The semantic distinction
-between "derives from requirement" and "derives from test spec" is carried by
-the **target row's `type`** (`requirement` vs `test-spec`), not by inventing
-two link kinds.
+`derives-from` (matching CHUNK-03's canonical name).
 
-CHUNK-14's walker can therefore treat both edges uniformly: "follow
-`derives-from` from an execution row, dispatch on target type."
+**Test Spec linkage is reached via the Requirement, not directly.** The earlier
+draft also wrote `(brief_id, test_spec_id, "derives-from")` but CHUNK-14's
+walker reaches Test Spec via `Requirement ─has-test-spec──▶ Test Spec` (the
+canonical Requirement↔Test-Spec hop owned by CHUNK-08). Writing a second edge
+from the brief to the test spec was redundant — DOS:O4 iteration-3 audit
+dropped it. The brief still embeds the test spec content into Section 6 of the
+markdown body; the link removal only affects the SQLite graph.
 
 ### 7.3 Immutability rules
 
@@ -694,7 +696,7 @@ The order below mirrors how a session-day might unfold. Each numbered step is in
    - On invoke (`requirementId` arg), call `briefBuilder.assembleDraft`, open a webview panel, post `brief.draftReady` to the webview.
    - Subscribe to webview messages: `brief.editSection`, `brief.editList`, `brief.save`.
    - **Host-side immutability guard (load-bearing).** Before processing `brief.editSection` or `brief.editList` for an existing brief, the host MUST look up the brief's `memory_entries` row and reject the message if `locked_at` is set. The host replies with `{ command: "brief.saveResult", ok: false, errors: ["Brief is locked; create a new version via Compose new version."] }` (re-using the save-result envelope so the webview surfaces the error in one place). Webview-only enforcement (disabling controls) is treated as a UX courtesy, **not** a security boundary — a webview can be tampered with via devtools, so the host is the authoritative gate. The check is a single `SELECT locked_at FROM memory_entries WHERE id = ?` per edit message; cheap.
-   - On `brief.save`: run `briefValidator.validate(draft)`. If invalid, return `{ command: "brief.saveResult", ok: false, errors }`. If valid: assign id (`briefIds.next()`), set `locked_at`, call `briefMarkdown.serialise`, `vscode.workspace.fs.writeFile`, then `MemoryStore.create("execution", …)` + `MemoryStore.link(…)`, then refresh the tree.
+   - On `brief.save`: run `briefValidator.validate(draft)`. If invalid, return `{ command: "brief.saveResult", ok: false, errors }`. If valid: assign id (`briefIds.next()`), set `locked_at`, call `briefMarkdown.serialise`, `vscode.workspace.fs.writeFile`, then `MemoryStore.create({ type: 'execution', title, payload, body: serialisedMarkdown })` + `MemoryStore.link(briefId, requirementId, 'derives-from')` + `MemoryStore.link(briefId, priorBriefId, 'supersedes')` if a prior version exists, then refresh the tree. **Per-CHUNK-03 API shapes (DOS:O4 iteration-3 audit fix):** `create` takes an object argument `{ type, title, payload, body? }`; `link` takes positional `(fromId, toId, kind)`. No positional `create("execution", …)` and no object-form `link({ from_id, to_id, kind })`.
    - The `brief.save` handler MUST also re-check the (`memory_entries`) row at write time: if the row already exists and has `locked_at` set (race against a concurrent open of the same brief id, or a malicious webview reusing a stale id), reject the save.
 
 7. **Webview composer panel** (~1 day).
@@ -867,7 +869,7 @@ For MVP, no — the composer requires a `requirementId` arg. A standalone "blank
 - The webview message contract (`brief.generateDraft`, `brief.editSection`, `brief.editList`, `brief.save`) from `contracts/src/brief.ts`.
 - The on-disk path convention `<workspace>/.deliveryos/memory/execution/<brief-id>.md`.
 - The four handoff sibling renderers from `extension/src/brief/handoffSiblings.ts`: `renderContextPackage`, `renderTestSpecification`, `renderVerificationChecklist`, `renderMemorySummary`. CHUNK-11 imports these; no other chunk re-implements them.
-- The memory link kinds **used by** this chunk: `derives-from` (Brief → Requirement; Brief → Test Spec) and `supersedes` (Brief → prior Brief). The kinds themselves are defined in `contracts/src/links.ts` (owned by CHUNK-03); CHUNK-09 imports them, does not invent them.
+- The memory link kinds **used by** this chunk: `derives-from` (Brief → Requirement) and `supersedes` (Brief → prior Brief). The kinds themselves are defined in `contracts/src/links.ts` (owned by CHUNK-03); CHUNK-09 imports them, does not invent them. Test Spec linkage is reached via Requirement → Test Spec (`has-test-spec`, owned by CHUNK-08); the brief does not write a direct edge to Test Spec.
 
 These are the **only** brief-related exports. Downstream chunks must import them, not re-implement them.
 

@@ -3,7 +3,7 @@
 **Status:** Spec (Phase A — Prompt 2).
 **Phase / Week:** Phase 0, Week 2 (second half), starting 2026-06-01.
 **Effort:** 3–4 session-days.
-**Depends on:** [CHUNK-01](./chunk-01-extension-scaffold.md), [CHUNK-02](./chunk-02-webview-foundation.md).
+**Depends on:** [CHUNK-01](./chunk-01-scaffold.md), [CHUNK-02](./chunk-02-webview-foundation.md).
 **Consumed by:** every chunk from CHUNK-05 onwards (all memory reads/writes).
 **Source-of-truth refs:** [`part-1-plan.md` CHUNK-03 + research findings #1 and #6](../part-1-plan.md), [`PRD.md` §§ 18.Y, 25.2](../../PRD.md), [`BUILD-PLAN.md` Phase 0 Week 2](../../BUILD-PLAN.md), [`architecture/memory-layers.md`](../../architecture/memory-layers.md).
 
@@ -16,6 +16,8 @@
 ### Goal
 
 Stand up the durable memory layer that every later chunk reads from and writes to. A single workspace-local SQLite file (via `sql.js` / WASM) holds the polymorphic index of memory entries plus their typed links; a sibling markdown tree holds the human-readable bodies. The schema is the **canonical memory contract** and the directory layout is the **canonical `.deliveryos/` layout** — both freeze at the end of this chunk.
+
+**Phase 0 scope note (added DOS:O4 iteration-3):** the BUILD-PLAN week-2 done-when only requires "a project record persists across editor restarts". This chunk's full surface — 9-arm payload union, 10-kind link vocabulary, walker, link-table — is **contract-freeze work**, landed in Phase 0 specifically so consumer chunks (CHUNK-05 through CHUNK-16) can import constants and types without later refactors. Phase 0's actual demoable bar only exercises `MemoryStore.create({ type: 'intent', ... })` + `MemoryStore.read(id)` of a single Intent entry. The rest is foundation, not feature. Track R should land it all but not over-invest in walker performance or link-traversal coverage tests at this stage — those have no Phase 0 consumer.
 
 ### In scope
 
@@ -140,6 +142,7 @@ Exports the canonical path constants the rest of the codebase imports. Centralis
 - Add `"sql.js": "^1.10.3"` to `dependencies`.
 - Add `"@types/sql.js": "^1.4.9"` to `devDependencies`.
 - Add a `files` / build-step entry that copies `node_modules/sql.js/dist/sql-wasm.wasm` into `extension/dist/sql-wasm.wasm` so `vsce package` includes it in the VSIX.
+- **Packaging note (DOS:O4 iteration-3 audit):** CHUNK-02 packages the extension with `vsce package --no-dependencies` — `node_modules/` is not bundled wholesale. The `sql.js` JS module itself is bundled by `tsc` (or `esbuild`) into `dist/extension.js` directly; only the `sql-wasm.wasm` blob needs the explicit copy step above to land in the VSIX. The copy + the `.vscodeignore` include rule (§ 2.13) are the two halves of making sql.js work under `--no-dependencies`.
 
 ### 2.13 `extension/.vscodeignore` — EDIT
 
@@ -324,6 +327,13 @@ export interface DiscoveryRecord {
   promptSnapshot: string;                // the exact discovery prompt CHUNK-05 used (for replay)
   answers: DiscoveryAnswer[];
   completedAt: number;                   // unix millis
+  rawAnswersPaste?: string;              // CHUNK-05 stores the raw paste alongside the parsed answers
+                                         //   so re-parsing later doesn't require re-pasting (DOS:O4
+                                         //   iteration-3 audit M-03b — preserves CHUNK-05 Risk-3
+                                         //   mitigation; field is optional for back-compat).
+  unmatchedText?: string;                // any text from the paste that the parser couldn't assign
+                                         //   to a question — surfaced in CHUNK-05's "needs review"
+                                         //   panel; optional.
 }
 
 export interface IntentPayload {
@@ -465,6 +475,19 @@ export type MemoryEntryOfType<T extends MemoryType> =
 
 export type MemoryPayloadOfType<T extends MemoryType> =
   MemoryEntryOfType<T>['payload'];
+
+// Per-type aliases — added DOS:O4 iteration-3 so consumer chunks (CHUNK-05/09/12/14)
+// can write `import type { RequirementMemory } from '@deliveryos/contracts/memory'`
+// instead of repeating `MemoryEntryOfType<'requirement'>` at every call site.
+export type IntentMemory       = MemoryEntryOfType<'intent'>;
+export type RequirementMemory  = MemoryEntryOfType<'requirement'>;
+export type DesignMemory       = MemoryEntryOfType<'design'>;
+export type CodebaseMemory     = MemoryEntryOfType<'codebase'>;
+export type ExecutionMemory    = MemoryEntryOfType<'execution'>;
+export type ResultMemory       = MemoryEntryOfType<'result'>;
+export type VerificationMemory = MemoryEntryOfType<'verification'>;
+export type ReleaseMemory      = MemoryEntryOfType<'release'>;
+export type TestSpecMemory     = MemoryEntryOfType<'test-spec'>;
 ```
 
 ### 5.5 Link kinds (canonical vocabulary, frozen for v1)
@@ -479,13 +502,10 @@ export const LINK_KINDS = [
   'verifies',
   'evaluates',
   'produced',
-  'targets',
-  'references-codebase',
   'supersedes',
   'includes',
   'reworks',
   'has-test-spec',
-  'subject-of-decision',
   'derived-from-verification',
   'releases',
 ] as const;
@@ -507,20 +527,16 @@ The canonical from-type → to-type table. Every consumer chunk writes/reads str
 | `derives-from` | `requirement` (`payload.kind === 'prd'`) | `intent` | The PRD traces back to the original Intent / raw idea (CHUNK-06). Walker uses this hop. |
 | `derives-from` | `design` | `requirement` | Design rationale traces to the requirement it serves (CHUNK-09 / CHUNK-14). |
 | `derives-from` | `design` | `design` | A newer design builds on an earlier one. |
-| `derives-from` | `execution` | `requirement` | Brief sourced its content from the requirement(s) it targets (replaces the dropped `sourced-from`). |
-| `derives-from` | `execution` | `test-spec` | Brief embedded this Test Spec into Section 6 (CHUNK-09). Alternative path: walker traverses Requirement → `has-test-spec` → Test Spec; both edges are canonical. |
-| `verifies` | `verification` | `requirement` | Verification verdict applies to this requirement. Strictly Verification → **Requirement** (the Verification → Result edge is `evaluates`, not `verifies` — audit collapsed the overload). |
+| `derives-from` | `execution` | `requirement` | Brief sourced its content from the requirement(s) it targets (replaces the dropped `sourced-from`; subsumes the dropped `targets` edge — Execution → Requirement is a single `derives-from` hop). |
+| `verifies` | `verification` | `requirement` | Verification verdict applies to this requirement. Strictly Verification → **Requirement** (the Verification → Result edge is `evaluates`, not `verifies` — audit collapsed the overload). Also covers the "we made a verdict here" history edge; previously a separate `subject-of-decision` kind, collapsed because the distinction was enforced nowhere in code. |
 | `evaluates` | `verification` | `test-spec` | Verification consulted this Test Spec when forming its verdict. |
 | `evaluates` | `verification` | `result` | Verification reviewed this Result when forming its verdict (the "did the run pass?" edge). |
 | `produced` | `execution` | `result` | The execution produced this result. Canonical name; **replaces** `result-of` and `produced-by` (both dropped). |
-| `targets` | `execution` | `requirement` | The execution was scoped to deliver this requirement. |
-| `references-codebase` | `execution` | `codebase` | The execution brief embedded this codebase memory snapshot. |
 | `supersedes` | `execution` | `execution` | Newer brief replaces an older brief for the same requirement (versioning). |
 | `supersedes` | any versioned memory | same type | Generic "newer entry replaces older entry" within a single type. |
 | `includes` | `release` | `requirement` | This release ships this requirement. |
 | `reworks` | `result` | `result` | A re-run result reworks a prior result (rework cycle). |
 | `has-test-spec` | `requirement` | `test-spec` | Test Designer attached this Test Spec to this Requirement (CHUNK-08). |
-| `subject-of-decision` | `verification` | `requirement` | A verification decision was made about this requirement (distinct from `verifies`: this records the "we made a verdict here" history edge; `verifies` records the active verdict's scope). |
 | `derived-from-verification` | `design` | `verification` | A design update was triggered by this verification (CHUNK-14 rework cycle). |
 | `derived-from-verification` | `codebase` | `verification` | A codebase memory update was triggered by this verification. |
 | `derived-from-verification` | `requirement` | `verification` | A requirement edit was triggered by this verification (new acceptance criteria, etc.). |
@@ -541,6 +557,10 @@ The canonical from-type → to-type table. Every consumer chunk writes/reads str
 | `snapshot-of` | (drop) | Read by walker, never written. Replace with `references-codebase` if the intent was Execution → Codebase. |
 | `has-bypass` | (drop) | No longer needed — bypasses live in `VerificationPayload.bypasses[]`, not as a separate type/edge. |
 | `belongs-to` | (drop) | Mentioned in CHUNK-06 prose but never landed in code. |
+| `targets` | `derives-from` (Execution → Requirement) | DOS:O4 iteration-3 audit: had zero writers across CHUNK-05..16; the relationship is reachable from the existing Brief→Requirement `derives-from` edge. Walker now derives Execution→Requirement from that single hop. |
+| `references-codebase` | (drop) | DOS:O4 iteration-3 audit: had zero writers. No Codebase Memory writer exists in v1; revisit when a writer chunk lands. CHUNK-14 walker drops the Execution → Codebase hop accordingly. |
+| `subject-of-decision` | `verifies` (Verification → Requirement) | DOS:O4 iteration-3 audit: doubled writes against `verifies` with no walker query exercising the "history vs. active" distinction. Collapsed to a single `verifies` edge per verification. |
+| `derives-from` (Execution → Test Spec) | (drop the edge) | DOS:O4 iteration-3 audit: CHUNK-09 wrote it, CHUNK-14 walker never read it (Test Spec reachable via `Requirement → has-test-spec`). Kind `derives-from` itself remains canonical for other edges. |
 
 > **Walker contract for CHUNK-14:** the multi-hop walker must construct its queries from `LINK_KINDS` constants imported from `@deliveryos/contracts/links` — never as string literals. A `LinkKind` typo becomes a TS compile error.
 
@@ -768,7 +788,7 @@ Suggested order — small commits per step:
 1. Build + package: `npm run package` produces a `.vsix`.
 2. Install into a clean VS Code (`code --install-extension deliveryos-*.vsix`).
 3. Open a fresh empty folder as a workspace.
-4. Run `deliveryos.project.create`, type "Bug Triage Assistant" as the idea.
+4. Run `deliveryos.project.create`, type "Bug Triage Assistant" when prompted for the project name. The smoke treats this as the seed idea text (vocabulary aligned with CHUNK-01 in DOS:O4 iteration-3).
 5. Confirm `<workspace>/.deliveryos/memory.sqlite` exists.
 6. Confirm `<workspace>/.deliveryos/memory/intent/intent-<short>.md` exists with the raw idea.
 7. Confirm `<workspace>/.deliveryos/README.md` exists.
@@ -889,7 +909,7 @@ Both are explicitly *out of scope* for CHUNK-03 — the simple strategy is the r
 
 ### 14.1 What this chunk depends on
 
-- **[CHUNK-01](./chunk-01-extension-scaffold.md)** — the extension activates, the `deliveryos.project.create` command exists, `context.extensionUri` and `context.globalStorageUri` are accessible. CHUNK-03 *replaces* the stub persistence inside `project.create`.
+- **[CHUNK-01](./chunk-01-scaffold.md)** — the extension activates, the `deliveryos.project.create` command exists, `context.extensionUri` and `context.globalStorageUri` are accessible. CHUNK-03 *replaces* the stub persistence inside `project.create`.
 - **[CHUNK-02](./chunk-02-webview-foundation.md)** — owns the `contracts/` package. CHUNK-03 contributes the `contracts/src/memory.ts` AND `contracts/src/links.ts` slices; CHUNK-02's `contracts/src/index.ts` must export both. CHUNK-02's `vscode-messenger` contracts can carry typed memory payloads and link kinds using these types from this point forward.
 
 ### 14.2 What this chunk exposes (and freezes)
@@ -898,7 +918,7 @@ Both are explicitly *out of scope* for CHUNK-03 — the simple strategy is the r
 |---|---|
 | `MEMORY_TYPES` (9 entries) + `MemoryType` | All later chunks. CHUNK-14's walker imports the tuple and may not add memory types of its own. |
 | `MemoryEntry` discriminated union and all 9 payload interfaces (`IntentPayload`, `RequirementPayload`, `DesignPayload`, `CodebasePayload`, `ExecutionPayload`, `ResultPayload`, `VerificationPayload`, `ReleasePayload`, `TestSpecPayload`) plus value objects (`RawIdea`, `DiscoveryRecord`, `DiscoveryAnswer`, `VerificationBypass`, `TestScenario`) | CHUNK-05 (Intent: `RawIdea` + `DiscoveryRecord`), CHUNK-06–CHUNK-08 (Requirement + Test Spec), CHUNK-09 (Execution), CHUNK-11 (Execution + Codebase), CHUNK-12 (Result), CHUNK-13 (Result.diffOutcome), CHUNK-14 (Verification.bypasses + Release). |
-| `LINK_KINDS` (13 canonical kinds) + `LinkKind` + `MemoryLink` — single source of truth in `contracts/src/links.ts` | CHUNK-07, CHUNK-08, CHUNK-09, CHUNK-12, CHUNK-13, CHUNK-14. No downstream chunk may invent a new kind; additions land here via spec amendment. |
+| `LINK_KINDS` (10 canonical kinds) + `LinkKind` + `MemoryLink` — single source of truth in `contracts/src/links.ts` | CHUNK-07, CHUNK-08, CHUNK-09, CHUNK-12, CHUNK-13, CHUNK-14. No downstream chunk may invent a new kind; additions land here via spec amendment. |
 | `MemoryStore` class (open/close/CRUD/link/walk/backlinks) | Every chunk from CHUNK-05 onwards. |
 | On-disk layout: `<workspace>/.deliveryos/memory.sqlite`, `<workspace>/.deliveryos/memory/<type>/<id>.md`, `<workspace>/.deliveryos/README.md` | CHUNK-09 (writes Execution bodies), CHUNK-12 (writes Result bodies), CHUNK-14 (writes Release bodies + `releases/` sibling — adds, doesn't conflict). |
 | Cross-project stub path `<globalStorageUri>/harness.sqlite` | Reserved name; later chunk implements the DB. |
@@ -924,7 +944,7 @@ Per [`part-1-plan.md` "Shared cross-chunk contracts"](../part-1-plan.md):
 - [ ] The migration runner runs cleanly on first init and is a no-op on re-init.
 - [ ] Unit tests in `extension/test/memory.test.ts` pass headlessly (`npm test`).
 - [ ] `contracts/src/memory.ts` exports the discriminated union (9 arms including `test-spec`); the webview side can `import type { MemoryEntry } from '@deliveryos/contracts/memory'` with no runtime dependency on `vscode` or `sql.js`.
-- [ ] `contracts/src/links.ts` exports `LINK_KINDS` (13 canonical kinds) + `LinkKind` + `MemoryLink`; importable from `@deliveryos/contracts/links` (and re-exported via `@deliveryos/contracts/memory` for the legacy path).
+- [ ] `contracts/src/links.ts` exports `LINK_KINDS` (10 canonical kinds) + `LinkKind` + `MemoryLink`; importable from `@deliveryos/contracts/links` (and re-exported via `@deliveryos/contracts/memory` for the legacy path).
 
 ---
 
