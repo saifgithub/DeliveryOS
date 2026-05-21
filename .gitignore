@@ -1,0 +1,59 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# Build outputs
+# NOTE: /build/ is root-anchored on purpose — docs/build/ is a tracked
+# process folder and must NOT be ignored.
+dist/
+/build/
+.next/
+out/
+*.egg-info/
+*.vsix
+
+# Env and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+secrets/
+
+# Local DB
+*.sqlite
+*.sqlite3
+*.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage
+coverage/
+.nyc_output/
+htmlcov/
+.coverage
+
+# Generated artefacts (project-specific PRD outputs, context packages, etc.)
+generated/
+.deliveryos-cache/
+
+# Claude Code session state (worktrees and the active-track pointer)
+.claude/worktrees/
+.claude/active-track
