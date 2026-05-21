@@ -17,11 +17,11 @@ Each week lists a goal, the work, and a "done when" line that is a concrete, che
 
 Goal: an empty DeliveryOS shell that installs and opens in more than one editor.
 
-**Week 1 (2026-05-25)** — Scaffold.
+**Week 1 (2026-05-25)** — Scaffold. **✅ Done — DOS:R1 (steps 1–3) + DOS:R2 (steps 4–13).** CHUNK-01 closed.
 Set up the TypeScript VS Code extension project (the `yo code` generator or a manual scaffold). Add the activity-bar icon and a sidebar tree view showing the four stages (DISCOVER, DEFINE, EXECUTE, VERIFY) as static items. Get `vsce package` producing a `.vsix`.
 Done when: the `.vsix` installs into VS Code and the DeliveryOS sidebar appears.
 
-**Week 2 (2026-06-01)** — Webview and memory store, multi-editor check.
+**Week 2 (2026-06-01)** — Webview and memory store, multi-editor check. **🟡 Partial — CHUNK-02 (webview) ✅ done DOS:R2. CHUNK-03 (memory store) + CHUNK-04 (multi-editor verify) pending → DOS:R3+.**
 Add one webview panel rendering a React + Tailwind "hello" app. Wire a `sql.js` (WASM SQLite) store for project data — see PRD § 25.2 for why the native `better-sqlite3` binding is the wrong choice for a sideloaded cross-editor VSIX. Sideload the `.vsix` into Cursor as well, and at least one of Windsurf or VSCodium, to confirm cross-editor install works. Note the signature-verification behaviour on each.
 Done when: the webview renders, a project record persists across editor restarts, and the extension installs in at least three editors.
 
