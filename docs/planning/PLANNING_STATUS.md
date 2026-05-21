@@ -1,6 +1,6 @@
 # Handover — Documentation (DOS:O)
 
-**Last updated:** 2026-05-21 (end of DOS:O5 — standalone PRD coherence + completeness audit: 4 blockers + 16 majors + ~14 minors found; blockers + majors fixed in PRD; audit committed)
+**Last updated:** 2026-05-21 (end of DOS:O5 — standalone PRD coherence + completeness audit: 4 blockers + 16 majors + ~14 minors fixed; consumer §-cite reconciliation + two inherited carry-overs closed in a follow-up commit; wrap commit landed)
 
 Read this file **first** when starting a new Documentation session (`/start-fresh O`). It is the single rolling source of truth for track O: state, narrative, and carry-overs all in one doc. Older "what just landed" sections rotate out to `docs/planning/PLANNING_HISTORY.md` newest-on-top.
 
@@ -10,8 +10,8 @@ Read this file **first** when starting a new Documentation session (`/start-fres
 
 | Thing | State |
 |---|---|
-| Repo HEAD | _will be_ the next wrap commit on top of the DOS:O5 audit-and-edits commit. R-track committed three DOS:R2 commits during this DOS:O5 session (CHUNK-01 steps 4–6 + 7–11 + 12) — those land below DOS:O5's substantive commit (`278d79f`, `6523214`, `813a56f`). |
-| Commit count | 16 before DOS:O5 substantive commit (10 pre-build + 3 O-track audits/wraps + 3 R-track DOS:R2); 18 after DOS:O5 substantive + wrap |
+| Repo HEAD | _will be_ the DOS:O5 wrap commit on top of `c496121 feat(webview): add webview package — CHUNK-02 Session 2 (DOS:R2)`. The R-track shipped **five DOS:R2 commits** during this DOS:O5 session: CHUNK-01 steps 4–6 (`278d79f`), 7–11 (`6523214`), 12 (`813a56f`), then CHUNK-02 monorepo restructure (`2f648fa`) and CHUNK-02 webview package (`c496121`). |
+| Commit count | 21 after DOS:O5 wrap (10 pre-build + 3 O-track audits/wraps from DOS:O3+O4 + 2 DOS:O5 commits + 5 DOS:R2 R-track + this wrap) |
 | Tags | none yet |
 | Session model definition | `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12 |
 | Session config | `.claude/session-config.yml` (prefix `DOS`, tracks O + R) |
@@ -20,7 +20,7 @@ Read this file **first** when starting a new Documentation session (`/start-fres
 | Phase A planning state | **Complete** (DOS:O3) + **third-pass audited** (DOS:O4) + **PRD audited as a standalone document** (DOS:O5). Corpus is internally consistent at post-iteration-3 state; PRD is internally consistent at post-DOS:O5 state. |
 | Iteration history | iteration-1 + iteration-2 in DOS:O3 (`validation-report.md`); iteration-3 in DOS:O4 (`audits/phase-0-audit.md`, Phase 0 scope); **PRD audit in DOS:O5** (`audits/prd-audit.md`, PRD-only scope). |
 | Canonical link kinds | **10** (reduced from 13 in DOS:O4 — `targets`, `references-codebase`, `subject-of-decision` retired as zero-writer or redundant) |
-| Phase B build state | **In progress** — DOS:R1 landed CHUNK-01 steps 1–3 (`e83940d`, `66c9de1` wrap); DOS:R2 landed CHUNK-01 steps 4–12 across three commits (`278d79f`, `6523214`, `813a56f`) **during this DOS:O5 session** but DOS:R2's `docs/build/BUILD_STATUS.md` wrap hasn't run yet — BUILD_STATUS.md is stale, still says "end of DOS:R1." A future `/handover R` will refresh it. |
+| Phase B build state | **In progress** — DOS:R1 landed CHUNK-01 steps 1–3 (`e83940d`, `66c9de1` wrap); DOS:R2 (in flight during this DOS:O5 session, not yet wrapped) landed CHUNK-01 steps 4–12 (`278d79f`, `6523214`, `813a56f`) and then started CHUNK-02 with the monorepo restructure (`2f648fa`) + webview package (`c496121`). DOS:R2's `docs/build/BUILD_STATUS.md` is stale, still says "end of DOS:R1." A future `/handover R` will refresh it. |
 | Functional requirements count | **20** in PRD §13 (FR15–FR29 from v0.3 origin; FR30..FR37 added in DOS:O5 for previously-orphan capabilities: PRD generation, Test Spec generation, Release Evidence generation, Requirements Catalogue generation, Allowed/Forbidden enforcement, Mid-stage gate enforcement, Project Lifecycle, Audit Trail snapshots) |
 | MVP scope alignment | **§15 now matches §26 trimmed scope** — Test Designer specialist only; Claude Code + Codex profiles only; polymorphic memory entries (rich-objects deferred); stage-library framework only (10-mid-stage catalogue deferred). |
 | Open bugs | 0 — `docs/build/bugs.json` is `{"bugs": []}` |
@@ -107,7 +107,7 @@ The natural next move is the **DOS:R2 handover wrap** that didn't run yet:
 /handover R
 ```
 
-DOS:R2 already landed three commits (`278d79f` steps 4–6, `6523214` steps 7–11, `813a56f` step 12) during this DOS:O5 session — but `docs/build/BUILD_STATUS.md` wasn't refreshed. `/handover R` will rotate the DOS:R1 narrative there into BUILD_HISTORY.md and write the DOS:R2 narrative on top, refreshing the "What's on disk" table to reflect the three new R-commits.
+DOS:R2 landed five commits during this DOS:O5 session — CHUNK-01 steps 4–12 (`278d79f`, `6523214`, `813a56f`) plus an early start on CHUNK-02 (`2f648fa` monorepo restructure + `c496121` webview package). `docs/build/BUILD_STATUS.md` was never refreshed. `/handover R` will rotate the DOS:R1 narrative there into BUILD_HISTORY.md and write the DOS:R2 narrative on top, refreshing the "What's on disk" table to reflect all five new R-commits.
 
 After that wrap, the next development session is **DOS:R3**:
 
@@ -115,7 +115,7 @@ After that wrap, the next development session is **DOS:R3**:
 /start-fresh R
 ```
 
-Substantive work for DOS:R3 is **CHUNK-01 step 13** (`.vsix` smoke verification across editors per CHUNK-04) + **CHUNK-02 start** (webview foundation). The DOS:O5 PRD edits do not break any active chunk spec (the §10 renumbering affects PRD cites, not chunk-internal logic) but consumer reconciliation is a separate follow-up — see Carry-overs below.
+Substantive work for DOS:R3 is **continuing CHUNK-02** (CHUNK-02 already started in DOS:R2 — the monorepo restructure and webview package are in; the remaining CHUNK-02 work is webview-host wiring + the React+Tailwind "hello" panel per CHUNK-02 spec). CHUNK-01 step 13 (`.vsix` smoke verification across editors) may have already been folded into the CHUNK-02 sessions — check BUILD_STATUS.md once it's refreshed. The DOS:O5 PRD edits do not break any active chunk spec; the §10 renumbering's consumer reconciliation was closed in this session's follow-up commit.
 
 If another Documentation session is opened (`/start-fresh O` → DOS:O6), the carry-overs are:
 
