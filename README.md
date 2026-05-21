@@ -2,7 +2,7 @@
 
 A meta-harness for AI-assisted software delivery. A harness around your harness.
 
-**Status:** Concept / pre-build. PRD v0.3 drafted, build plan set, not yet validated.
+**Status:** Build in progress. Phase A planning complete (PRD v0.3, 14-week BUILD-PLAN, 16 chunk specs, `docs/planning/READY.md` green-light). CHUNK-01 scaffold landed 2026-05-21 — `npm run package` produces a `deliveryos-0.0.1.vsix` that installs into VS Code and activates cleanly. Activity-bar icon, stage tree, and project-create flow land next.
 
 ## What this is
 
@@ -57,15 +57,19 @@ DeliveryOS/
 │   ├── research/               Competitive notes, harness research
 │   └── deprecated/             Superseded specs and critiques
 ├── src/
-│   ├── frontend/               React + TS in VS Code webviews
-│   ├── backend/                Logic in the extension host (Node)
-│   └── shared/                 Shared types/schemas
-├── tests/
-├── scripts/
-├── config/
+│   └── extension.ts            VS Code extension entry (CHUNK-01 scaffold)
+├── package.json                Extension manifest
+├── tsconfig.json
+├── .vscodeignore
 └── .github/workflows/
 ```
 
 ## Getting started
 
-Nothing to run yet. The build starts the week of 2026-05-25. Week-by-week steps are in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). First milestone: a `.vsix` that installs into VS Code and Cursor (end of week 2).
+```bash
+npm install
+npm run package
+code --install-extension deliveryos-0.0.1.vsix
+```
+
+The scaffold activates on startup and logs `DeliveryOS activated` to the Extension Host output. Week-by-week build steps are in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). The week-2 milestone is a `.vsix` that installs into both VS Code and Cursor (Phase 0 demoable state).
