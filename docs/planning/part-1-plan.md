@@ -296,7 +296,7 @@ Each chunk follows this schema:
   - Stores as a Discovery Record (a sub-field of Intent Memory in this trimmed build).
 - A "Discovery summary" panel showing the captured Q&A formatted.
 
-**Out of scope.** AI-suggested mid-stages (the "trigger question" mechanic from PRD § 10.X) — the trimmed MVP runs the four-stage default. Configurable stage library wiring beyond surfacing as static config. Specialist expansion (BAs, Architects, etc.) — only the Test Designer is in scope (CHUNK-08).
+**Out of scope.** AI-suggested mid-stages (the "trigger question" mechanic from PRD § 10.8) — the trimmed MVP runs the four-stage default. Configurable stage library wiring beyond surfacing as static config. Specialist expansion (BAs, Architects, etc.) — only the Test Designer is in scope (CHUNK-08).
 
 **Dependencies.** CHUNK-02 (webview foundation), CHUNK-03 (memory store).
 
@@ -312,7 +312,7 @@ Each chunk follows this schema:
 **Verified by.** End-to-end manual run with Claude.ai or ChatGPT as the external tool.
 
 **Risks / unknowns.**
-- The discovery question library is hand-curated for MVP. PRD § 10.X has the full trigger-question set; trim aggressively.
+- The discovery question library is hand-curated for MVP. PRD § 10.8 has the full trigger-question set; trim aggressively.
 
 ---
 

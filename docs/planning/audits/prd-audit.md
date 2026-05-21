@@ -209,18 +209,23 @@ The PRD had **4 blockers, 16 majors, and ~14 minors** when DOS:O5 started. All f
 
 ---
 
-## Deferred consumer reconciliations
+## Deferred consumer reconciliations *(resolved same session)*
 
-The §10 renumbering (M-02) changes section numbers that downstream docs cite. **This audit does not edit those consumer docs** — that is a follow-up Track O job (analogous to O4's Group C "deferred to build" pattern).
+The §10 renumbering (M-02) changes section numbers that downstream docs cite. Originally deferred as a follow-up Track O job; the user expanded DOS:O5 scope to absorb the sweep in-session.
 
-- [`docs/planning/READY.md`](../READY.md) — search for `§10.X`, `§10.8`, `§10.10`, `§10.11`, etc.; update to new numbering.
-- [`docs/planning/chunks/chunk-15-bug-triage-demo.md`](../chunks/chunk-15-bug-triage-demo.md) — 12 references to `PRD § 23` (unchanged) but spot-check for any `§10.X` references.
-- [`docs/architecture/memory-layers.md`](../../architecture/memory-layers.md) — line 19 references PRD; spot-check.
-- [`docs/architecture/stage-configuration.md`](../../architecture/stage-configuration.md) — references PRD §10.X; needs update to §10.8.
-- [`docs/decisions/0001-vsix-extension-not-fork.md`](../../decisions/0001-vsix-extension-not-fork.md) — line 48 references `PRD section 25.1` (unchanged); no edit.
-- [`docs/BUILD-PLAN.md`](../../BUILD-PLAN.md) — references `PRD § 25.2` (unchanged); spot-check for §10 refs.
+**Sweep result (full grep across `docs/planning/`, `docs/architecture/`, `docs/decisions/`, `docs/BUILD-PLAN.md`, `docs/MULTI_AGENT_BUILD_PROCESS.md`):** 6 stale `PRD § 10.X` cites in 2 files; everywhere else was clean.
 
-Track R should flag any §-cite friction during DOS:R2 onward; trigger a follow-up O sweep when surfaced.
+- [`docs/planning/part-1-plan.md`](../part-1-plan.md) lines 299, 315 — `PRD § 10.X` → `PRD § 10.8`. ✅ done.
+- [`docs/planning/chunks/chunk-05-discover-capture.md`](../chunks/chunk-05-discover-capture.md) lines 35, 185, 254, 675 — four sites `PRD § 10.X` → `PRD § 10.8`. ✅ done.
+- [`docs/planning/READY.md`](../READY.md) — no §10 cites. Clean.
+- [`docs/planning/chunks/chunk-15-bug-triage-demo.md`](../chunks/chunk-15-bug-triage-demo.md) — only `PRD § 23` refs (unchanged). Clean.
+- [`docs/architecture/memory-layers.md`](../../architecture/memory-layers.md) — no §10 cites. (Separately, line 88 "one SQLite table per memory type" prose nit was an inherited DOS:O3 carry-over — also fixed in this session's follow-up commit.)
+- [`docs/architecture/stage-configuration.md`](../../architecture/stage-configuration.md) — no PRD §-cite. Clean.
+- [`docs/decisions/0001-vsix-extension-not-fork.md`](../../decisions/0001-vsix-extension-not-fork.md) — only `PRD section 25.1` (unchanged). Clean.
+- [`docs/BUILD-PLAN.md`](../../BUILD-PLAN.md) — only `PRD § 25.2` (unchanged). Clean. (Separately, the long-standing "READY.md is canonical execution order" pointer was added at the top, closing the DOS:O1+O2 carry-over.)
+- [`docs/MULTI_AGENT_BUILD_PROCESS.md`](../../MULTI_AGENT_BUILD_PROCESS.md) — only generic "PRD" mentions. Clean.
+
+No surviving stale §10 cites or v0.2 `Stage N:` references in the corpus. This deferred section is closed; no follow-up O sweep needed for §10 numbering.
 
 ---
 

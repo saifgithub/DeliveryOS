@@ -5,6 +5,7 @@
 **Duration:** 14 weeks.
 **Start:** week of 2026-05-25. **Target demo-ready:** week of 2026-08-24.
 **Delivery mechanism:** sideloadable `.vsix` extension (see ADR-0001).
+**Canonical execution order:** [`docs/planning/READY.md`](planning/READY.md) — chunk-level ordered build sequence, dependency map, and parallelisable-pairs declarations. This BUILD-PLAN is the week-by-week schedule; READY.md is the chunk-level "what next, in what order" reference. The two are kept in sync but READY.md wins for execution disputes (it carries the iteration-2 + iteration-3 audit verdicts).
 
 ## How to read this plan
 

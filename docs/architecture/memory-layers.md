@@ -85,7 +85,7 @@ Every Release Memory entry should be traceable back to an Intent Memory entry th
 
 ## Storage
 
-MVP: SQLite tables, one per memory type, with markdown documents on disk for the longer-form content. Each entry has a UUID, a created_at, an updated_at, and a links field pointing to related entries.
+MVP: a **polymorphic single-table** SQLite store — one `memory_entries` row per memory of any type, discriminated by the `type` column and a typed `payload` JSON blob (the 9-type discriminated union owned by CHUNK-03's `contracts/src/memory.ts`). A second `memory_links` edge table holds typed relationships per the 10-kind `LINK_KINDS` vocabulary. Longer-form content lives in markdown documents on disk; each row has a UUID, created_at, updated_at, and an outbound-edges field. See the top of this doc for the canonical statement and PRD § 25.2 for the rationale (sql.js WASM bundle, zero ABI concerns across editor forks).
 
 Later: a graph backend (Neo4j or similar) if the relationship queries get complex.
 

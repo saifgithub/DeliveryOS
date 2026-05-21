@@ -32,7 +32,7 @@ Build the first end-user surface of DeliveryOS: capture a raw idea, generate a d
 
 ### Out of scope
 
-- AI-suggested mid-stages — the "trigger question" mechanic in PRD § 10.X. Trimmed MVP runs the four-stage default only. We capture the answer text, but we do NOT infer stages from it. (Out-of-scope per CHUNK-05 row in part-1-plan.md and per the trimmed MVP statement.)
+- AI-suggested mid-stages — the "trigger question" mechanic in PRD § 10.8. Trimmed MVP runs the four-stage default only. We capture the answer text, but we do NOT infer stages from it. (Out-of-scope per CHUNK-05 row in part-1-plan.md and per the trimmed MVP statement.)
 - Configurable stage library wiring beyond surfacing as static config — not relevant in this chunk at all.
 - Specialist expansion (BAs, Architects, etc.) — only the Test Designer specialist is in scope, and that lands in CHUNK-08.
 - Direct API calls to Claude / OpenAI / etc. — every prompt is copy-out, paste-in.
@@ -182,7 +182,7 @@ When the user clicks an artefact node, `command: deliveryos.openDiscover` runs w
 
 ## 4. The ~12 discovery questions (MVP hardcoded library)
 
-Trimmed aggressively from PRD § 10.X mid-stage triggers and from the v0.1 discovery interview prompt. Each entry below is `id`, `topic`, `prompt`, optional `helperText`. The selection prioritises questions whose answers most usefully shape a PRD downstream; trigger-question signals for mid-stage suggestion are NOT used in the trimmed MVP, but the answer text is preserved so a future build can mine them.
+Trimmed aggressively from PRD § 10.8 mid-stage triggers and from the v0.1 discovery interview prompt. Each entry below is `id`, `topic`, `prompt`, optional `helperText`. The selection prioritises questions whose answers most usefully shape a PRD downstream; trigger-question signals for mid-stage suggestion are NOT used in the trimmed MVP, but the answer text is preserved so a future build can mine them.
 
 ```ts
 // extension/src/discovery/questionLibrary.ts
@@ -251,7 +251,7 @@ export const DISCOVERY_QUESTIONS_MVP: DiscoveryQuestion[] = [
 ];
 ```
 
-12 questions — fits "the hardcoded ~12-question MVP set" exactly. Topics map to PRD § 10.X triggers (Q4→Privacy, Q5→Compliance/Legal/Accessibility, Q6→UX, Q7→Architecture, Q8→Cost/Ops, Q12→Pre-release Sign-off) so the future "auto-suggest mid-stages" feature is a pure read of these answers — no question library change required when that lands.
+12 questions — fits "the hardcoded ~12-question MVP set" exactly. Topics map to PRD § 10.8 triggers (Q4→Privacy, Q5→Compliance/Legal/Accessibility, Q6→UX, Q7→Architecture, Q8→Cost/Ops, Q12→Pre-release Sign-off) so the future "auto-suggest mid-stages" feature is a pure read of these answers — no question library change required when that lands.
 
 The library is intentionally hand-curated. Future iterations can add questions or split them; the MVP keeps the list short to keep the AI tool's response manageable (typically 600–1500 words back).
 
@@ -672,7 +672,7 @@ Manual only — no automated test infrastructure required at this chunk. The Tes
 
 ### Risk 1 — keeping the question library curated
 
-PRD § 10.X lists 10 mid-stage triggers, each potentially mapping to its own discovery prompt. The full v0.1 discovery interview was longer. The MVP must NOT bloat to 30 questions or the AI's response becomes unmanageable for the user to paste back. **Mitigation:** the 12-question MVP set is frozen at this chunk; future additions require an ADR or a feature ticket, not a casual append. Question additions in CHUNK-06+ are out of scope.
+PRD § 10.8 lists 10 mid-stage triggers, each potentially mapping to its own discovery prompt. The full v0.1 discovery interview was longer. The MVP must NOT bloat to 30 questions or the AI's response becomes unmanageable for the user to paste back. **Mitigation:** the 12-question MVP set is frozen at this chunk; future additions require an ADR or a feature ticket, not a casual append. Question additions in CHUNK-06+ are out of scope.
 
 **Open question for Prompt 3 (audit):** does the audit confirm 12 is the right number, given downstream CHUNK-06 (PRD generation) and CHUNK-07 (requirements decomposition) need? If yes, freeze. If they want a question about "test commands" or "deployment target" earlier in the funnel, add it now rather than in CHUNK-09.
 

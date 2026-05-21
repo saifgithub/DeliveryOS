@@ -78,6 +78,15 @@ The prior O-track audits (DOS:O3 iteration-2; DOS:O4 Phase 0) had **alignment-ch
 
 **2 files modified + 1 new audit doc:** `docs/PRD.md` (substantively edited per above) + `docs/planning/audits/prd-audit.md` (new) + `docs/planning/PLANNING_HISTORY.md` (DOS:O4 narrative rotated) + this file. **R-track files (src/, package.json, media/) untouched** per the dirty-tree constraint — the user opened DOS:O5 with R2 in-flight files in the working tree and chose "leave dirty, start O anyway." DOS:O5 wrote only under `docs/**`. **Side effect during the session:** Track R committed DOS:R2 in parallel (three commits landing CHUNK-01 steps 4–12 — `278d79f`, `6523214`, `813a56f`), clearing the dirty tree before DOS:O5's commit step. DOS:R2's BUILD_STATUS.md wrap has not yet run.
 
+**Follow-up commit landed same session:** the deferred consumer §-cite reconciliation (originally carried over to DOS:O6) was executed inline. Edits:
+
+- `docs/planning/part-1-plan.md` lines 299, 315 — `PRD § 10.X` → `PRD § 10.8`.
+- `docs/planning/chunks/chunk-05-discover-capture.md` lines 35, 185, 254, 675 — `PRD § 10.X` → `PRD § 10.8` (four sites).
+- `docs/architecture/memory-layers.md` line 88 — "SQLite tables, one per memory type" rewritten to match CHUNK-03's polymorphic single-table strategy (was a DOS:O3 carry-over; closed here).
+- `docs/BUILD-PLAN.md` — "Canonical execution order: READY.md" pointer added at the top (was a DOS:O1+O2 carry-over; closed here).
+
+Architecture / ADR / BUILD-PLAN / MULTI_AGENT_BUILD_PROCESS scanned and clean — no other stale §10 cites or v0.2 `Stage N:` references survive.
+
 ### Gotchas the next session should know
 
 - **PRD §10 numbering changed.** Old `§10.X` and `§10.8`–`§10.14` are gone. New scheme: `§10.1` (mapping table), `§10.2` (Codebase Memory Prep), `§10.3` (Harness-Based Execution), `§10.4` (Result Capture), `§10.5` (Verification), `§10.6` (Memory Update), `§10.7` (Release Evidence), `§10.8` (Stage Configuration). Consumer docs that cite `PRD § 10.X` or `§ 10.8` (old meaning = Codebase Memory Prep) need a follow-up sweep — see audit doc § "Deferred consumer reconciliations." This is the only PRD edit that breaks downstream cites.
@@ -112,11 +121,13 @@ If another Documentation session is opened (`/start-fresh O` → DOS:O6), the ca
 
 ### Carry-overs for DOS:O6 (if opened)
 
-- **Consumer §-cite reconciliation for PRD §10 renumbering.** Sweep `docs/planning/READY.md`, `docs/planning/chunks/*.md` (especially any `§10.X` references), `docs/architecture/stage-configuration.md`, and `docs/architecture/memory-layers.md` for stale numbering. Documented in `audits/prd-audit.md` § "Deferred consumer reconciliations". Trivial to scan; one-session sweep.
 - **The ~8 Group B prose-softness minors** documented in `audits/prd-audit.md` § "Group B" — Track R can ignore; these are §2/§3/§28 vision/positioning prose nits, no build impact.
-- **Phase 1 audit (CHUNK-05..08) when Track R approaches CHUNK-05.** Same shape as `phase-0-audit.md` but Phase 1 scope. Trigger: ask the user when Track R reports a chunk-spec friction point during build, or when CHUNK-04 ships.
-- **DOS:O4 carry-overs that DOS:O5 did not touch:**
-  - **`docs/build/BUILD_STATUS.md` line 43 citation typo** (cites CHUNK-01 § 4 instead of § 5 / § 7) — Track R hygiene fix; not Track O's to edit.
-  - **Architecture doc nit** — `memory-layers.md` leftover "one SQLite table per memory type" prose contradicts CHUNK-03's polymorphic single-table. One-line edit.
-  - **`BUILD-PLAN.md` → `READY.md` pointer.** One-liner. Trivial. Inherited from DOS:O1 + O2.
+- **Phase 1 audit (CHUNK-05..08) when Track R approaches CHUNK-05.** Same shape as `phase-0-audit.md` but Phase 1 scope. Trigger: ask the user when Track R reports a chunk-spec friction point during build, or when CHUNK-04 ships. Note CHUNK-05 now reflects the post-O5 PRD §10 numbering — Phase 1 audit can assume cite stability.
+- **`docs/build/BUILD_STATUS.md` line 43 citation typo** (cites CHUNK-01 § 4 instead of § 5 / § 7) — Track R hygiene fix from DOS:O4; not Track O's to edit. Will be naturally resolved at the next `/handover R`.
 - **Memory Workspace UI planning sub-loop** (PRD §21) — if the project decides post-MVP to ship it.
+
+**Resolved in DOS:O5 (no longer carry-overs):**
+
+- ~~Consumer §-cite reconciliation for PRD §10 renumbering~~ — closed; 6 sites edited.
+- ~~`memory-layers.md` "one SQLite table per memory type" prose nit~~ — closed; rewritten to match CHUNK-03 polymorphic single-table.
+- ~~`BUILD-PLAN.md` → `READY.md` pointer~~ — closed; pointer added at top of BUILD-PLAN.
