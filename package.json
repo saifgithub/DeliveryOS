@@ -1,0 +1,44 @@
+{
+  "name": "deliveryos",
+  "displayName": "DeliveryOS",
+  "description": "A meta-harness for AI-assisted software delivery. Sits above Claude Code / Codex / Cursor as the SDLC memory and orchestration layer.",
+  "version": "0.0.1",
+  "publisher": "deliveryos",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "sdlc",
+    "ai",
+    "claude-code",
+    "codex",
+    "harness",
+    "memory"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deliveryos/deliveryos.git"
+  },
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "scripts": {
+    "clean": "rimraf dist *.vsix",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npm run clean && npm run compile && vsce package --no-dependencies",
+    "vscode:prepublish": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.4.0"
+  }
+}
