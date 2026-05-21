@@ -1,6 +1,6 @@
 # Handover — Documentation (DOS:O)
 
-**Last updated:** 2026-05-21 (end of DOS:O3 — Phase A Prompts 2–4: chunk specs, validation, iteration to READY)
+**Last updated:** 2026-05-21 (end of DOS:O4 — Phase 0 third validation pass: 3 blockers + 17 majors + ~34 minors found, blockers/majors fixed, audit committed)
 
 Read this file **first** when starting a new Documentation session (`/start-fresh O`). It is the single rolling source of truth for track O: state, narrative, and carry-overs all in one doc. Older "what just landed" sections rotate out to `docs/planning/PLANNING_HISTORY.md` newest-on-top.
 
@@ -10,81 +10,91 @@ Read this file **first** when starting a new Documentation session (`/start-fres
 
 | Thing | State |
 |---|---|
-| Repo HEAD | `bee77f2` — `docs(planning): land Prompts 3+4 — validation + iteration + READY (DOS:O3)` |
-| Commit count | 8 |
+| Repo HEAD | _will be_ the next wrap commit on top of `88b95b1` — `docs(planning): land DOS:O4 Phase 0 audit (iteration 3) + apply fixes` |
+| Commit count | 12 (will be 13 after this wrap) |
 | Tags | none yet |
 | Session model definition | `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12 |
 | Session config | `.claude/session-config.yml` (prefix `DOS`, tracks O + R) |
-| PRD | `docs/PRD.md` v0.3 — research-driven changes landed in DOS:O3 (sql.js, Radix UI, workspace-trust caps, PreToolUse hook in Risk 3, `.deliveryos-handoff/` dotfile across §§ 9/12/17/18/22, Memory Workspace deferred) |
-| Build plan | `docs/BUILD-PLAN.md` — 14 weeks, week 1 starts 2026-05-25, demo target 2026-08-24 (Week 2 line updated for sql.js) |
-| Phase A planning state | **Complete.** `part-1-plan.md` (Prompt 1) + 16 chunk specs under `docs/planning/chunks/` (Prompt 2, ~11,300 lines) + `chunks/README.md` cross-chunk index + `validation-report.md` (Prompt 3, two iterations: 5 blockers/18 majors/16 minors → 0/0/22-justified) + `READY.md` (Prompt 4 green-light). Track R can now open DOS:R1. |
-| Architecture docs | All 4 (`execution-briefs.md`, `harness-profiles.md`, `memory-layers.md`, `stage-configuration.md`) reconciled with the 9 canonical memory types + 13 canonical link kinds. `harness-profiles.md` has `command_template` + `harness_version_pin` + PreToolUse + Codex `-o` detail. |
-| ADR-0001 | Consequences section reframed: sig-verification risk is "future tightening (years out), not present-day breakage"; SHA-256 hashes on Releases as user-facing mitigation |
-| Phase B build state | not started (week 1 of BUILD-PLAN has not begun) |
+| PRD | `docs/PRD.md` v0.3 — untouched in DOS:O4 (Phase 0 audit surfaced no PRD drift) |
+| Build plan | `docs/BUILD-PLAN.md` — 14 weeks, week 1 starts 2026-05-25, demo target 2026-08-24; untouched in DOS:O4 |
+| Phase A planning state | **Complete** (DOS:O3) + **third-pass audited** (DOS:O4). Corpus is internally consistent at post-iteration-3 state. |
+| Iteration history | iteration-1 + iteration-2 in DOS:O3 (`validation-report.md`); **iteration-3 in DOS:O4** (`audits/phase-0-audit.md`, scoped to Phase 0 only). |
+| Canonical link kinds | **10** (reduced from 13 in DOS:O4 — `targets`, `references-codebase`, `subject-of-decision` retired as zero-writer or redundant) |
+| Phase B build state | **In progress** — DOS:R1 landed CHUNK-01 steps 1–3 (`e83940d`, `66c9de1` wrap); Track R is in mid-CHUNK-01 |
 | Open bugs | 0 — `docs/build/bugs.json` is `{"bugs": []}` |
+| Worktree residue | None — `.claude/worktrees/` empty |
 
 ---
 
-## What just landed (this session — DOS:O3)
+## What just landed (this session — DOS:O4)
 
-Phase A planning loop completed. Track R is unblocked. The output is `docs/planning/READY.md` plus the full evidence chain that produced it.
+Third validation pass scoped to Phase 0 (CHUNK-01..04 + the source-of-truth docs they reference + the Phase 1+ chunks that consume Phase 0 contracts). Triggered by DOS:R1 producing the first real-world test of the planning corpus — building CHUNK-01 steps 1–3 + smoke-verifying a 3.79 KB `.vsix`. Four parallel cohesion-audit subagents (coverage, structure, contracts, verification) ran against the Phase 0 slice.
 
-**Substantive deliverables (single landing commit `bee77f2`, building on `97d00cc` from the same session):**
+**Substantive deliverables (single commit `88b95b1`):**
 
-1. **16 chunk specs in `docs/planning/chunks/`** (~11,300 lines total). Each spec covers: restated goal, file-by-file breakdown, key interfaces and types, data-model touches, VS Code APIs, step-by-step implementation outline, test plan, risks, explicit dependencies. Plus `chunks/README.md` — the cross-chunk contract index.
-2. **`docs/planning/validation-report.md`** — final state: zero blockers, zero majors, ~22 justified residual minors with rationale.
-3. **`docs/planning/READY.md`** — the green-light document for Track R. Names the canonical contracts, the final ordered chunk list, the phase boundaries, the verified-folded research changes.
-4. **Source-of-truth docs updated**: PRD (handoff path consistency, sql.js, Radix UI, workspace-trust caps, PreToolUse Risk 3 mitigation, Memory Workspace deferral); BUILD-PLAN Week 2; ADR-0001 Consequences; all 4 `architecture/*.md` files.
+1. **`docs/planning/audits/phase-0-audit.md`** — new audit report (new `audits/` folder). Finding-by-finding with severity + recommended fix + resolution chosen + files-touched footer. Mirrors the Prompt-3 cohesion-audit shape from DOS:O3 but scoped to Phase 0 only.
+2. **3 blockers + 17 majors + ~34 minors** documented. All blockers + majors fixed in-session. Group A (cross-ref hygiene) + Group B (build-friction) minors landed. ~26 verification-framing minors deferred to build with rationale.
+3. **`docs/planning/validation-report.md`** sign-off section appended with Iteration 3 entry. Iteration-2's "13-entry LINK_KINDS" claim explicitly superseded.
 
-**How it was produced (the loop runs on itself).**
+**Findings the iteration-2 corpus had missed (because iteration-2 audited the corpus as a whole; iteration-3 traced producer→consumer contract surfaces explicitly):**
 
-- **Prompt 2** — 16 worktree-isolated parallel subagents (`isolation: worktree`), one per chunk. Each subagent owned a single `chunk-NN-*.md` spec file, committed it on its isolation branch, and reported back. After all 16 returned, I copied the files into main, committed them as `97d00cc`, removed all 16 worktrees + their branches.
-- **Prompt 3** — 4 parallel cohesion-audit subagents (no worktree, read-only): coverage + scope drift, structure + dependencies, contracts + interface consistency, verification / "Done when" checkability. Each audit returned ≤25 findings with severity + recommended fix. Initial findings: 5 blockers, 18 majors, 16 minors.
-- **Prompt 4 iteration 1** — ~10 parallel fix subagents, one per chunk file with the biggest fix lists (CHUNK-03, 09, 10, 12, 13, 14, 15) plus one batched subagent for 9 smaller chunks, one subagent for `chunks/README.md`, one subagent for the 6 source-of-truth docs. Each got the validation report + a focused fix list. No worktrees — each subagent edited a unique file in-place.
-- **Prompt 3 iteration 2** — same 4-audit shape, scoped to verify iteration 1's fixes. Surfaced 1 blocker (CHUNK-12 tree-provider regression), 5 majors (parallel tree contribution file, VERIFY-vs-EXECUTE placement, missed PRD path replaces, missing edge-table rows, stale `projectTree.ts` reference), 26 minors.
-- **Prompt 4 iteration 2** — applied surgical edits directly (no subagents — small focused changes). Cleared the blocker + all 5 majors + 10 high-value minors. Documented the ~22 remaining minors as justified residue in `validation-report.md`.
+- **B-01.** `targets` and `references-codebase` link kinds had zero writers; `subject-of-decision` was semantically identical to `verifies`. **Resolution:** `LINK_KINDS` reduced from 13 to 10. CHUNK-14 walker simplified — Execution → Requirement reached via `derives-from`; Execution → Codebase deferred until a Codebase Memory writer chunk lands; `verifies` covers both active-verdict scope and history edge.
+- **B-02.** CHUNK-03 used subpath imports (`@deliveryos/contracts/memory`) that CHUNK-02's `contracts/package.json` shape didn't resolve. **Resolution:** added `exports` map to CHUNK-02 § 3.1 covering `./memory`, `./links`, `./panels/*`.
+- **B-03.** CHUNK-09 imported `Requirement`/`CodebaseMemory`/`TestSpecMemory` aliases CHUNK-03 didn't export. **Resolution:** added canonical per-type aliases (`IntentMemory`, `RequirementMemory`, `DesignMemory`, …) in CHUNK-03's `contracts/src/memory.ts`.
 
-**Canonical contracts the loop established (each owned by exactly one chunk, imported elsewhere):**
+**Majors fixed (highlights):**
 
-- **Memory types** (CHUNK-03): 9 canonical entries — `intent`, `requirement`, `design`, `codebase`, `execution`, `result`, `verification`, `release`, `test-spec`. Discovery lives at `IntentPayload.discovery`; PRD is `requirement` with `payload.kind === 'prd'`; bypasses are at `VerificationPayload.bypasses[]`.
-- **Link kinds** (CHUNK-03 via `contracts/src/links.ts`): 13 canonical kinds; `LINK_KIND_EDGES` table specifies every legal from-type → to-type edge.
-- **Webview message contracts** (CHUNK-02 via `contracts/`).
-- **Execution Brief markdown schema** (CHUNK-09 via `extension/src/brief/briefMarkdown.ts`): 10 H2 sections, `BRIEF_SCHEMA_VERSION = 1`, `RESULT_MD_SECTION_NAMES` shared with CHUNK-12.
-- **Harness Profile schema** (CHUNK-10): with `command_template?` and `harness_version_pin?`.
-- **Managed delimiter block syntax** (CHUNK-10 via `extension/src/profiles/managedBlock.ts`): three formats — `'md'`, `'json'` (sentinel key `"deliveryos.managed"`), `'gitignore'`.
-- **Handoff directory layout** (CHUNK-11 via `extension/src/handoff/paths.ts`): `.deliveryos-handoff/` dotfile root; flat `current-*` + `history/<timestamp>-*` audit trail.
+- CHUNK-01 § 4 didn't actually sanction DOS:R1's pre-include of `activationEvents` at step 1 — spec citation in BUILD_STATUS line 43 was wrong. CHUNK-01 § 7 step 6 now states both orderings are acceptable, with step-1 preferred for partial-session smokes.
+- CHUNK-01 § 8.1 expected `.vsix` contents annotated per step-slice (steps 1–3 vs 1–6 vs 1–13) + size band per slice so partial-session smokes verify the right subset.
+- Phase 0 boundary now has a **consolidated rehearsal checklist** in CHUNK-04 § 11.5 (single source replacing the cross-chunk composition that lived implicitly across four chunks).
+- CHUNK-09/12 call shapes corrected to match CHUNK-03's `MemoryStore` API (positional `link(from, to, kind)`; object-arg `create({ type, title, payload, body? })`).
+- READY.md "Parallelisable pairs" claim rewritten to reflect CHUNK-03's actual CHUNK-02 dependency.
+- vscode-messenger version pin cross-chunk enforcement note added to CHUNK-02 § 4.2.
+- CHUNK-03 § 1 Phase-0 scope note clarifying that the 9-arm payload union + 10-kind link vocabulary + walker are contract-freeze work, not Phase-0 done-when work.
 
-**Commits this session.** Three: `97d00cc` (Prompt 2 chunk specs), `bee77f2` (Prompts 3+4 validation + iteration + READY), and this wrap (next commit on top). Three-commit pattern reflects the multi-step nature of the planning loop.
+**Minors landed in session (Groups A + B):**
+
+- Broken `chunk-01-extension-scaffold.md` links in CHUNK-02 + CHUNK-03 → `chunk-01-scaffold.md`.
+- `PersistedProjectRegistry` seam ambiguity resolved (direct rebind chosen).
+- sql.js wasm copy strategy under `--no-dependencies` packaging clarified in CHUNK-03 § 2.12.
+- `stages/` → `tree/` directory rename signposted at CHUNK-02 § 3.5 header.
+- CHUNK-03 § 11.1 step 4 vocabulary aligned with CHUNK-01 (project name vs. idea text).
+- CHUNK-04 § 11.1 step 6 "reopen the same workspace folder"; § 11.5 "in parallel" rewrite.
+
+**~26 verification-framing minors deferred** to build with rationale, documented in `audits/phase-0-audit.md` § "Group C". Examples: per-editor install stdout capture conventions, README troubleshooting placeholder for "Cursor refused install", verbose-mode smoke addition, vite manifest recovery line.
+
+**11 files modified + 1 new audit doc.** PRD / BUILD-PLAN / architecture/* / ADR-0001 untouched (no Phase 0 drift surfaced for them). `docs/build/BUILD_STATUS.md` not edited (Track R's territory; the citation typo there is documented in the audit as a Track R hygiene item).
 
 ### Gotchas the next session should know
 
-- **DOS:O3 produced `READY.md` — Track R is unblocked.** Track R can now run `/start-fresh R` to open DOS:R1 and start at CHUNK-01.
-- **`READY.md` § "Justified minor residue" is canonical.** Don't try to fix the documented minors as a separate planning pass — they were deliberately deferred. Track R should address them during the corresponding chunk's build (e.g. command-ID naming convention is for CHUNK-01's `package.json` integration sweep).
-- **`validation-report.md` is iteration-2 final.** Two iterations ran in DOS:O3; the file reflects the post-iteration-2 state with full iteration history at the top. Don't overwrite it without a third validation run.
-- **The `LINK_KIND_EDGES` table in CHUNK-03 is the type-checker for memory writes.** If Track R adds a new edge during build (e.g. CHUNK-09 actually writing `targets` or `references-codebase`), the corresponding row must already exist in the table — otherwise the planning corpus drifts again.
-- **HEAD in this table points at the wrap commit this session (`bee77f2`)**, not the substantive Prompt-2 commit (`97d00cc`). Two substantive commits + this wrap makes three; the wrap commit will be 9th on main.
-- **No worktree residue.** All 16 Prompt-2 worktrees were removed in DOS:O3 itself; `.claude/worktrees/` is empty.
-- **PRD/architecture doc updates land as part of the planning corpus, not separately.** They were folded in during Prompt 4 iteration. Don't try to re-fold the 12 research-driven changes — they're already in.
+- **`LINK_KINDS` is now 10 entries, not 13.** Any reference to "13 canonical link kinds" in fresh writing is wrong. The retirement list in CHUNK-03 § 5.5 "Explicitly removed" has the rationale for each of the three drops.
+- **The new audit doc `docs/planning/audits/phase-0-audit.md` is the post-DOS:O4 source of truth for Phase 0 cohesion.** `validation-report.md` is iteration-2 final with iteration-3 appended at the bottom; the appended section explicitly supersedes the earlier 13-link claim.
+- **Track R has already started.** DOS:R1 is wrapped (CHUNK-01 steps 1–3 done). Track R's BUILD_STATUS.md says steps 4–6 are next at DOS:R2. The DOS:O4 audit fixes apply to specs Track R hasn't built against yet — meaning the iteration-3 corrections are in place *before* Track R reaches the affected chunks.
+- **The Phase 0 rehearsal checklist now lives in CHUNK-04 § 11.5** — a future "is Phase 0 done?" check walks one list, not four chunks' separate done-whens.
+- **No worktree residue.** Both audit subagent batches in DOS:O4 ran read-only (no `isolation: worktree`); `.claude/worktrees/` is empty.
+- **DOS:O4 wrap commit will be the 13th on main.** HEAD just before this wrap is `88b95b1` (the audit-landing commit).
 
 ---
 
 ## How to start the next session
 
-Next session is the **first development session**, not another planning session:
+The natural next move is the **second development session** on track R:
 
 ```text
 /start-fresh R
 ```
 
-Session name to use: **DOS:R1**
+Session name to use: **DOS:R2**
 
-Substantive work for DOS:R1 is **CHUNK-01 — Extension scaffold + activity-bar + static stage tree**. Read `docs/planning/chunks/chunk-01-scaffold.md` first; it has the full file-by-file breakdown, `package.json` contributions, build pipeline, and done-when criteria.
+Substantive work for DOS:R2 is **CHUNK-01 steps 4–6** — activity-bar icon, empty tree view, four static stages, capabilities block. Read `docs/build/BUILD_STATUS.md` first; Track R's wrap notes have the carry-over list. The DOS:O4 iteration-3 fixes are already folded into the chunk spec.
 
-If for some reason another Documentation session is opened first (`/start-fresh O` → DOS:O4), the carry-overs are minor:
+If another Documentation session is opened (`/start-fresh O` → DOS:O5), the carry-overs are minor:
 
-### Carry-overs for DOS:O4 (if ever opened)
+### Carry-overs for DOS:O5 (if opened)
 
-- **Address residual minors documented in `validation-report.md`** if the user wants to clean them up before Track R starts. The list is short and each item is small; none blocks the build.
-- **Reconcile `docs/BUILD-PLAN.md` chunk-order framing** with `READY.md` as the canonical execution order (inherited carry-over from DOS:O1 + DOS:O2). One-liner in BUILD-PLAN pointing at `READY.md`.
-- **Memory Workspace UI deferral** (PRD § 21 marked deferred) — if the project decides post-MVP to ship it, a planning sub-loop for the workspace panel could happen here.
-- **Track R-specific planning prep** (CLAUDE.md template, the demo target repo skeleton at `examples/bug-triage/`, etc.) — most of this is described in the chunk specs and lands during build, but Track O could pre-stage if useful.
+- **Watch for fresh Track R signals.** As Track R builds CHUNK-02 onwards, real implementation pressure may surface spec gaps the audit missed. A Phase 1 audit (CHUNK-05..08) could run analogously when CHUNK-04 ships and Track R approaches CHUNK-05. Trigger: ask the user when Track R reports a chunk-spec friction point during build.
+- **The deferred ~26 verification-framing minors** documented in `audits/phase-0-audit.md` § "Group C" — Track R can absorb each one when reaching the relevant chunk, but a sweep that lands them all in one O-session is a reasonable use of an idle hour.
+- **`docs/build/BUILD_STATUS.md` line 43 citation typo** (cites CHUNK-01 § 4 instead of § 5 / § 7) — Track R hygiene fix, not Track O's to edit; surface it to whoever runs the next R wrap.
+- **Architecture doc nit from DOS:O3** — `memory-layers.md` leftover "one SQLite table per memory type" prose still contradicts CHUNK-03's polymorphic single-table strategy. One-line edit; trivial.
+- **`BUILD-PLAN.md` → `READY.md` pointer** (inherited from DOS:O1 + DOS:O2). One-liner. Trivial.
+- **Memory Workspace UI deferral** (PRD § 21) — if the project decides post-MVP to ship it, a planning sub-loop could happen here.
