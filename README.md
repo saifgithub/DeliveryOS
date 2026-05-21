@@ -2,7 +2,7 @@
 
 A meta-harness for AI-assisted software delivery. A harness around your harness.
 
-**Status:** Build in progress. Phase A planning complete (PRD v0.3, 14-week BUILD-PLAN, 16 chunk specs, `docs/planning/READY.md` green-light). CHUNK-01 complete as of 2026-05-21 — `npm run package` produces a `deliveryos-0.0.1.vsix` that installs into VS Code, contributes the activity-bar rocket icon, renders four static stages (DISCOVER → DEFINE → EXECUTE → VERIFY) behind a `Create a project` welcome flow. Webview + memory persistence land next ([CHUNK-02](docs/planning/chunks/chunk-02-webview-foundation.md) + [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md)).
+**Status:** Build in progress. Phase A planning complete (PRD v0.3, 14-week BUILD-PLAN, 16 chunk specs, `docs/planning/READY.md` green-light). CHUNK-01 + CHUNK-02 complete as of 2026-05-21 — `npm run package` produces a `deliveryos-0.0.2.vsix` (~65 KB) that installs into VS Code, contributes the activity-bar rocket icon, renders the four-stage tree behind a `Create a project` welcome flow, and exposes a `DeliveryOS: Open Hello (dev smoke test)` command that opens a React + Tailwind webview panel with a CSP-locked round trip to the extension host via `vscode-messenger`. Memory persistence + multi-editor verification land next ([CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md) + [CHUNK-04](docs/planning/chunks/chunk-04-multi-editor-verify.md)).
 
 ## What this is
 
@@ -39,7 +39,7 @@ DeliveryOS ships as a sideloadable `.vsix` VS Code extension. One file runs in V
 
 ## Repo layout
 
-```
+```text
 DeliveryOS/
 ├── docs/
 │   ├── PRD.md                  Current spec (v0.3)
@@ -56,23 +56,37 @@ DeliveryOS/
 │   ├── specialists/            Specialist role definitions
 │   ├── research/               Competitive notes, harness research
 │   └── deprecated/             Superseded specs and critiques
-├── src/
-│   ├── extension.ts            VS Code extension entry (CHUNK-01 scaffold)
-│   ├── contextKeys.ts          deliveryos.* context-key constants
-│   ├── projectRegistry.ts      InMemoryProjectRegistry (CHUNK-03 swaps in persistence)
-│   ├── commands/
-│   │   ├── projectCreate.ts    deliveryos.project.create
-│   │   └── stagesRefresh.ts    deliveryos.stages.refresh
-│   └── stages/
-│       ├── stageDefinitions.ts STAGE_DEFS (4 frozen entries)
-│       ├── stageTreeNodes.ts   StageNode | ArtefactNode + toTreeItem
-│       └── stageTreeProvider.ts TreeDataProvider, gated on active project
-├── media/
-│   ├── icon-rocket.svg         Activity-bar icon (Lucide rocket, monochrome)
-│   └── deliveryos-logo.png     Extension icon (Extensions sidebar)
-├── package.json                Extension manifest
-├── tsconfig.json
-├── .vscodeignore
+├── extension/                  VS Code extension host package (name: "deliveryos")
+│   ├── src/
+│   │   ├── extension.ts        activate() / deactivate() — wires registry, tree, host messenger, serializer
+│   │   ├── contextKeys.ts      deliveryos.* context-key constants
+│   │   ├── projectRegistry.ts  InMemoryProjectRegistry (CHUNK-03 swaps in persistence)
+│   │   ├── commands/           {projectCreate, stagesRefresh, openHello}.ts
+│   │   ├── tree/               {stageDefinitions, stageTreeNodes, stageTreeProvider}.ts
+│   │   ├── webview/            {nonce, htmlFactory, messenger, panelManager, helloPanel}.ts
+│   │   └── serializers/        helloPanelSerializer.ts
+│   ├── media/                  icon-rocket.svg + deliveryos-logo.png
+│   ├── package.json            Extension manifest (engines, contributes, activationEvents)
+│   ├── tsconfig.json
+│   ├── esbuild.mjs             Bundle src/ + vscode-messenger → dist/extension.js
+│   └── .vscodeignore
+├── webview/                    React + Tailwind webview app (private: @deliveryos/webview)
+│   ├── src/
+│   │   ├── shared/             {vscode, messenger, styles/tailwind.css}
+│   │   └── panels/hello/       {index.html, main.tsx, HelloApp.tsx}
+│   ├── vite.config.ts          Multi-entry build, per-panel Rollup input, manifest.json
+│   ├── tailwind.config.ts      Hybrid theming: dos.* palette + vscode.* CSS-var anchors
+│   ├── postcss.config.js
+│   ├── package.json            (name: @deliveryos/webview)
+│   └── tsconfig.json
+├── contracts/                  Type-only shared contracts (name: @deliveryos/contracts)
+│   └── src/
+│       ├── messages.ts         Base RequestType / NotificationType helpers
+│       ├── panels/hello.ts     GetHelloText RequestType
+│       └── index.ts            Namespaced barrel (export * as Hello)
+├── scripts/build.mjs           Orchestrator: contracts → webview → extension, then copy webview/dist → extension/dist/webview
+├── tsconfig.base.json          Shared strict TS options
+├── package.json                Root workspaces manifest
 └── .github/workflows/
 ```
 
@@ -81,16 +95,19 @@ DeliveryOS/
 ```bash
 npm install
 npm run package
-code --install-extension deliveryos-0.0.1.vsix
+code --install-extension extension/deliveryos-0.0.2.vsix
 ```
 
 After install, click the rocket icon in the activity bar. A welcome panel offers **Create a project**; submitting a name renders the four stage rows (DISCOVER, DEFINE, EXECUTE, VERIFY). Each row is empty — artefacts arrive in later chunks. The Extension Host output shows `DeliveryOS activated` on startup.
 
-### Known limitations (CHUNK-01)
+Smoke-test the webview round trip via the command palette: **DeliveryOS: Open Hello (dev smoke test)** opens a React + Tailwind panel that calls `Hello.GetHelloText` against the extension host and renders the reply + a server-side ISO timestamp. Use **Developer: Open Webview Developer Tools** to confirm zero CSP violations.
+
+### Known limitations (CHUNK-01 + CHUNK-02)
 
 - **Project state is in-memory only.** Closing VS Code forgets the project — the welcome view returns on next launch. Persistence lands in [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md).
 - **Workspace trust required.** DeliveryOS declines to activate in restricted or virtual workspaces, by design (see `capabilities.{untrustedWorkspaces,virtualWorkspaces}.description`).
+- **`deliveryos.openHello` is a dev smoke test.** It will be hidden behind a `deliveryos.devMode` `when` clause in CHUNK-04 so it doesn't appear in the user-facing palette.
 
 ## What's next
 
-Week-by-week build steps are in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). The week-2 milestone is a `.vsix` that installs into both VS Code and Cursor — the Phase 0 demoable state after [CHUNK-02](docs/planning/chunks/chunk-02-webview-foundation.md) (webview foundation), [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md) (memory store), and [CHUNK-04](docs/planning/chunks/chunk-04-multi-editor-verify.md) (multi-editor verify) land.
+Week-by-week build steps are in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). The week-2 milestone is a `.vsix` that installs into both VS Code and Cursor — the Phase 0 demoable state after [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md) (memory store) and [CHUNK-04](docs/planning/chunks/chunk-04-multi-editor-verify.md) (multi-editor verify) land.

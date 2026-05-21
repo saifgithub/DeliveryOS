@@ -77,6 +77,11 @@
         "title": "DeliveryOS: Refresh Stage Tree",
         "category": "DeliveryOS",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "deliveryos.openHello",
+        "title": "DeliveryOS: Open Hello (dev smoke test)",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {
@@ -91,20 +96,23 @@
   },
   "scripts": {
     "clean": "rimraf dist *.vsix",
-    "build": "tsc -p tsconfig.json",
+    "build": "node esbuild.mjs && tsc -p tsconfig.json --noEmit",
     "compile": "tsc -p tsconfig.json",
     "watch": "tsc -watch -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepackage": "cp ../LICENSE LICENSE && cp ../README.md readme.md",
-    "package": "npm run prepackage && vsce package --no-dependencies",
-    "vscode:prepublish": "npm run build"
+    "package": "npm run prepackage && vsce package --no-dependencies"
   },
   "dependencies": {
-    "@deliveryos/contracts": "*"
+    "@deliveryos/contracts": "*",
+    "vscode-messenger": "^0.4.5",
+    "vscode-messenger-common": "^0.4.5"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
     "rimraf": "^5.0.0",
     "typescript": "^5.5.0"
   }

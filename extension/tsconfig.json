@@ -6,9 +6,10 @@
     "rootDir": "src",
     "outDir": "dist",
     "lib": ["ES2022"],
-    "sourceMap": true
+    "sourceMap": true,
+    "declaration": false
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "../node_modules"],
+  "exclude": ["node_modules", "dist", "../node_modules", "esbuild.mjs"],
   "references": [{ "path": "../contracts" }]
 }

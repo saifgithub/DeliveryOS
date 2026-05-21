@@ -7,5 +7,6 @@ src/**
 **/*.ts
 !dist/**/*.js
 tsconfig.json
+esbuild.mjs
 *.vsix
 .DS_Store
