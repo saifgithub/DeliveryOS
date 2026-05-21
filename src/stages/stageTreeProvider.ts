@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { IProjectRegistry } from '../projectRegistry';
 import { STAGE_DEFS } from './stageDefinitions';
 import {
   StageTreeNode,
@@ -14,6 +15,10 @@ export class StageTreeProvider
   >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
+  constructor(private readonly registry: IProjectRegistry) {
+    registry.onDidChange(() => this.refresh());
+  }
+
   refresh(node?: StageTreeNode): void {
     this._onDidChangeTreeData.fire(node);
   }
@@ -23,6 +28,9 @@ export class StageTreeProvider
   }
 
   getChildren(element?: StageTreeNode): vscode.ProviderResult<StageTreeNode[]> {
+    if (!this.registry.getActive()) {
+      return [];
+    }
     if (!element) {
       return STAGE_DEFS.map(stageDefToNode);
     }
