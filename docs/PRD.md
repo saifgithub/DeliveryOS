@@ -125,35 +125,35 @@ DeliveryOS solves this by maintaining structured memory across the lifecycle and
 
 **Goal 1: Start before the PRD**
 
-The user should be able to begin with only a rough idea. DeliveryOS should conduct an AI-led discovery interview and gradually form structured product artefacts.
+The user must be able to begin with only a rough idea. DeliveryOS must conduct an AI-led discovery interview and progressively form structured product artefacts.
 
 **Goal 2: Convert conversation into PRD**
 
-The system should turn discovery conversations into a structured PRD with clear goals, users, requirements, assumptions, risks, constraints, and success criteria.
+The system must turn discovery conversations into a structured PRD with clear goals, users, requirements, assumptions, risks, constraints, and success criteria.
 
 **Goal 3: Expand the PRD through specialist AI roles**
 
-Different AI specialists should review and expand the PRD from their discipline (Product, Business Analyst, Solution Architect, Security, Compliance, UX, Data, QA, DevOps, Cost/Operations).
+AI specialists must review and expand the PRD from their discipline (Product, Business Analyst, Solution Architect, Security, Compliance, UX, Data, QA, DevOps, Cost/Operations). MVP delivers the Test Designer specialist only; the wider discipline set is post-MVP per §26.
 
 **Goal 4: Maintain structured project memory**
 
-DeliveryOS should maintain a typed memory graph (Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release) that persists across sessions and harnesses.
+DeliveryOS must maintain a typed memory graph (Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release) that persists across sessions and harnesses.
 
 **Goal 5: Produce Execution Briefs, not raw prompts**
 
-DeliveryOS should generate Execution Briefs (controlled handoff packages) rather than casual prompts, and should format them according to the target harness (Claude Code, Codex, Cursor, etc.).
+DeliveryOS must generate Execution Briefs (controlled handoff packages) rather than casual prompts, and must format them according to the target harness (Claude Code and Codex in MVP; Cursor and others post-MVP per NFR8).
 
 **Goal 6: Capture results from external harnesses**
 
-DeliveryOS should capture what the coding harness actually did (changed files, tests run, errors, deviations) and link it back to the requirement.
+DeliveryOS must capture what the coding harness actually did (changed files, tests run, errors, deviations) and link it back to the requirement.
 
 **Goal 7: Build validation from the beginning**
 
-Every requirement should have verification criteria before build begins. The system should follow a test-first mindset.
+Every requirement must have verification criteria before build begins. The system must enforce a test-first mindset: no Execution Brief is generated until a Test Specification with verification criteria exists for the target requirement.
 
 **Goal 8: Preserve traceability**
 
-DeliveryOS should maintain links from original user intent through to release evidence, via every intermediate artefact.
+DeliveryOS must maintain links from original user intent through to release evidence, via every intermediate artefact.
 
 ---
 
@@ -245,7 +245,7 @@ See `docs/architecture/stage-configuration.md` for the full stage library and th
 
 ## 10. SDLC Stages
 
-### 10.0 Mapping v0.2 stages onto the v0.3 four-stage model
+### 10.1 Mapping v0.2 stages onto the v0.3 four-stage model
 
 The granular v0.2 stages (Raw Idea, Discovery Interview, Draft PRD, Specialist Expansion, Consolidated PRD, Requirement Analysis, Solution Design, Codebase Memory Preparation, Test Specification, Harness-Based Execution, Result Capture, Verification, Memory Update, Release Evidence) are not deleted. They become sub-steps inside the four default stages:
 
@@ -254,9 +254,9 @@ The granular v0.2 stages (Raw Idea, Discovery Interview, Draft PRD, Specialist E
 - **EXECUTE** contains: Handoff via `.deliveryos-handoff/`, External Coding Harness work, Result Capture.
 - **VERIFY** contains: Verification against test spec, Memory Update, Release Evidence.
 
-The detailed sub-step descriptions from v0.2 are unchanged and described in `docs/deprecated/PRD-v0.1.md` and in the architecture references. Below are the updated and new stages with the configurable-mid-stage mechanic applied.
+The v0.2 mapping table above is the canonical v0.3 reference; the sub-step prose detail in `docs/deprecated/PRD-v0.1.md` is informational only. Sections 10.2–10.7 below describe each sub-step whose v0.3 behaviour materially diverges from v0.2 (Codebase Memory Prep, Harness-Based Execution, Result Capture, Verification, Memory Update, Release Evidence). Section 10.8 describes the new v0.3 Stage Configuration mechanic.
 
-### 10.8 Stage 8: Codebase Memory Preparation (renamed from "Context Preparation")
+### 10.2 Codebase Memory Preparation (renamed from "Context Preparation")
 
 Before handoff to a coding harness, DeliveryOS prepares structured memory that the harness can consume directly.
 
@@ -281,7 +281,9 @@ Output:
 - impact summary
 - missing context warnings
 
-### 10.10 Stage 10: Harness-Based Execution (replaces "AI-Assisted Implementation")
+**Gate:** Codebase Memory entry exists with each of the ten input categories populated (or explicitly marked "not applicable"); impact summary is non-empty; any missing-context warning is acknowledged or resolved before progression to the next sub-step.
+
+### 10.3 Harness-Based Execution (replaces "AI-Assisted Implementation")
 
 DeliveryOS does not generate or execute code. It produces an Execution Brief for the chosen external coding harness.
 
@@ -314,7 +316,9 @@ Output:
 - Execution Memory entry
 - Result Capture template ready to receive the harness output
 
-### 10.11 Stage 11: Result Capture
+**Gate:** Execution Memory entry is persisted; Execution Brief written to `.deliveryos-handoff/current-execution-brief.md`; a timestamped snapshot is written to `.deliveryos-handoff/history/` per §18.Y; the user has been routed to the chosen external coding harness.
+
+### 10.4 Result Capture
 
 The output from the external coding harness is captured back into DeliveryOS, either through paste, file ingestion from `.deliveryos-handoff/`, or (later) MCP exchange.
 
@@ -332,7 +336,9 @@ Output:
 
 - Result Memory entry, linked to the Execution Brief and the originating requirement
 
-### 10.12 Stage 12: Verification
+**Gate:** Result Memory entry is parsed without errors (paste-mode requires non-empty "summary of changes" and "files changed" fields); a timestamped result snapshot is written to `.deliveryos-handoff/history/` per §18.Y; the Result is linked to its originating Execution Brief and requirement.
+
+### 10.5 Verification
 
 Verification compares the captured result against the test specification and the requirement.
 
@@ -346,56 +352,68 @@ Output:
 - rework instructions
 - approval or rejection decision
 
-### 10.13 Stage 13: Memory Update
+**Gate:** Verification Memory entry exists with an explicit pass / pass-with-warnings / fail decision against every verification criterion in the Test Specification; the Allowed/Forbidden Changes diff (per FR34, §27 Risk 3) has been run; pass-with-warnings or fail blocks progression to §10.7 Release Evidence until rework or explicit waiver.
+
+### 10.6 Memory Update
 
 The system updates project memory based on what the harness actually did, decisions it made, and deviations.
 
 Update targets: Design Memory (if new decisions were made), Codebase Memory (if new files or conventions emerged), Requirement Memory (if assumptions changed).
 
-### 10.14 Stage 14: Release Evidence
+**Gate:** Every memory type implied by the Result has either been updated or explicitly noted as "no change"; the audit log records each update with timestamp and the memory type touched (per FR24).
+
+### 10.7 Release Evidence
 
 When work is complete, DeliveryOS captures release evidence: approved requirement, design reference, codebase memory snapshot, execution brief, harness identity, result, verification, human approval, release notes, known limitations, deferred items.
 
+**Gate:** Release Evidence Package contains every required field (per FR32); for solo-builder projects with no mid-stages, `human approval`, `known limitations`, and `deferred items` may be empty but must be explicitly marked so; for projects with mid-stages, each mid-stage's gate artefact must be linked from the Release Evidence Package.
+
 ---
 
-## 10.X Stage Configuration (new in v0.3)
+### 10.8 Stage Configuration (new in v0.3)
 
-During DISCOVER, the AI interview asks targeted questions whose answers determine which mid-stages are added to the project. The user can also add or remove mid-stages manually at any time. Each mid-stage is a real stage with its own artefacts and a gate that blocks progression until satisfied.
+During DISCOVER, the AI interview asks targeted questions whose answers determine which mid-stages are added to the project. The user can also add or remove mid-stages manually at any time. Each mid-stage is a real stage with its own artefact and a measurable gate that blocks progression until satisfied.
 
-### Mid-stage library (MVP set)
+#### Mid-stage library (planned post-MVP catalogue)
 
-Each entry below is a configurable stage. The trigger column lists the discovery answers that auto-suggest it.
+The 10 entries below are the planned post-MVP mid-stage catalogue. MVP delivers the **framework** for configurable mid-stages (FR26 add/remove + FR27 discovery-driven suggestion + FR35 gate enforcement), but the pre-defined trigger-to-stage mappings below are the post-MVP target — see §15 MVP Scope and §26 Build Phases. MVP default is four stages only with zero pre-defined mid-stages; users may define custom mid-stages.
 
-| Stage                    | Trigger (discovery answer)                                              | Gate produces                            |
-| ------------------------ | ----------------------------------------------------------------------- | ---------------------------------------- |
-| Security Review          | "handles user data", "exposes APIs", "auth required"                    | Security verification criteria + sign-off |
-| Privacy / Data Review    | "stores PII", "processes personal data"                                 | Data classification + retention policy   |
-| Compliance Review        | "regulated industry (health/finance/gov)", "SOC 2", "HIPAA", "GDPR"     | Compliance checklist + audit notes       |
-| Legal Sign-off           | "external publish", "customer-facing contracts", "third-party data"     | Legal approval record                    |
-| UX Review                | "customer-facing", "multi-step user flow"                               | UX flow review + usability checklist     |
-| Accessibility Review     | "public-facing", "regulated accessibility (WCAG, ADA)"                  | Accessibility checklist                  |
-| Architecture Review      | "multi-service", "scale matters", "touches core systems"                | Architecture decision record (ADR)        |
-| Cost / Ops Review        | "production deploy", "cost-sensitive", "high-traffic"                   | Cost estimate + ops runbook              |
-| Pre-release Sign-off     | "external release", "customers will see this"                           | Release approval record                  |
-| Post-deploy Validation   | "production traffic", "live data dependency"                            | Live verification result                 |
+| Stage                    | Trigger (discovery answer)                                              | Artefact produced                          | Gate criterion                                                          |
+| ------------------------ | ----------------------------------------------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------- |
+| Security Review          | "handles user data", "exposes APIs", "auth required"                    | Security review note + threat model        | Threat model has ≥3 mitigations; sign-off is dated and non-null         |
+| Privacy / Data Review    | "stores PII", "processes personal data"                                 | Data classification + retention policy     | Retention duration is specified; classification covers all stored fields |
+| Compliance Review        | "regulated industry (health/finance/gov)", "SOC 2", "HIPAA", "GDPR"     | Compliance checklist + audit notes         | Every applicable regulation has a checked entry                         |
+| Legal Sign-off           | "external publish", "customer-facing contracts", "third-party data"     | Legal approval record                      | Signed by authorised party and dated                                    |
+| UX Review                | "customer-facing", "multi-step user flow"                               | UX flow review + usability checklist       | Usability checklist fully marked                                        |
+| Accessibility Review     | "public-facing", "regulated accessibility (WCAG, ADA)"                  | Accessibility checklist                    | Applicable WCAG/ADA criteria addressed                                  |
+| Architecture Review      | "multi-service", "scale matters", "touches core systems"                | Architecture decision record (ADR)         | ADR records decision, rationale, and rejected alternatives              |
+| Cost / Ops Review        | "production deploy", "cost-sensitive", "high-traffic"                   | Cost estimate + ops runbook                | Runbook covers deploy / rollback / monitor; cost estimate has range     |
+| Pre-release Sign-off     | "external release", "customers will see this"                           | Release approval record                    | Signed and dated by named release owner                                 |
+| Post-deploy Validation   | "production traffic", "live data dependency"                            | Live verification result                   | Validation criteria executed against production with recorded outcome   |
 
-Profiles can also be saved. For example: "Regulated SaaS Default" might include Security, Privacy, Compliance, Legal, Pre-release Sign-off, and Post-deploy Validation. The user picks a profile at project creation and tweaks from there.
+Users can save custom profiles. Example: a user might save a "Regulated SaaS Default" profile that includes Security, Privacy, Compliance, Legal, Pre-release Sign-off, and Post-deploy Validation, and pick that profile at project creation.
 
-### Default = four stages only
+#### Default = four stages only
 
 If discovery does not surface any of the triggers above, the project runs the four-stage default with no mid-stages. This is the path most solo builders will take. The product does not feel heavy unless the project warrants it.
 
-### Adding stages mid-project
+#### Adding stages mid-project
 
 Mid-stages can be added after the project has started. Example: a feature originally scoped as internal becomes customer-facing. The user (or AI) flags the change, DeliveryOS proposes adding UX Review and Pre-release Sign-off, the user accepts, and those stages slot in before EXECUTE proceeds.
 
-### Why this mechanic matters
+#### Why this mechanic matters
 
 It collapses the "solo builder vs regulated enterprise" tension into one product. Both users see four stages on the homepage. Only one of them sees Legal and Compliance gates inside DEFINE, because their project actually needs them. Nothing is ceremony, every gate has a reason it exists.
 
 ## 11. Operating Modes
 
-Unchanged from v0.1: Human-Led, AI-Assisted, AI-Led. Each configurable mid-stage can be set to a different operating mode. A team might run Architecture Review in Human-Led mode while Security Review runs in AI-Assisted mode.
+DeliveryOS supports three operating modes per stage (or per mid-stage). Each mid-stage can be configured to a different mode.
+
+- **Human-Led.** A human owns the artefact; AI is advisory only. Stage exit requires explicit human approval recorded against the stage's gate.
+- **AI-Assisted.** AI produces the artefact; a human reviews and signs off. Stage exit requires both the AI output and a human sign-off entry against the gate.
+- **AI-Led.** AI produces the artefact and the stage exits when the gate criterion is met by the AI output alone; a human audits post-hoc. Stage exit records the AI run identity; no human approval is required at exit.
+
+Mode selection is recorded against each stage in the project configuration. A team might run Architecture Review in Human-Led mode while Security Review runs in AI-Assisted mode and the four default stages run AI-Assisted.
 
 ---
 
@@ -403,23 +421,23 @@ Unchanged from v0.1: Human-Led, AI-Assisted, AI-Led. Each configurable mid-stage
 
 ### 12.X Memory Types
 
-DeliveryOS maintains a typed memory graph. Each type is a first-class object.
+DeliveryOS maintains a typed memory graph. Each type is a first-class typed entry persisted in the polymorphic `memory_entries` store (per §25.2) with edges in `memory_links`. PRD-level guarantees are stated below per type; detailed field-level schema (TypeScript discriminated union) lives in `contracts/src/memory.ts` per CHUNK-03.
 
-**Intent Memory** — what the user originally wanted. Stores raw idea, discovery answers, problem statement, user goals, non-goals, success criteria.
+**Intent Memory** — what the user originally wanted. Stores raw idea, discovery answers, problem statement, user goals, non-goals, success criteria. **Links:** root of the graph (no inbound). **Mutability:** append-only — the original raw idea is preserved; subsequent discovery answers append.
 
-**Requirement Memory** — what the system agreed to build. Stores requirements, assumptions, constraints, priorities, verification criteria.
+**Requirement Memory** — what the system agreed to build. Stores requirements, assumptions, constraints, priorities, verification criteria. **Links:** derives-from Intent Memory; outbound to Design Memory, Execution Memory, Verification Memory. **Mutability:** append-only — superseded requirements remain readable for audit.
 
-**Design Memory** — how the system should be built. Stores architecture decisions, data model, API design, security design, UX flows, tradeoffs, rejected options.
+**Design Memory** — how the system should be built. Stores architecture decisions, data model, API design, security design, UX flows, tradeoffs, rejected options. **Links:** derives-from Requirement Memory; outbound to Execution Memory. **Mutability:** mutable — design evolves through the project; older decisions are tagged superseded but kept.
 
-**Codebase Memory** — what already exists. Stores folder structure, key files, components, database schema, APIs, coding conventions, test commands, known defects.
+**Codebase Memory** — what already exists. Stores folder structure, key files, components, database schema, APIs, coding conventions, test commands, known defects. **Links:** referenced-by Execution Memory; updated by Result Memory. **Mutability:** mutable — refreshed when the codebase changes.
 
-**Execution Memory** — what the coding harness was asked to do. Stores execution brief, target harness, harness profile, date and time, context package, expected outputs.
+**Execution Memory** — what the coding harness was asked to do. Stores execution brief, target harness, harness profile, date and time, context package, expected outputs. **Links:** derives-from Requirement Memory + references Design Memory + references Codebase Memory; outbound to Result Memory. **Mutability:** append-only — every Execution Brief is its own entry; reruns create new entries.
 
-**Result Memory** — what actually happened. Stores output from the harness, changed files, tests run, errors, reviewer notes, deviations from the plan.
+**Result Memory** — what actually happened. Stores output from the harness, changed files, tests run, errors, reviewer notes, deviations from the plan. **Links:** derives-from Execution Memory; outbound to Verification Memory. **Mutability:** append-only — each capture is immutable.
 
-**Verification Memory** — whether the work passed. Stores test result, failed criteria, defects, rework notes, approval decision.
+**Verification Memory** — whether the work passed. Stores test result, failed criteria, defects, rework notes, approval decision. **Links:** verifies Requirement Memory; derives-from Result Memory; outbound to Release Memory. **Mutability:** append-only — pass/fail/warning verdicts are immutable; rework triggers a new entry.
 
-**Release Memory** — what was released and why. Stores release evidence, known limitations, deferred items, final sign-off.
+**Release Memory** — what was released and why. Stores release evidence, known limitations, deferred items, final sign-off. **Links:** consolidates Requirement + Design + Codebase + Execution + Result + Verification Memory. **Mutability:** append-only — each release is its own immutable record.
 
 The memory graph is the product. Every other artefact derives from it or feeds it.
 
@@ -453,27 +471,27 @@ Priority: Must have
 
 **FR21 (new): Select Execution Harness Profile**
 
-The user must be able to choose a target harness profile (Claude Code, Codex, Cursor, Generic). The Execution Brief must be rendered according to the chosen profile.
+The user must be able to choose a target harness profile. MVP profiles are Claude Code and Codex (per §26 trimmed scope and NFR8). Generic, Cursor, and Replit/Lovable profiles are post-MVP fast follows. The Execution Brief must be rendered according to the chosen profile.
 
 Priority: Must have
 
 **FR22 (new): File-based handoff**
 
-The system must be able to write a `.deliveryos-handoff/` directory containing execution-brief.md, context-package.md, test-specification.md, verification-checklist.md, and memory-summary.md.
+The system must be able to write a `.deliveryos-handoff/` directory containing the regenerated working files `current-execution-brief.md`, `current-context-package.md`, `current-test-specification.md`, `current-verification-checklist.md`, and `memory-summary.md`, plus a `history/` subdirectory containing committed timestamped snapshots `<timestamp>-execution-brief.md` and `<timestamp>-result.md` per the §18.Y archive policy. The `current-*` files are workspace working files; the `history/*` snapshots are the committed audit trail.
 
 Priority: Must have
 
 **FR23 (new): Memory persistence**
 
-The system must maintain a typed memory store (the eight memory types in section 12.X) that persists between sessions and is queryable by the user and by the system.
+The system must maintain a typed memory store (the eight memory types in section 12.X) that persists between sessions and is queryable by the user and by the system. MVP query support: browse memory entries via per-stage tree-view rows (one row per artefact under its parent stage); programmatic lookup by entry `id` and by `type`. Full query API and the dedicated Memory Workspace browse panel are deferred post-MVP per §21.
 
 Priority: Must have
 
-**FR24 (new): Memory update on result capture**
+**FR24 (revised): Memory update on result capture**
 
-When a Result is captured and verified, the system must update Design, Codebase, and Requirement memories where applicable, and record the change in an audit log.
+When a Result is captured and verified, the system must update Design Memory if new design decisions appear in the Result, Codebase Memory if new files or conventions appear, and Requirement Memory if assumption violations appear. Each update must be recorded in the audit log with timestamp and the memory types touched.
 
-Priority: Should have
+Priority: Must have
 
 **FR25 (new, future): MCP server mode**
 
@@ -505,6 +523,54 @@ The user must be able to save and apply named stage profiles (e.g., "Solo Defaul
 
 Priority: Should have
 
+**FR30 (new in v0.3): Generate PRD from Discovery**
+
+The system must turn the Discovery Interview's captured answers into a structured PRD that contains the canonical sections: goals, users, requirements (placeholder for later catalogue), assumptions, risks, constraints, success criteria. PRD generation is the gate criterion for exiting DISCOVER into DEFINE.
+
+Priority: Must have
+
+**FR31 (new in v0.3): Generate Test Specification with Verification Criteria**
+
+The system must generate a Test Specification containing verification criteria for each Requirement before any Execution Brief targeting that Requirement may be generated. The Test Designer specialist (per §17 and §26) produces this artefact in manual mode for MVP. Verification criteria are the canonical source for §10.5 Verification's pass/fail decision.
+
+Priority: Must have
+
+**FR32 (new in v0.3): Generate Release Evidence Package**
+
+The system must produce a Release Evidence Package per §10.7 at project completion or at each release boundary. The package consolidates: approved Requirement, Design reference, Codebase Memory snapshot, Execution Brief, harness identity, Result, Verification verdict, human approval (if any), release notes, known limitations, deferred items. Mid-stage gate artefacts (per §10.8) must be linked from the package when present.
+
+Priority: Must have
+
+**FR33 (new in v0.3): Generate Requirements Catalogue**
+
+The system must produce a Requirements Catalogue from the consolidated PRD with one entry per Requirement containing: id, title, statement, assumptions, constraints, priority, linked goal, and verification criteria (populated by FR31). The Catalogue is the source-of-truth Requirement list for downstream Design, Execution, and Verification work.
+
+Priority: Must have
+
+**FR34 (new in v0.3): Enforce Allowed/Forbidden Changes**
+
+The system must enforce the Allowed Changes and Forbidden Changes sections of every Execution Brief against the actual changed-files set captured in §10.4 Result Capture. For the Claude Code profile, the system must generate a managed `PreToolUse` hook block in `.claude/settings.json` that blocks Write/Edit/MultiEdit attempts against Forbidden patterns in real time (per §27 Risk 3). For every other profile, post-hoc diff against the captured Result is the universal backstop. Verification (§10.5) must not pass without this check being run.
+
+Priority: Must have
+
+**FR35 (new in v0.3): Enforce Mid-stage Gates**
+
+The system must not allow progression past a mid-stage's parent default stage until each active mid-stage's gate criterion (per §10.8) is satisfied. Unmet gates must be visible in the UI; an unmet gate blocks the DEFINE → EXECUTE transition (or whichever default-stage transition the mid-stage is attached to). Gate override is not supported in MVP — projects must satisfy or remove the mid-stage.
+
+Priority: Must have
+
+**FR36 (new in v0.3): Project Lifecycle**
+
+The user must be able to create a new project by entering a name and selecting a workspace root directory. The system creates a `.deliveryos/` subdirectory holding the project record (id, name, created-at, stage configuration, polymorphic memory store per §25.2). The user must be able to open an existing project, identified by its `.deliveryos/` directory. Projects are local-first; multi-project switching is supported within the extension session.
+
+Priority: Must have
+
+**FR37 (new in v0.3): Audit Trail Snapshots**
+
+The system must write timestamped snapshots into `.deliveryos-handoff/history/` on every Execution Brief generation and every Result Capture, per the §18.Y archive policy. Snapshots are immutable, ISO-8601-named, and committed to the user's VCS (no auto-expiration in MVP). The Audit Trail is the load-bearing mechanism for Goal 8 traceability and §24's verifiable-evidence success criterion.
+
+Priority: Must have
+
 ---
 
 ## 14. Non-Functional Requirements
@@ -513,7 +579,7 @@ Unchanged from v0.1. Add:
 
 **NFR8: Harness Neutrality**
 
-DeliveryOS must not lock the user to a single coding harness. Profile support is mandatory for at least Claude Code, Codex, and a Generic profile in MVP. Cursor and others as fast follows.
+DeliveryOS must not lock the user to a single coding harness. Profile support is mandatory for Claude Code and Codex in MVP (matching §26 trimmed scope). Generic, Cursor, and Replit/Lovable profiles are planned for a post-MVP follow-up build.
 
 **NFR9: Memory Durability**
 
@@ -525,27 +591,28 @@ The memory graph must survive app restarts and project re-opens. Local-first sto
 
 **MVP must include**
 
-- project creation
+- project creation (FR36)
 - raw idea capture
 - AI discovery interview prompts (manual mode)
 - discovery-driven mid-stage suggestion (FR27)
-- configurable stage library with at least the MVP mid-stages listed in section 10.X
+- configurable stage library **framework** (FR26 add/remove; FR27 suggestion; FR35 gate enforcement). MVP default is four stages only with zero pre-defined mid-stages; users may define custom mid-stages. The pre-defined trigger-mapped 10-mid-stage catalogue in §10.8 is the planned post-MVP target per §26.
 - discovery summary
-- PRD generation
+- PRD generation (FR30)
 - PRD editor
-- specialist expansion (BA, Architect, Security, QA only)
+- specialist expansion: **Test Designer specialist only** for test spec generation in MVP. BA, Architect, Security, QA, and the wider discipline set are post-MVP per §26.
 - PRD consolidation
-- requirements catalogue with verification criteria
-- the eight memory types as first-class storage
-- Codebase Memory preparation
-- test specification generation
-- Execution Brief generation
-- harness profile selection (Claude Code, Codex, Generic)
-- file-based handoff via `.deliveryos-handoff/`
-- result capture (paste mode)
-- verification summary
-- memory update on verification
-- release evidence export
+- requirements catalogue with verification criteria (FR33)
+- the eight memory types persisted as polymorphic entries (single `memory_entries` table per §25.2; per-stage tree-view rows for browsing per FR23). Per-type rich object views and the dedicated Memory Workspace panel are deferred post-MVP per §21.
+- Codebase Memory preparation (§10.2)
+- test specification generation (FR31)
+- Execution Brief generation (FR15)
+- harness profile selection: **Claude Code and Codex** in MVP (FR21, NFR8). Generic, Cursor, and Replit/Lovable profiles are post-MVP.
+- file-based handoff via `.deliveryos-handoff/` (FR22) with audit trail snapshots in `history/` (FR37)
+- result capture (paste mode) (FR16)
+- verification summary (§10.5)
+- Allowed/Forbidden Changes enforcement (FR34)
+- memory update on verification (FR24)
+- release evidence export (FR32)
 
 **MVP should not include**
 
@@ -561,7 +628,7 @@ The memory graph must survive app restarts and project re-opens. Local-first sto
 
 ## 16. MVP User Journey
 
-In v0.3, the user journey starts the same way as v0.2 but adds a stage configuration step inside DISCOVER. After the AI captures the raw idea and runs the interview, it asks the trigger questions in section 10.X. Based on the answers, DeliveryOS proposes a set of mid-stages.
+In v0.3, the user journey starts the same way as v0.2 but adds a stage configuration step inside DISCOVER. After the AI captures the raw idea and runs the interview, it asks the trigger questions in section 10.8. Based on the answers, DeliveryOS proposes a set of mid-stages.
 
 Example for a solo internal tool:
 - "Will this touch user data?" → "Yes, but only internal team data."
@@ -589,7 +656,7 @@ DeliveryOS writes `.deliveryos-handoff/` into the project repo containing the ex
 
 **Step 12: External harness execution**
 
-The user invokes Claude Code (or Codex / Cursor / etc.) and instructs it to read `.deliveryos-handoff/current-execution-brief.md` and execute only that work. For harnesses with their own conventions (AGENTS.md, CLAUDE.md), DeliveryOS can also produce a suggested update to those files.
+The user invokes Claude Code (or Codex) and instructs it to read `.deliveryos-handoff/current-execution-brief.md` and execute only that work. For the Claude Code and Codex profiles, DeliveryOS produces a suggested update to `CLAUDE.md` / `AGENTS.md` respectively. Cursor and other harnesses are post-MVP profiles per §18.Z.
 
 **Step 13: Result capture**
 
@@ -611,13 +678,19 @@ DeliveryOS exports a package showing: Idea → Discovery → PRD → Requirement
 
 ## 17. AI Execution Roles
 
-Unchanged from v0.1, with one rename: "Implementation Assistant" becomes **Execution Brief Author**, whose only job is to produce a well-formed Execution Brief for the selected harness. The brief is then handed to the external coding harness, which is treated as the actual implementer.
+v0.3 carries the v0.1 role catalogue forward with one rename and an explicit MVP scope cut.
+
+- **Rename:** "Implementation Assistant" becomes **Execution Brief Author**, whose only job is to produce a well-formed Execution Brief for the selected harness. The brief is then handed to the external coding harness, which is treated as the actual implementer.
+- **MVP role set:** Discovery Interviewer (manual mode), Execution Brief Author, and Test Designer specialist (per §15 and §26). The Test Designer specialist generates the Test Specification per FR31; the Execution Brief Author renders the brief per FR15 and FR21; the Discovery Interviewer captures Intent Memory and runs the trigger questions for §10.8 Stage Configuration.
+- **Post-MVP roles** (kept conceptually, not implemented in MVP): BA Reviewer, Solution Designer, Security Reviewer, Compliance Reviewer, UX Reviewer, Data Designer, QA Reviewer, Cost / Ops Reviewer, Verification Reviewer, Release Documenter. These roles are gated behind API integration per §25.2; MVP runs every active specialist in manual mode (prompt out, paste in).
 
 ---
 
 ## 18. Execution Briefs and Handoff
 
-### 18.X Execution Brief schema
+### 18.X Execution Brief template
+
+This template defines the 10 mandatory sections and the intent of each. Every Execution Brief must include all 10 sections. Detailed field-level types (post-implementation) live in `contracts/src/execution-brief.ts` per CHUNK-09; this PRD section is the human-readable contract.
 
 ```md
 # DeliveryOS Execution Brief
@@ -678,7 +751,9 @@ Define what must be true before the work is considered complete.
     <timestamp>-result.md             # committed audit trail
 ```
 
-The `current-*` files are working files, regenerated on every session (typically gitignored). The `history/<timestamp>-*` snapshots are the committed audit trail — they resolve the tension between auditability (success criterion in § 24) and diff noise. This mirrors how Claude Code itself splits `CLAUDE.md` (shared) from `CLAUDE.local.md` (user-only). The dotfile root (`.deliveryos-handoff/`) matches `.vscode/`, `.claude/`, `.codex/` — the conventional shape for tool sidecars.
+The `current-*` files are working files, regenerated on every session (gitignored by default). The `history/<timestamp>-*` snapshots are the committed audit trail — they resolve the tension between traceability (the "navigable artefact traceability" success criterion in § 24) and diff noise. This mirrors how Claude Code itself splits `CLAUDE.md` (shared) from `CLAUDE.local.md` (user-only). The dotfile root (`.deliveryos-handoff/`) matches `.vscode/`, `.claude/`, `.codex/` — the conventional shape for tool sidecars.
+
+**Archive policy (MVP).** Snapshots are written automatically on (a) every Execution Brief generation (`<timestamp>-execution-brief.md`) and (b) every Result Capture (`<timestamp>-result.md`). Naming convention: ISO-8601 timestamp prefix, e.g. `2026-05-21T14-32-15Z-execution-brief.md`. Snapshots are immutable once written. Cleanup is manual in MVP — users may delete old entries; there is no auto-expiration. `current-*` files are git-ignored; `history/*` snapshots are committed by the user (recommended practice: commit on every Result Capture). This is the load-bearing mechanism for FR37 Audit Trail and Goal 8 traceability.
 
 The user instructs the harness: "Read .deliveryos-handoff/current-execution-brief.md and execute only that work." Codex reads AGENTS.md, Claude Code reads CLAUDE.md, both can be pointed at the handoff directory by convention or by an entry in their respective config files.
 
@@ -686,17 +761,17 @@ The user instructs the harness: "Read .deliveryos-handoff/current-execution-brie
 
 ### 18.Z Execution Harness Profiles
 
-Each profile customises the rendering of the Execution Brief.
+Each profile customises the rendering of the Execution Brief. MVP ships two profiles; the remaining three are post-MVP fast follows per NFR8 and §26.
 
-**Claude Code Profile.** Outputs an Execution Brief, a suggested CLAUDE.md update, and a file-based handoff. Later: MCP-compatible memory exposure.
+**Claude Code Profile (MVP).** Outputs an Execution Brief, a suggested CLAUDE.md update, a file-based handoff, and a managed `PreToolUse` hook block in `.claude/settings.json` for FR34 enforcement (per §27 Risk 3). Later: MCP-compatible memory exposure.
 
-**Codex Profile.** Outputs an Execution Brief plus a suggested AGENTS.md update. Includes repo-local context files and explicit test/build commands.
+**Codex Profile (MVP).** Outputs an Execution Brief plus a suggested AGENTS.md update. Includes repo-local context files and explicit test/build commands. Uses Codex's `-o / --output-last-message` flag for native result-file writing (per §23 example).
 
-**Cursor Profile.** Outputs a concise implementation-style prompt, a target file list, an expected patch, and a test checklist.
+**Cursor Profile (post-MVP).** Outputs a concise implementation-style prompt, a target file list, an expected patch, and a test checklist.
 
-**Replit/Lovable Profile.** Outputs a product-level build prompt with UI behaviour, constraints, and verification checklist.
+**Replit/Lovable Profile (post-MVP).** Outputs a product-level build prompt with UI behaviour, constraints, and verification checklist.
 
-**Generic Profile.** A harness-agnostic markdown brief usable in any chat-based AI tool.
+**Generic Profile (post-MVP).** A harness-agnostic markdown brief usable in any chat-based AI tool.
 
 ---
 
@@ -812,17 +887,17 @@ the same path natively.
 
 ## 24. Success Criteria (revised)
 
-DeliveryOS succeeds as a public proof-of-work if it demonstrates:
+DeliveryOS succeeds as a public proof-of-work if **every** criterion below is met. Each is a verifiable outcome a third party can replicate from the repo and the demo recording.
 
-- a clear, defensible architectural thesis (meta-harness around coding harnesses)
-- credible understanding of agent harnesses (Claude Code, Codex, Cursor) and how they consume context
-- practical, working file-based handoff that actually drives a real harness session end to end
-- a memory graph that is more than a database table, demonstrably useful between sessions
-- test-first thinking applied through the Execution Brief
-- strong artefact traceability from intent to release
-- one complete, polished demo
+1. **End-to-end demo completes for Bug Triage Assistant** (§19, §23) in a single recorded session: raw idea → DISCOVER → DEFINE → EXECUTE → VERIFY → Release Evidence, with no manual repair of artefacts mid-demo.
+2. **File-based handoff drives both MVP profiles end to end.** The Bug Triage Execution Brief is consumed by Claude Code (with the Allowed/Forbidden `PreToolUse` hook active) and by Codex (with `-o` writing `result.md`); both produce a Result that passes Verification against the Test Specification.
+3. **Memory persists across the extension lifecycle.** Closing and reopening the VS Code workspace, then reopening the project, restores every memory entry from the prior session. Verified across ≥3 close/reopen cycles in the demo.
+4. **Navigable artefact traceability.** From any Requirement in the Catalogue, the user can navigate forward (Design → Execution Brief → Result → Verification → Release Evidence) and backward (to Intent Memory + Discovery answer) via UI clicks alone. Verified by a click-path walkthrough in the demo.
+5. **Cross-editor surface.** The `.vsix` installs and runs the Bug Triage demo on **VS Code and Cursor** at minimum (the two MVP target editors per §25.1; Windsurf / Antigravity / VSCodium are nice-to-have).
+6. **Publishable proof-of-work.** A repository containing the extension, an `INSTALL.md` reproducing the demo, a ≤5-minute demo recording (`demo.mp4`), and a one-page writeup of the meta-harness thesis is published. AI-companies hiring audience (§7.4) can reach the artefact from a single link.
+7. **Audit-trail completeness.** Every Execution Brief and Result in the demo project produces a `history/<timestamp>-*.md` snapshot that is committed in the repo and readable by a reviewer.
 
-The project does not need to become a commercial product. It needs to make the builder look credible to AI companies.
+The project does not need to become a commercial product. It needs to make the meta-harness thesis legible to AI companies through reproducible artefacts.
 
 ---
 
@@ -841,7 +916,7 @@ Rationale in brief:
 
 Distribution: `.vsix` published on GitHub Releases, plus an install script that detects installed editors and installs into each. OpenVSX is the fallback path if auto-update and discoverability become needed later.
 
-Two known constraints, both minor for a prototype: sideloaded VSIX files do not auto-update (mitigated by an in-extension version check against GitHub Releases), and recent VS Code builds are tightening extension signature verification (must be tested on each target editor early).
+Two known constraints to plan around: sideloaded VSIX files do not auto-update (mitigated by an in-extension version check against GitHub Releases), and recent VS Code builds are tightening extension signature verification (signature behaviour is verified on every target editor during Phase 0 per CHUNK-04's multi-editor smoke).
 
 ### 25.2 Technical Stack
 
@@ -889,7 +964,7 @@ Scope deliberately deferred to a later build: the remaining MVP specialists, the
 
 **Risk 3: File-based handoff is leaky.** Agents may ignore the brief or modify forbidden areas. Mitigation: explicit Allowed/Forbidden Changes sections in the brief, post-execution diff checks during Result Capture (universal across harnesses — the load-bearing backstop). Additionally, for the **Claude Code profile**, DeliveryOS generates a `PreToolUse` hook inside a managed block in `.claude/settings.json` that reads the Forbidden list from `.deliveryos-handoff/current-execution-brief.md` and exits non-zero on any matching `Edit` / `Write` / `MultiEdit` attempt. Critically, `PreToolUse` fires *before* permission-mode checks; it cannot be bypassed by `--dangerously-skip-permissions`. This is real-time enforcement, not after-the-fact diffing. Codex has no equivalent in 2026, so the post-hoc diff remains the universal backstop on every other profile.
 
-**Risk 4: Memory becomes write-only.** Memory entries get created but never updated. Mitigation: Stage 13 Memory Update is mandatory before release evidence.
+**Risk 4: Memory becomes write-only.** Memory entries get created but never updated. Mitigation: §10.6 Memory Update is mandatory (FR24 Must have) before §10.7 Release Evidence proceeds.
 
 **Risk 5: Confused with Linear/Jira.** Mitigation: lead with the harness language (Execution Brief, Result Capture, Memory) not the task language.
 
