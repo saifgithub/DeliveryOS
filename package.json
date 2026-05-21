@@ -5,6 +5,7 @@
   "version": "0.0.1",
   "publisher": "deliveryos",
   "license": "MIT",
+  "icon": "media/deliveryos-logo.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -27,6 +28,37 @@
     "onStartupFinished"
   ],
   "main": "./dist/extension.js",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "DeliveryOS reads and writes .deliveryos-handoff/ and .deliveryos/, runs terminals against the workspace, and reads source files for Codebase Memory. It cannot safely run on untrusted code."
+    },
+    "virtualWorkspaces": {
+      "supported": false,
+      "description": "DeliveryOS requires a local filesystem to write the handoff directory and the memory store. Virtual workspaces (GitHub repos, remote tunnels without a local checkout) are not supported."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "deliveryos",
+          "title": "DeliveryOS",
+          "icon": "media/icon-rocket.svg"
+        }
+      ]
+    },
+    "views": {
+      "deliveryos": [
+        {
+          "id": "deliveryos.stages",
+          "name": "Stages",
+          "contextualTitle": "DeliveryOS",
+          "icon": "media/icon-rocket.svg"
+        }
+      ]
+    }
+  },
   "scripts": {
     "clean": "rimraf dist *.vsix",
     "compile": "tsc -p ./",
