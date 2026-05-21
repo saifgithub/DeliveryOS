@@ -2,7 +2,7 @@
 
 A meta-harness for AI-assisted software delivery. A harness around your harness.
 
-**Status:** Build in progress. Phase A planning complete (PRD v0.3, 14-week BUILD-PLAN, 16 chunk specs, `docs/planning/READY.md` green-light). CHUNK-01 scaffold landed 2026-05-21 — `npm run package` produces a `deliveryos-0.0.1.vsix` that installs into VS Code and activates cleanly. Activity-bar icon, stage tree, and project-create flow land next.
+**Status:** Build in progress. Phase A planning complete (PRD v0.3, 14-week BUILD-PLAN, 16 chunk specs, `docs/planning/READY.md` green-light). CHUNK-01 complete as of 2026-05-21 — `npm run package` produces a `deliveryos-0.0.1.vsix` that installs into VS Code, contributes the activity-bar rocket icon, renders four static stages (DISCOVER → DEFINE → EXECUTE → VERIFY) behind a `Create a project` welcome flow. Webview + memory persistence land next ([CHUNK-02](docs/planning/chunks/chunk-02-webview-foundation.md) + [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md)).
 
 ## What this is
 
@@ -57,7 +57,19 @@ DeliveryOS/
 │   ├── research/               Competitive notes, harness research
 │   └── deprecated/             Superseded specs and critiques
 ├── src/
-│   └── extension.ts            VS Code extension entry (CHUNK-01 scaffold)
+│   ├── extension.ts            VS Code extension entry (CHUNK-01 scaffold)
+│   ├── contextKeys.ts          deliveryos.* context-key constants
+│   ├── projectRegistry.ts      InMemoryProjectRegistry (CHUNK-03 swaps in persistence)
+│   ├── commands/
+│   │   ├── projectCreate.ts    deliveryos.project.create
+│   │   └── stagesRefresh.ts    deliveryos.stages.refresh
+│   └── stages/
+│       ├── stageDefinitions.ts STAGE_DEFS (4 frozen entries)
+│       ├── stageTreeNodes.ts   StageNode | ArtefactNode + toTreeItem
+│       └── stageTreeProvider.ts TreeDataProvider, gated on active project
+├── media/
+│   ├── icon-rocket.svg         Activity-bar icon (Lucide rocket, monochrome)
+│   └── deliveryos-logo.png     Extension icon (Extensions sidebar)
 ├── package.json                Extension manifest
 ├── tsconfig.json
 ├── .vscodeignore
@@ -72,4 +84,13 @@ npm run package
 code --install-extension deliveryos-0.0.1.vsix
 ```
 
-The scaffold activates on startup and logs `DeliveryOS activated` to the Extension Host output. Week-by-week build steps are in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). The week-2 milestone is a `.vsix` that installs into both VS Code and Cursor (Phase 0 demoable state).
+After install, click the rocket icon in the activity bar. A welcome panel offers **Create a project**; submitting a name renders the four stage rows (DISCOVER, DEFINE, EXECUTE, VERIFY). Each row is empty — artefacts arrive in later chunks. The Extension Host output shows `DeliveryOS activated` on startup.
+
+### Known limitations (CHUNK-01)
+
+- **Project state is in-memory only.** Closing VS Code forgets the project — the welcome view returns on next launch. Persistence lands in [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md).
+- **Workspace trust required.** DeliveryOS declines to activate in restricted or virtual workspaces, by design (see `capabilities.{untrustedWorkspaces,virtualWorkspaces}.description`).
+
+## What's next
+
+Week-by-week build steps are in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). The week-2 milestone is a `.vsix` that installs into both VS Code and Cursor — the Phase 0 demoable state after [CHUNK-02](docs/planning/chunks/chunk-02-webview-foundation.md) (webview foundation), [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md) (memory store), and [CHUNK-04](docs/planning/chunks/chunk-04-multi-editor-verify.md) (multi-editor verify) land.
