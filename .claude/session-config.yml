@@ -1,7 +1,7 @@
 # session-config.yml — read by /handover + /start-fresh.
 # Re-run /session-setup to amend a field or add a track.
 
-project_prefix: "DOS"            # session tags become DOS:O<N> / DOS:R<N>
+project_prefix: "DOS"            # session tags become DOS:O<N> / DOS:R<N> / DOS:P<N>
 
 # Shared across all tracks
 memory_project_file: project_deliveryos.md
@@ -33,7 +33,7 @@ tracks:
       - name: "clean working tree"
         cmd: "git status --porcelain"
       - name: "scaffold state"
-        cmd: "ls src/ && ls package.json 2>&1"
+        cmd: "ls extension/src/ && ls extension/package.json webview/package.json contracts/package.json package.json 2>&1"
       - name: "lint (soft)"
         cmd: "test -f package.json && npm run -s lint || echo 'lint: not yet wired'"
     bug_list:
@@ -42,3 +42,11 @@ tracks:
         jq '.bugs | length' docs/build/bugs.json
       titles_cmd: |
         jq -r '.bugs[] | "  - \(.id // "?"): \(.title // "(no title)")"' docs/build/bugs.json
+
+  P:
+    label: "Project Management"
+    handover_path: docs/pm/PM_STATUS.md
+    history_path: docs/pm/PM_HISTORY.md
+    # project_plan_path omitted — PM_STATUS.md absorbs backlog
+    # sanity_checks: none
+    # bug_list: disabled
