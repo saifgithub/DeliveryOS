@@ -1,6 +1,6 @@
 # Handover — Documentation (DOS:O)
 
-**Last updated:** 2026-05-21 (end of DOS:O1 — bootstrap two-track session model)
+**Last updated:** 2026-05-21 (end of DOS:O2 — Phase A Prompt 1: chunk plan)
 
 Read this file **first** when starting a new Documentation session (`/start-fresh O`). It is the single rolling source of truth for track O: state, narrative, and carry-overs all in one doc. Older "what just landed" sections rotate out to `docs/planning/PLANNING_HISTORY.md` newest-on-top.
 
@@ -10,42 +10,50 @@ Read this file **first** when starting a new Documentation session (`/start-fres
 
 | Thing | State |
 |---|---|
-| Repo HEAD | `5cca542` — `chore(session): bootstrap two-track session model (O = Docs, R = Development)` |
-| Commit count | 3 |
+| Repo HEAD | `0cee6f7` — `docs(planning): land Phase A Prompt 1 — chunk plan (DOS:O2)` |
+| Commit count | 5 |
 | Tags | none yet |
 | Session model definition | `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12 |
 | Session config | `.claude/session-config.yml` (prefix `DOS`, tracks O + R) |
 | PRD | `docs/PRD.md` v0.3 (2026-05-20, delivery decisions added 2026-05-21) |
 | Build plan | `docs/BUILD-PLAN.md` — 14 weeks, week 1 starts 2026-05-25, demo target 2026-08-24 |
-| Phase A planning state | **not started** — `docs/planning/claude-code-build-prompts.md` defines the four-prompt loop; no chunks under `docs/planning/chunks/` yet, no `docs/planning/READY.md` yet |
+| Phase A planning state | **Prompt 1 complete** — `docs/planning/part-1-plan.md` (16 chunks across BUILD-PLAN Phases 0–4, ordered build sequence, dependency map, 12 research-driven changes flagged for Prompt 4). Prompts 2–4 pending: no chunk specs under `docs/planning/chunks/` yet, no `validation-report.md`, no `READY.md`. |
 | Phase B build state | not started (week 1 of BUILD-PLAN has not begun) |
 | Open bugs | 0 — `docs/build/bugs.json` is `{"bugs": []}` |
 
 ---
 
-## What just landed (this session — DOS:O1)
+## What just landed (this session — DOS:O2)
 
-Bootstrap session. Two parallel things happened:
+Phase A Prompt 1 — chunk plan for the trimmed MVP. The big move of this session: turning the 14-week BUILD-PLAN + the v0.3 PRD into a validated chunk break-down that Prompt 2 can fan out on.
 
-1. **`/session-setup` ran first** and wrote `.claude/session-config.yml` from defaults. It used `HANDOVER_O.md` / `HANDOVER_R.md` as the handover paths because I hadn't yet seen the in-flight doc edits that specified otherwise.
-2. **`/start-fresh O` immediately found the in-flight doc edits** to `docs/CHANGELOG.md` and `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12, which intentionally name `docs/planning/PLANNING_STATUS.md` and `docs/build/BUILD_STATUS.md` as the handover docs (AMI single-doc-per-track convention). The doc and the just-written config disagreed.
+**Substantive deliverable.** `docs/planning/part-1-plan.md` (~870 lines, commit `0cee6f7`):
 
-The session work was reconciling the two. The doc won — it captures intentional design and the AMI convention the project is explicitly mirroring (§ 13 calls `BUILD_STATUS.md` "the single source of truth"). Concretely:
+- **16 chunks** spanning BUILD-PLAN Phases 0–4, each 1–5 session-days, mapped 1:1 onto the 14-week schedule.
+- **Ordered build sequence** (week-by-week table) with CHUNK-02/03 flagged as the only parallelisable pair; everything from CHUNK-05 onward is strictly sequential.
+- **Dependency map** (ASCII) with CHUNK-13 (Allowed/Forbidden diff + Claude Code PreToolUse hook) starred as the headline / unique feature.
+- **Shared cross-chunk contracts** sketched (memory schema, brief schema, profile schema, handoff layout, managed-block delimiter syntax) for Prompt 2 to formalise without duplication.
+- **Phase-boundary fallback** noted: if the timeline slips, Phase 3 end (after CHUNK-14) is the minimum acceptable ship — the SDLC loop is closed and the diff feature works.
 
-- `.claude/session-config.yml` rewritten: track O `handover_path` → `docs/planning/PLANNING_STATUS.md`, history → `docs/planning/PLANNING_HISTORY.md`, `project_plan_path` omitted (the handover doc absorbs the backlog in this model). Track R `handover_path` → `docs/build/BUILD_STATUS.md`, history → `docs/build/BUILD_HISTORY.md`, `project_plan_path` kept as `docs/BUILD-PLAN.md` (the 14-week static roadmap is genuinely a separate doc from the rolling status).
-- `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12 picked up the two-track description and the per-track handover paths (this was the user's in-flight edit; just landed it intact).
-- `docs/CHANGELOG.md` entry added recording the model + the `Eval/DeliveryOS` → drive-root + git-init promotion.
+**How it was produced.** Six research subagents in parallel: VS Code extension architecture, webview panels (React + Tailwind + CSP), VSIX packaging + cross-editor sideload, persistence (SQLite options), terminal integration + harness CLI shapes, harness conventions (CLAUDE.md / AGENTS.md / MCP / hooks). Findings synthesised into chunks + a 12-item list of source-doc updates.
 
-All three landed as one wrap commit: **`5cca542`**.
+**Research-driven changes flagged for Prompt 4** (consolidated list in [part-1-plan.md § "Research-driven changes"](part-1-plan.md)):
 
-This file (`docs/planning/PLANNING_STATUS.md`) was created on the second wrap of this session — `/handover O` is its canonical author, this is the first instance.
+- **HIGH #1.** Ship **`sql.js`** (WASM), not `better-sqlite3` — native modules break across editor forks' Electron ABIs. PRD § 25.2 to update.
+- **HIGH #4.** Codex CLI has **`-o/--output-last-message <file>`** — maps directly onto `result.md` and reshapes the Codex profile. `architecture/harness-profiles.md` to update.
+- **HIGH #5.** Claude Code's **`PreToolUse` hooks** can hard-block Forbidden paths in real time (cannot be bypassed by `--dangerously-skip-permissions`). Upgrades the headline diff feature on the Claude profile; Codex stays diff-only. PRD § 27 Risk 3 mitigation to strengthen; CHUNK-13 incorporates this.
+- **HIGH #3.** **Sideloaded VSIX bypasses signature verification by design** across all 5 target editors — *resolves* the ADR-0001 concern (the risk is years-out tightening, not present-day breakage). ADR-0001 Consequences to tighten.
+- **MEDIUM #2.** **`@vscode/webview-ui-toolkit` was deprecated 2025-01-01** — use Radix UI + Tailwind + Lucide React inside Vite-built React webviews with hybrid theming. PRD § 25.2 to update.
+- **LOW items:** handoff directory naming standardised on `.deliveryos-handoff/` (dotfile, PRD § 18.Y); `current-*` vs committed `history/` split; trusted-workspace capability declaration; modern `onStartupFinished` activation; `onDidWriteTerminalData` is permanently proposed, do not rely on it; AGENTS.md now a Linux Foundation open standard (Dec 2025); MCP momentum stronger than PRD wording suggests, both Claude Code AND Codex support it.
+
+**Commits this session.** Two: substantive (`0cee6f7`) + this wrap (next commit on top). Two-commit pattern matches DOS:O1.
 
 ### Gotchas the next session should know
 
-- **`/remote-control` and `/rename` are not Skill targets in the VSCode extension environment.** `/start-fresh` and `/handover` skip them silently; rename the chapter manually from FleetView if you want session tags on chapters.
-- **Track R has no rolling status doc yet either** — `docs/build/BUILD_STATUS.md` will be created by `/handover R` on the first development session, the same way this file was created today. Until then, `/start-fresh R` will surface that the file doesn't exist (alongside the three sanity checks, which are pre-build-friendly and only the lint check will print the "not yet wired" message).
-- **The bug-list block in config is enabled for Track R** even though `bugs.json` is currently empty. That's fine — `/start-fresh R` will report 0 open bugs until the build starts producing them.
-- **`docs/build/**` is in `scan_excludes`.** That means consistency scans skip `BUILD_STATUS.md`, `BUILD_HISTORY.md`, and the build artefact subdirs. Intentional: rolling status narratives shouldn't trigger scan flags. Just be aware that scans run from Track O will not catch stale refs *inside* Track R's handover doc — that's Track R's wrap's job.
+- **The 12 research-driven changes are tracked in `part-1-plan.md`, not in the source docs yet.** Prompt 4 (DOS:O3) is the canonical place to fold them back in. Don't pre-emptively edit PRD/BUILD-PLAN/ADR — let Prompt 4 do it as part of the validation loop so the audit trail is clean.
+- **Prompt 2 spawns 16 subagents in parallel** (one per chunk). Each writes a single `docs/planning/chunks/chunk-NN-*.md` spec. Worktree-isolated subagents will leave residue under `.claude/worktrees/agent-*/`; `/handover O` cleans them per the skill. Plain Agent calls (no `isolation: worktree`) leave nothing. Pick the right mode per chunk — for parallel-write chunks, worktree isolation is safer.
+- **`current-*` vs `history/` split for `.deliveryos-handoff/`** is a decision the planning loop made but Track R hasn't implemented yet. CHUNK-11 lands the implementation. If Track R picks up CHUNK-01 → 04 (Phase 0) before CHUNK-11, the handoff directory pattern can be deferred without blocking.
+- **HEAD in this table points at the substantive commit (`0cee6f7`), not the wrap commit.** Convention inherited from DOS:O1.
 
 ---
 
@@ -55,19 +63,21 @@ This file (`docs/planning/PLANNING_STATUS.md`) was created on the second wrap of
 /start-fresh O
 ```
 
-Session name to use: **DOS:O2**
+Session name to use: **DOS:O3**
 
-Likely substantive work for DOS:O2 is the **Phase A planning loop** — running the four prompts in `docs/planning/claude-code-build-prompts.md` against the PRD + BUILD-PLAN, with the goal of producing:
+Substantive work for DOS:O3 is **Prompts 2–4 of the Phase A planning loop**:
 
-- `docs/planning/part-1-plan.md` (Prompt 1 output)
-- `docs/planning/chunks/chunk-NN-*.md` (Prompt 2 output)
-- `docs/planning/validation-report.md` (Prompt 3 output, overwritten each iteration)
-- `docs/planning/READY.md` (Prompt 4 final output)
+- **Prompt 2** — expand each of the 16 chunks into `docs/planning/chunks/chunk-NN-*.md` specs in parallel (16-way fan-out). Each spec includes file-by-file breakdown, key interfaces and types, data model touches, VS Code APIs used, step-by-step implementation outline, test plan, risks, explicit dependencies. Plus `docs/planning/chunks/README.md` listing cross-chunk types and contracts.
+- **Prompt 3** — cohesion audit. Parallel audit subagents check for gaps, overlaps, interface mismatches, dependency problems, shared-contract drift, verification gaps, scope drift. Writes `docs/planning/validation-report.md`.
+- **Prompt 4** — iterate until clean. Resolves blockers + majors. During iteration, fold the 12 research-driven changes from `part-1-plan.md` into PRD / BUILD-PLAN / ADR / architecture docs. Writes `docs/planning/READY.md` when zero blockers + zero majors remain.
 
 Once `READY.md` exists, Track R can open its first session (`/start-fresh R` → DOS:R1) and pick a chunk to build.
 
-### Carry-overs for DOS:O2
+### Carry-overs for DOS:O3
 
-- Run the four-prompt planning loop end-to-end; produce chunks + READY.md.
-- Decide whether `docs/BUILD-PLAN.md` (14-week phased plan) and the chunk dependency order in `READY.md` should be reconciled — they describe overlapping but differently-sliced views of the same scope. May need a one-liner in BUILD-PLAN pointing at READY.md as the canonical execution order.
-- The Phase A loop spawns subagents per § 7 of `docs/MULTI_AGENT_BUILD_PROCESS.md`. Spawned worktrees clean up on `/handover` (step 2 of this skill).
+- **Run Prompt 2** — 16-way parallel chunk-spec expansion. Decide whether to use `isolation: worktree` for each subagent (safer for parallel writes to separate files; do clean them up on wrap).
+- **Run Prompt 3** — cohesion audit → `validation-report.md`.
+- **Run Prompt 4** — iterate until clean → `READY.md`. During this prompt, fold the 12 research-driven changes from `part-1-plan.md` § "Research-driven changes" into PRD / BUILD-PLAN / ADR / architecture. Don't pre-emptively edit them in DOS:O3 — let Prompt 4 do it so the audit trail is one coherent edit pass.
+- **Reconcile `docs/BUILD-PLAN.md` chunk-order framing** once `READY.md` exists (inherited carry-over from DOS:O1; still applies). Possibly just a one-liner in BUILD-PLAN pointing at READY.md as the canonical execution order.
+- **`current-*` vs `history/` split for `.deliveryos-handoff/`** — implementation lives in CHUNK-11 but the decision can land earlier if Track R wants it before then.
+- **Worktree hygiene.** Prompt 2 fans out 16 subagents; if any use `isolation: worktree`, `/handover O` cleans them on wrap.
