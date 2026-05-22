@@ -37,6 +37,60 @@ Deprecated (kept for history, see [docs/deprecated/README.md](docs/deprecated/RE
 
 DeliveryOS ships as a sideloadable `.vsix` VS Code extension. One file runs in VS Code, Cursor, Windsurf, Antigravity, and VSCodium. Not a fork, not a standalone app. See ADR-0001.
 
+## Install
+
+DeliveryOS ships as a sideloadable `.vsix`. It runs in VS Code, Cursor, Windsurf, VSCodium, and Antigravity.
+
+### Quick install (macOS / Linux)
+
+```sh
+curl -fsSL https://github.com/deliveryos/deliveryos/releases/latest/download/install.sh | sh
+```
+
+### Quick install (Windows, PowerShell)
+
+```powershell
+iwr -useb https://github.com/deliveryos/deliveryos/releases/latest/download/install.ps1 | iex
+```
+
+The install script detects every supported editor on your `PATH` and installs DeliveryOS into each.
+
+### Manual install
+
+1. Download `deliveryos-X.Y.Z.vsix` from the [latest release](https://github.com/deliveryos/deliveryos/releases/latest).
+2. Verify the SHA-256:
+
+    ```sh
+    shasum -a 256 -c SHA256SUMS.txt
+    ```
+
+3. Install into whichever editors you use:
+
+    ```sh
+    code        --install-extension deliveryos-X.Y.Z.vsix --force   # VS Code
+    cursor      --install-extension deliveryos-X.Y.Z.vsix --force   # Cursor
+    windsurf    --install-extension deliveryos-X.Y.Z.vsix --force   # Windsurf
+    codium      --install-extension deliveryos-X.Y.Z.vsix --force   # VSCodium
+    antigravity --install-extension deliveryos-X.Y.Z.vsix --force   # Antigravity
+    ```
+
+   Or use each editor's "Install from VSIX" command from the command palette (`Cmd/Ctrl+Shift+P`).
+
+### Why SHA-256?
+
+Sideloaded VSIX files bypass the editor's Microsoft-signed extension verification by design — that path only applies to Marketplace-installed extensions. DeliveryOS publishes a SHA-256 hash on every release so you can confirm the `.vsix` you downloaded matches what was built by the [release workflow](.github/workflows/release.yml).
+
+### Updates
+
+DeliveryOS checks GitHub Releases on startup and notifies you when a newer version is available. To disable: set `deliveryos.checkForUpdates` to `false` in your editor settings.
+
+### Troubleshooting
+
+- **`command not found: code` (or `cursor` / `windsurf` / `codium` / `antigravity`).** Open the editor, hit `Cmd/Ctrl+Shift+P`, search for `Shell Command: Install '<editor>' command in PATH` (the wording matches the editor). Re-run the install script.
+- **Extension installs but the activity-bar icon doesn't appear.** Reload the window (`Cmd/Ctrl+Shift+P → Developer: Reload Window`). Some editors need a reload before custom activity-bar contributions render.
+- **Antigravity not detected.** Antigravity's CLI ships at `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` on macOS. If it's not on `PATH`, add that directory or use "Install from VSIX" from the command palette as a manual fallback.
+- **GitHub rate limit on update check.** Harmless — the check fails silently and you won't see the notification. To suppress entirely, set `deliveryos.checkForUpdates` to `false`.
+
 ## Repo layout
 
 ```text
@@ -97,7 +151,7 @@ DeliveryOS/
 ```bash
 npm install
 npm run package
-code --install-extension extension/deliveryos-0.0.2.vsix
+code --install-extension extension/deliveryos-0.0.4.vsix
 ```
 
 After install, click the rocket icon in the activity bar. A welcome panel offers **Create a project**; submitting a name renders the four stage rows (DISCOVER, DEFINE, EXECUTE, VERIFY). Each row is empty — artefacts arrive in later chunks. The Extension Host output shows `DeliveryOS activated` on startup.
@@ -108,7 +162,7 @@ Smoke-test the webview round trip via the command palette: **DeliveryOS: Open He
 
 - **Project state is in-memory only.** Closing VS Code forgets the project — the welcome view returns on next launch. Persistence lands in [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md).
 - **Workspace trust required.** DeliveryOS declines to activate in restricted or virtual workspaces, by design (see `capabilities.{untrustedWorkspaces,virtualWorkspaces}.description`).
-- **`deliveryos.openHello` is a dev smoke test.** It will be hidden behind a `deliveryos.devMode` `when` clause in CHUNK-04 so it doesn't appear in the user-facing palette.
+- **`deliveryos.openHello` is a dev smoke test.** It remains user-visible in the command palette through CHUNK-04 — hiding it behind a `deliveryos.devMode` `when` clause is deferred until after Phase 0.
 
 ## What's next
 
