@@ -75,7 +75,23 @@ foreach ($editor in $editors) {
       $rows += [pscustomobject]@{ editor = $editor; status = 'FAIL'; version = $version }
     }
   } else {
-    $rows += [pscustomobject]@{ editor = $editor; status = 'SKIP'; version = 'not on PATH' }
+    $skipReason = 'not on PATH'
+    # Antigravity 2.x dropped the antigravity CLI binary entirely (bundle
+    # restructure removed /Contents/Resources/app/bin/antigravity). When the
+    # app is installed but the CLI is missing, surface a clearer SKIP
+    # reason so the user knows to install via the app UI rather than hunt
+    # for a missing CLI on PATH. On Windows the typical install path is
+    # %LOCALAPPDATA%\Programs\Antigravity\Antigravity.exe — check both that
+    # and the macOS path for cross-platform PowerShell users.
+    if ($editor -eq 'antigravity') {
+      $antiMac = '/Applications/Antigravity.app'
+      $antiWin = Join-Path $env:LOCALAPPDATA 'Programs\Antigravity\Antigravity.exe'
+      if ((Test-Path -LiteralPath $antiMac) -or
+          ($env:LOCALAPPDATA -and (Test-Path -LiteralPath $antiWin))) {
+        $skipReason = 'Antigravity 2.x — CLI removed; install manually via app UI'
+      }
+    }
+    $rows += [pscustomobject]@{ editor = $editor; status = 'SKIP'; version = $skipReason }
   }
 }
 
