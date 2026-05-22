@@ -4,12 +4,12 @@
       "id": "b001",
       "title": "install.sh + install.ps1 probe for `antigravity` CLI broken on Antigravity 2.0+",
       "category": "packaging",
-      "status": "in_progress",
+      "status": "pending_review",
       "steps": "1. Update Antigravity to 2.0.1 (auto-update may already have happened). 2. Run `scripts/install.sh <vsix>` with Antigravity.app installed. 3. Antigravity is skipped in the summary block (`antigravity SKIP (not on PATH)`) even though Antigravity is present, because the CLI binary was removed in the 2.0 bundle restructure. The old path `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` no longer exists; the new `Contents/Resources/bin/` contains only language_server + webm_encoder. The install scripts have no alternative install path for Antigravity (e.g. write to user-extensions dir directly, or document the GUI Install-from-VSIX flow). Discovered during DOS:R5 Phase B/E sessions — earlier DOS:R4 install runs against Antigravity 1.107.0 worked.",
       "created_at": "2026-05-22",
       "assigned_branch": "claude/bug-fix-20260522-142757",
-      "note": "Investigate whether Antigravity 2.0 ships a CLI under a different name, or whether sideload is now GUI-only. If GUI-only, the install scripts need a documented fallback + the smoke test path needs adjustment. Likely affects future install.sh updates and the README troubleshooting block.",
-      "fixed_commit": null
+      "note": "Fixed as a diagnostic improvement: install.sh + install.ps1 now detect the Antigravity.app bundle (macOS + Windows paths) when the CLI check fails and emit `SKIP (Antigravity 2.x — CLI removed; install manually via app UI)` instead of the generic `not on PATH`. README troubleshooting block updated with the GUI sideload path. A programmatic fallback (unzip vsix into ~/.antigravity/extensions/) was considered but deferred — introduces a design call about CLI-less editor support more broadly; revisit if Antigravity becomes a dogfooding target. Live-verified against the user's machine (Antigravity 2.0.1 present, CLI absent).",
+      "fixed_commit": "a34a5a70e0a54442cc45578e2f8761e3cfbfe337"
     },
     {
       "id": "b002",
