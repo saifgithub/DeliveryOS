@@ -22,7 +22,7 @@ The "hello" panel is **scaffolding, not a product surface**. Every later UI chun
 - Restructure the repo into npm workspaces with `extension/`, `webview/`, `contracts/` packages and a thin root.
 - Vite config producing a multi-entry build with per-panel hashed bundles + manifest.
 - Tailwind v3 with **hybrid theming**: DeliveryOS palette in `theme.extend.colors` plus a small set of "anchor" tokens bound to VS Code CSS variables.
-- HTML factory in the extension that reads `webview/dist/.vite/manifest.json`, generates a fresh nonce per panel open, rewrites asset URIs via `webview.asWebviewUri()`, and emits a CSP-locked HTML string.
+- HTML factory in the extension that reads the Vite manifest at runtime (`extension/dist/webview/.vite/manifest.json` — see § 8 "Path resolution"), generates a fresh nonce per panel open, rewrites asset URIs via `webview.asWebviewUri()`, and emits a CSP-locked HTML string.
 - `vscode-messenger` wiring (host side via `Messenger` from `vscode-messenger`; webview side via `vscodeApi` + `vscode-messenger-webview`). One typed round-trip request: `getHelloText` → `"Hello DeliveryOS"` (with project name suffix).
 - `WebviewPanelSerializer` registration so the "hello" panel survives `Developer: Reload Window`.
 - `deliveryos.openHello` command (registered in `package.json`, wired in `extension/src/extension.ts`).
@@ -174,7 +174,7 @@ docs/**
 scripts/**
 ```
 
-(Final form lands in CHUNK-04 alongside the `vsce package` smoke test.)
+(Final form lands in CHUNK-04 alongside the `vsce package` smoke test. The illustrative block above shows repo-root-relative paths for clarity; in the DOS:R2-shipped layout `vsce package --no-dependencies` runs from `extension/` and the actual `.vscodeignore` is `extension/.vscodeignore` with paths relative to `extension/`. The `!webview/dist/**` and `!contracts/dist/**` rules drop out under that layout because `scripts/build.mjs` copies the orchestrator outputs into `extension/dist/` before packaging — see § 8 "Path resolution: extension/dist/webview" and § 11 "Edge case: vite manifest path resolution at runtime".)
 
 ---
 
@@ -729,8 +729,11 @@ async function loadManifest(extensionUri: vscode.Uri): Promise<ViteManifest> {
   if (cachedManifest) return cachedManifest;
   const manifestPath = path.join(
     extensionUri.fsPath,
-    "..", "webview", "dist", ".vite", "manifest.json",
-    // ↑ path is relative to extension/dist/extension.js; resolved at runtime.
+    "dist", "webview", ".vite", "manifest.json",
+    // ↑ resolved at runtime against extensionUri.fsPath. The build orchestrator
+    //   (scripts/build.mjs) copies webview/dist → extension/dist/webview before
+    //   packaging, so this path resolves identically in F5 dev mode and inside
+    //   the packaged .vsix. See § 8 "Path resolution: extension/dist/webview".
   );
   const raw = await fs.readFile(manifestPath, "utf8");
   cachedManifest = JSON.parse(raw) as ViteManifest;
@@ -763,7 +766,7 @@ export async function renderPanelHtml(opts: {
     throw new Error(`DeliveryOS: vite manifest missing entry "${entryKey}"`);
   }
 
-  const distRoot = vscode.Uri.joinPath(extensionUri, "..", "webview", "dist");
+  const distRoot = vscode.Uri.joinPath(extensionUri, "dist", "webview");
   const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(distRoot, entryRecord.file));
   const cssUris = (entryRecord.css ?? []).map((href) =>
     webview.asWebviewUri(vscode.Uri.joinPath(distRoot, href)),
@@ -885,7 +888,7 @@ export async function openHelloPanel(
       enableScripts: true,
       retainContextWhenHidden: false,
       localResourceRoots: [
-        vscode.Uri.joinPath(context.extensionUri, "..", "webview", "dist"),
+        vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
       ],
     },
   );
@@ -927,7 +930,7 @@ export function helloPanelSerializer(
       panel.webview.options = {
         enableScripts: true,
         localResourceRoots: [
-          vscode.Uri.joinPath(context.extensionUri, "..", "webview", "dist"),
+          vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),
         ],
       };
       panel.webview.html = await renderPanelHtml({
@@ -1146,7 +1149,7 @@ The hello panel's serializer is the reference implementation. Every later panel 
 |---|---|---|
 | `vscode.window.createWebviewPanel(viewType, title, column, options)` | `helloPanel.ts` | Create the panel. `viewType` matches the serializer registration. |
 | `vscode.WebviewPanelOptions.enableScripts: true` | `helloPanel.ts` | Webviews are script-disabled by default. |
-| `vscode.WebviewPanelOptions.localResourceRoots` | `helloPanel.ts`, serializer | Allow-list `webview/dist/`. Granular per-panel is overkill at MVP — the whole `webview/dist/` is fine since all entries live there. |
+| `vscode.WebviewPanelOptions.localResourceRoots` | `helloPanel.ts`, serializer | Allow-list `extension/dist/webview/` (the runtime location after `scripts/build.mjs` copies `webview/dist` in). Granular per-panel is overkill at MVP — the whole `extension/dist/webview/` is fine since all entries live there. See § 8 "Path resolution: extension/dist/webview". |
 | `vscode.WebviewPanelOptions.retainContextWhenHidden: false` | `helloPanel.ts` | Default. We use `WebviewPanelSerializer` for true persistence rather than the more memory-hungry `retainContext`. |
 | `Webview.asWebviewUri(uri)` | `htmlFactory.ts` | Rewrite `file://` URIs to `https://...vscode-cdn.net/...` form (the only scheme webviews can load resources from). |
 | `Webview.cspSource` | `htmlFactory.ts` | The string token to include in CSP `img-src` / `style-src` / `connect-src` for self-origin assets. Differs per panel — must come from the panel's webview, not a static string. |
@@ -1260,7 +1263,7 @@ extension activates
   → on `deliveryos.openHello`:
       1. createWebviewPanel(viewType, title, column, {
            enableScripts: true,
-           localResourceRoots: [webview/dist]
+           localResourceRoots: [extension/dist/webview]
          })
       2. renderPanelHtml({ webview, extensionUri, entry: "hello", title })
            a. loadManifest()  (cached after first call)
@@ -1273,6 +1276,16 @@ extension activates
       4. host.attachPanel(panel)         → messenger routes to/from this panel
       5. trackPanel(panel, viewType)     → show-or-focus tracking
 ```
+
+### Path resolution: `extension/dist/webview`
+
+All three webview-related path lookups (`loadManifest()`, the htmlFactory's `distRoot`, and `localResourceRoots`) resolve against `context.extensionUri` using the single canonical layout `extension/dist/webview/`. There is **no** `..`-walk back to a sibling `webview/dist/` at runtime.
+
+The reason this matters: a `..`-based path (`extensionUri.joinPath("..", "webview", "dist")`) only resolves under F5 dev mode, where `extensionUri.fsPath` points to the workspace's `extension/` directory and the sibling `webview/dist/` happens to exist on disk. In a packaged `.vsix`, only files under `extension/` are bundled — `..` escapes the install root and the lookup fails (`localResourceRoots` rejects the URI; `loadManifest()` throws `ENOENT`).
+
+The build orchestrator (`scripts/build.mjs`) closes the gap: after `vite build` emits `webview/dist/`, the orchestrator copies it into `extension/dist/webview/`. From the extension's runtime perspective the path is identical in F5 dev mode and inside the packaged `.vsix`, and no `..` ever appears in the resolved URI. The `.vsix` bundles only `extension/dist/**`, so the `webview/dist/` sibling is not part of the published artefact.
+
+This layout was decided during DOS:R2 implementation when the `..`-walk that an earlier draft of this spec sketched was found to break inside packaged `.vsix` builds. The fix — copy `webview/dist` into `extension/dist/webview` at build time — is now the canonical layout; see § 14 "Acknowledged deviations" for the build-time consequence.
 
 ### Manifest key choice
 
@@ -1431,7 +1444,9 @@ If `deliveryos.openHello` runs with no workspace folder, the hello panel still o
 
 ### Edge case: vite manifest path resolution at runtime
 
-The htmlFactory resolves the manifest path relative to `context.extensionUri.fsPath` (`extension/dist/extension.js` at runtime) and walks up to `webview/dist/.vite/manifest.json`. This assumes the published `.vsix` preserves the monorepo structure. The `.vscodeignore` rules in §2 keep both `extension/dist/**` and `webview/dist/**` in the package; verify with `unzip -l extension/deliveryos-0.0.2.vsix | grep manifest` during CHUNK-04 smoke.
+The htmlFactory resolves the manifest path against `context.extensionUri.fsPath` (the extension install root — `extension/` in F5 dev mode, the unpacked `.vsix` directory in installed mode) as `dist/webview/.vite/manifest.json`. The build orchestrator (`scripts/build.mjs`) copies the Vite output from `webview/dist/` into `extension/dist/webview/` before packaging, so dev mode and packaged `.vsix` resolve the same URI — see § 8 "Path resolution: extension/dist/webview" for the why.
+
+Practical consequence for `.vscodeignore`: the package only needs to include `extension/dist/**` (the orchestrator-copied output). The sibling `webview/dist/**` and the source `webview/src/**` never need to ship — `vsce package` runs from `extension/` and cannot bundle anything above its CWD anyway. Verify with `unzip -l extension/deliveryos-0.0.2.vsix | grep manifest` during CHUNK-04 smoke — exactly one match should appear, at `extension/dist/webview/.vite/manifest.json`.
 
 ### Open question: should the contracts package be runtime or types-only?
 
@@ -1489,4 +1504,7 @@ Plus the test plan in §10.
 
 ## 14. Acknowledged deviations from part-1-plan.md
 
-None. This spec expands on the CHUNK-02 entry in `part-1-plan.md` without changing scope. The only addition not explicitly named in the parent doc is the `panelManager` show-or-focus pattern, which is sized at ~20 lines and is the standard VS Code webview UX. It belongs in CHUNK-02 because every later panel needs it; landing it in CHUNK-05 instead would mean refactoring CHUNK-02's hello panel a few weeks later.
+This spec expands on the CHUNK-02 entry in `part-1-plan.md` without changing scope. Two refinements not explicitly named in the parent doc:
+
+1. **`panelManager` show-or-focus pattern.** ~20 lines, the standard VS Code webview UX. It belongs in CHUNK-02 because every later panel needs it; landing it in CHUNK-05 instead would mean refactoring CHUNK-02's hello panel a few weeks later.
+2. **Build-time copy `webview/dist → extension/dist/webview`** performed by `scripts/build.mjs`, so the htmlFactory + `localResourceRoots` resolve against `extensionUri.joinPath("dist", "webview")` instead of a `..`-walk to a sibling workspace. The `..`-walk only worked in F5 dev mode; the build-time copy makes dev and packaged `.vsix` resolution identical. Documented in detail under § 8 "Path resolution: extension/dist/webview". Decided during DOS:R2 implementation; folded back into this spec during DOS:O6.
