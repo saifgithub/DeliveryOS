@@ -4,10 +4,10 @@
       "id": "b001",
       "title": "install.sh + install.ps1 probe for `antigravity` CLI broken on Antigravity 2.0+",
       "category": "packaging",
-      "status": "open",
+      "status": "in_progress",
       "steps": "1. Update Antigravity to 2.0.1 (auto-update may already have happened). 2. Run `scripts/install.sh <vsix>` with Antigravity.app installed. 3. Antigravity is skipped in the summary block (`antigravity SKIP (not on PATH)`) even though Antigravity is present, because the CLI binary was removed in the 2.0 bundle restructure. The old path `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` no longer exists; the new `Contents/Resources/bin/` contains only language_server + webm_encoder. The install scripts have no alternative install path for Antigravity (e.g. write to user-extensions dir directly, or document the GUI Install-from-VSIX flow). Discovered during DOS:R5 Phase B/E sessions — earlier DOS:R4 install runs against Antigravity 1.107.0 worked.",
       "created_at": "2026-05-22",
-      "assigned_branch": null,
+      "assigned_branch": "claude/bug-fix-20260522-142757",
       "note": "Investigate whether Antigravity 2.0 ships a CLI under a different name, or whether sideload is now GUI-only. If GUI-only, the install scripts need a documented fallback + the smoke test path needs adjustment. Likely affects future install.sh updates and the README troubleshooting block.",
       "fixed_commit": null
     },
@@ -37,10 +37,10 @@
       "id": "b004",
       "title": "release.yml uses Node.js 20 actions — will break after 2026-09-16 runner deprecation",
       "category": "build",
-      "status": "open",
+      "status": "in_progress",
       "steps": "`.github/workflows/release.yml` lines 15-21 use `actions/checkout@v4` + `actions/setup-node@v4` with `node-version: '20'`. Both surface a deprecation annotation on every workflow run: Node.js 20 will be forced to Node.js 24 from 2026-06-02 and removed entirely from the runner on 2026-09-16. The build still works today but the warning rides every release.",
       "created_at": "2026-05-22",
-      "assigned_branch": null,
+      "assigned_branch": "claude/bug-fix-20260522-142757",
       "note": "Bump `node-version` to '24' (or '22' LTS). Verify `npm ci` + `npm run build` + `vsce package` still succeed against the newer Node. Bumping the actions/* versions is also worth checking — newer @v5 variants may exist. Trivial PR; do as part of a future release-pipeline tidy or alongside the next release.",
       "fixed_commit": null
     }
