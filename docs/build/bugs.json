@@ -1,3 +1,48 @@
 {
-  "bugs": []
+  "bugs": [
+    {
+      "id": "b001",
+      "title": "install.sh + install.ps1 probe for `antigravity` CLI broken on Antigravity 2.0+",
+      "category": "packaging",
+      "status": "open",
+      "steps": "1. Update Antigravity to 2.0.1 (auto-update may already have happened). 2. Run `scripts/install.sh <vsix>` with Antigravity.app installed. 3. Antigravity is skipped in the summary block (`antigravity SKIP (not on PATH)`) even though Antigravity is present, because the CLI binary was removed in the 2.0 bundle restructure. The old path `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` no longer exists; the new `Contents/Resources/bin/` contains only language_server + webm_encoder. The install scripts have no alternative install path for Antigravity (e.g. write to user-extensions dir directly, or document the GUI Install-from-VSIX flow). Discovered during DOS:R5 Phase B/E sessions — earlier DOS:R4 install runs against Antigravity 1.107.0 worked.",
+      "created_at": "2026-05-22",
+      "assigned_branch": null,
+      "note": "Investigate whether Antigravity 2.0 ships a CLI under a different name, or whether sideload is now GUI-only. If GUI-only, the install scripts need a documented fallback + the smoke test path needs adjustment. Likely affects future install.sh updates and the README troubleshooting block.",
+      "fixed_commit": null
+    },
+    {
+      "id": "b002",
+      "title": "CHUNK-04 § 11.5 smoke incomplete — Cursor walk deferred (user not signed up)",
+      "category": "verification",
+      "status": "open",
+      "steps": "DOS:R5 Phase C smoke ran on VS Code (8/8 ✅) + Antigravity (8/8 ✅) but Cursor was deferred because the dev did not have a Cursor account ready. Cursor IS installed at `/Applications/Cursor.app` (via brew during DOS:R5 Phase B) and v0.0.1 is sideloaded, but no smoke walk was completed. CHUNK-04 § 11.1 lists Cursor as REQUIRED (B04). Until a Cursor smoke is walked, CHUNK-04 done-when is partial.",
+      "created_at": "2026-05-22",
+      "assigned_branch": null,
+      "note": "Sign in to Cursor, open `/tmp/deliveryos-smoke-r5-cursor/` (workspace still exists), walk the 8 sub-checks per § 11.5. If any sub-check fails, file a separate bug. If all pass, this bug can be marked `resolved` at merge time.",
+      "fixed_commit": null
+    },
+    {
+      "id": "b003",
+      "title": "Phase E upgrade-notification e2e: live walkthrough deferred (user stepped away)",
+      "category": "verification",
+      "status": "open",
+      "steps": "DOS:R5 Phase E set up the conditions for CHUNK-04 § 11.4 verification: v0.0.1 installed in VS Code (internal version 0.0.1), v0.0.2 release tagged + workflow green + assets verified, repo flipped public so the unauthenticated API call returns 200 with tag_name=v0.0.2. The remaining step — reload VS Code window, observe the `DeliveryOS v0.0.2 is available...` notification, click `Open release page` (verify browser opens https://github.com/saifgithub/DeliveryOS/releases/tag/v0.0.2), and separately reset state + click `Don't show again` (verify `deliveryos.checkForUpdates` flips to false) — was not performed because the user stepped away mid-Phase E. Code review of `extension/src/updater/checkForUpdates.ts` confirmed the handlers wire up correctly (lines 113-122). All non-UI checks pass.",
+      "created_at": "2026-05-22",
+      "assigned_branch": null,
+      "note": "When user is back at the computer: (a) Reload VS Code window at /tmp/deliveryos-smoke-r5/ — notification should fire. (b) Click 'Open release page' — browser opens v0.0.2 release URL. (c) Reload again — no notification (lastSeenReleaseTag=v0.0.2 suppression). (d) Reset state by `code --uninstall-extension deliveryos.deliveryos` then `code --install-extension /tmp/release-verify-v2/deliveryos-0.0.1.vsix --force`. (e) Reload — notification re-fires. (f) Click 'Don't show again'. (g) Settings → search 'deliveryos.checkForUpdates' → confirm value is `false`. (h) Reload — no notification. All eight observations needed before marking this bug resolved AND closing CHUNK-04 done-when.",
+      "fixed_commit": null
+    },
+    {
+      "id": "b004",
+      "title": "release.yml uses Node.js 20 actions — will break after 2026-09-16 runner deprecation",
+      "category": "build",
+      "status": "open",
+      "steps": "`.github/workflows/release.yml` lines 15-21 use `actions/checkout@v4` + `actions/setup-node@v4` with `node-version: '20'`. Both surface a deprecation annotation on every workflow run: Node.js 20 will be forced to Node.js 24 from 2026-06-02 and removed entirely from the runner on 2026-09-16. The build still works today but the warning rides every release.",
+      "created_at": "2026-05-22",
+      "assigned_branch": null,
+      "note": "Bump `node-version` to '24' (or '22' LTS). Verify `npm ci` + `npm run build` + `vsce package` still succeed against the newer Node. Bumping the actions/* versions is also worth checking — newer @v5 variants may exist. Trivial PR; do as part of a future release-pipeline tidy or alongside the next release.",
+      "fixed_commit": null
+    }
+  ]
 }
