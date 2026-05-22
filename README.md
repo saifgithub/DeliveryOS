@@ -44,20 +44,20 @@ DeliveryOS ships as a sideloadable `.vsix`. It runs in VS Code, Cursor, Windsurf
 ### Quick install (macOS / Linux)
 
 ```sh
-curl -fsSL https://github.com/deliveryos/deliveryos/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/saifgithub/DeliveryOS/releases/latest/download/install.sh | sh
 ```
 
 ### Quick install (Windows, PowerShell)
 
 ```powershell
-iwr -useb https://github.com/deliveryos/deliveryos/releases/latest/download/install.ps1 | iex
+iwr -useb https://github.com/saifgithub/DeliveryOS/releases/latest/download/install.ps1 | iex
 ```
 
 The install script detects every supported editor on your `PATH` and installs DeliveryOS into each.
 
 ### Manual install
 
-1. Download `deliveryos-X.Y.Z.vsix` from the [latest release](https://github.com/deliveryos/deliveryos/releases/latest).
+1. Download `deliveryos-X.Y.Z.vsix` from the [latest release](https://github.com/saifgithub/DeliveryOS/releases/latest).
 2. Verify the SHA-256:
 
     ```sh

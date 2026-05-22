@@ -23,7 +23,7 @@ test. No user-facing features beyond that.
 ### Install
 
 ```sh
-curl -fsSL https://github.com/deliveryos/deliveryos/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/saifgithub/DeliveryOS/releases/latest/download/install.sh | sh
 ```
 
 Or download the `.vsix` and install manually with `<editor>

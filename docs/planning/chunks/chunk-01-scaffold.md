@@ -325,7 +325,7 @@ export const STAGE_DEFS = Object.freeze([
     "viewsWelcome": [
       {
         "view": "deliveryos.stages",
-        "contents": "**Welcome to DeliveryOS**\n\nA harness around your harness.\n\nDeliveryOS turns a raw idea into a verified release through four stages: DISCOVER → DEFINE → EXECUTE → VERIFY.\n\n[Create a project](command:deliveryos.project.create)\n\nLearn more in the [README](https://github.com/deliveryos/deliveryos#readme).",
+        "contents": "**Welcome to DeliveryOS**\n\nA harness around your harness.\n\nDeliveryOS turns a raw idea into a verified release through four stages: DISCOVER → DEFINE → EXECUTE → VERIFY.\n\n[Create a project](command:deliveryos.project.create)\n\nLearn more in the [README](https://github.com/saifgithub/DeliveryOS#readme).",
         "when": "!deliveryos.hasProject"
       }
     ],
