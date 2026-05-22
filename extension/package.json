@@ -82,6 +82,11 @@
         "command": "deliveryos.openHello",
         "title": "DeliveryOS: Open Hello (dev smoke test)",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.openDiscover",
+        "title": "DeliveryOS: Open Discover",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {

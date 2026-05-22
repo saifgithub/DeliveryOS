@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { registerOpenDiscover } from './commands/openDiscover';
 import { registerOpenHello } from './commands/openHello';
 import { registerProjectCreate } from './commands/projectCreate';
 import { registerStagesRefresh } from './commands/stagesRefresh';
@@ -9,9 +10,11 @@ import {
   InMemoryProjectRegistry,
   PersistedProjectRegistry,
 } from './projectRegistry';
+import { discoverPanelSerializer } from './serializers/discoverPanelSerializer';
 import { helloPanelSerializer } from './serializers/helloPanelSerializer';
 import { StageTreeProvider } from './tree/stageTreeProvider';
 import { checkForUpdates } from './updater/checkForUpdates';
+import { DISCOVER_VIEW_TYPE } from './webview/discoverPanel';
 import { HELLO_VIEW_TYPE } from './webview/helloPanel';
 import { HostMessenger } from './webview/messenger';
 
@@ -51,6 +54,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   const host = new HostMessenger();
   host.registerHelloHandlers();
+  if (memoryStore) {
+    host.registerDiscoverHandlers({ registry, memoryStore });
+  }
 
   context.subscriptions.push(
     registerProjectCreate({
@@ -60,9 +66,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     registerStagesRefresh(stageTreeProvider),
     registerOpenHello(context, host),
+    registerOpenDiscover(context, host),
     vscode.window.registerWebviewPanelSerializer(
       HELLO_VIEW_TYPE,
       helloPanelSerializer(context, host),
+    ),
+    vscode.window.registerWebviewPanelSerializer(
+      DISCOVER_VIEW_TYPE,
+      discoverPanelSerializer(context, host),
     ),
   );
 
