@@ -30,17 +30,28 @@ jobs:
         id: package
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          cd extension
-          npx --no-install @vscode/vsce package --no-dependencies --out "../deliveryos-${VERSION}.vsix"
-          cd ..
-          echo "vsix=deliveryos-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
+          # Run the workspace `package` script so the `prepackage` lifecycle
+          # (cp ../LICENSE + ../README.md into extension/) runs before vsce.
+          # Without prepackage, the .vsix is missing LICENSE.txt + readme.md
+          # and vsce emits a warning.
+          npm -w deliveryos run package
+          # vsce writes deliveryos-<pkgVersion>.vsix into extension/.
+          # Move/rename so the asset matches the tag (in case the two ever
+          # drift mid-release — they should match, but defend against it).
+          PKG_VSIX=$(ls extension/deliveryos-*.vsix | head -1)
+          OUT_VSIX="deliveryos-${VERSION}.vsix"
+          mv "$PKG_VSIX" "$OUT_VSIX"
+          echo "vsix=${OUT_VSIX}" >> "$GITHUB_OUTPUT"
 
       - name: Compute SHA-256 sums
         run: |
-          ASSETS="${{ steps.package.outputs.vsix }} scripts/install.sh scripts/install.ps1"
-          if [ -f demo.mp4 ]; then ASSETS="$ASSETS demo.mp4"; fi
-          # shellcheck disable=SC2086
-          sha256sum $ASSETS > SHA256SUMS.txt
+          # Write hashes using the BASENAMES that users see after downloading
+          # from the GitHub release page. install.sh / install.ps1 live under
+          # scripts/ in the repo but are uploaded as bare filenames, so the
+          # SHA256SUMS.txt entries must match.
+          sha256sum "${{ steps.package.outputs.vsix }}" > SHA256SUMS.txt
+          ( cd scripts && sha256sum install.sh install.ps1 ) >> SHA256SUMS.txt
+          if [ -f demo.mp4 ]; then sha256sum demo.mp4 >> SHA256SUMS.txt; fi
           echo "--- SHA256SUMS.txt ---"
           cat SHA256SUMS.txt
 
