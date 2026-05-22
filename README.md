@@ -60,11 +60,13 @@ DeliveryOS/
 │   ├── src/
 │   │   ├── extension.ts        activate() / deactivate() — wires registry, tree, host messenger, serializer
 │   │   ├── contextKeys.ts      deliveryos.* context-key constants
-│   │   ├── projectRegistry.ts  InMemoryProjectRegistry (CHUNK-03 swaps in persistence)
+│   │   ├── projectRegistry.ts  IProjectRegistry seam — InMemory + Persisted impls (Persisted backed by MemoryStore)
+│   │   ├── memory/             {MemoryStore, sqlJsHost, schema, migrations, paths, ids, markdown, readmeTemplate}.ts
 │   │   ├── commands/           {projectCreate, stagesRefresh, openHello}.ts
 │   │   ├── tree/               {stageDefinitions, stageTreeNodes, stageTreeProvider}.ts
 │   │   ├── webview/            {nonce, htmlFactory, messenger, panelManager, helloPanel}.ts
 │   │   └── serializers/        helloPanelSerializer.ts
+│   ├── test/                   memory.test.ts + vscode-stub.ts (tsx + node:test)
 │   ├── media/                  icon-rocket.svg + deliveryos-logo.png
 │   ├── package.json            Extension manifest (engines, contributes, activationEvents)
 │   ├── tsconfig.json

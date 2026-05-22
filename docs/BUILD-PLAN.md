@@ -21,7 +21,7 @@ Goal: an empty DeliveryOS shell that installs and opens in more than one editor.
 Set up the TypeScript VS Code extension project (the `yo code` generator or a manual scaffold). Add the activity-bar icon and a sidebar tree view showing the four stages (DISCOVER, DEFINE, EXECUTE, VERIFY) as static items. Get `vsce package` producing a `.vsix`.
 Done when: the `.vsix` installs into VS Code and the DeliveryOS sidebar appears.
 
-**Week 2 (2026-06-01)** — Webview and memory store, multi-editor check. **🟡 Partial — CHUNK-02 (webview) ✅ done DOS:R2. CHUNK-03 (memory store) + CHUNK-04 (multi-editor verify) pending → DOS:R3+.**
+**Week 2 (2026-06-01)** — Webview and memory store, multi-editor check. **🟡 Partial — CHUNK-02 (webview) ✅ done DOS:R2; CHUNK-03 (memory store) ✅ done DOS:R3. CHUNK-04 (multi-editor verify) pending → DOS:R4.**
 Add one webview panel rendering a React + Tailwind "hello" app. Wire a `sql.js` (WASM SQLite) store for project data — see PRD § 25.2 for why the native `better-sqlite3` binding is the wrong choice for a sideloaded cross-editor VSIX. Sideload the `.vsix` into Cursor as well, and at least one of Windsurf or VSCodium, to confirm cross-editor install works. Note the signature-verification behaviour on each.
 Done when: the webview renders, a project record persists across editor restarts, and the extension installs in at least three editors.
 
