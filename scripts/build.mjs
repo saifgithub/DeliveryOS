@@ -1,5 +1,5 @@
 import { execSync } from 'node:child_process';
-import { rmSync, cpSync, existsSync } from 'node:fs';
+import { rmSync, cpSync, copyFileSync, existsSync } from 'node:fs';
 
 const run = (cmd) => execSync(cmd, { stdio: 'inherit' });
 
@@ -15,3 +15,8 @@ if (existsSync(targetDir)) {
 }
 cpSync(webviewDist, targetDir, { recursive: true });
 console.log(`copied ${webviewDist} → ${targetDir}`);
+
+const sqlWasmSrc = 'node_modules/sql.js/dist/sql-wasm.wasm';
+const sqlWasmDst = 'extension/dist/sql-wasm.wasm';
+copyFileSync(sqlWasmSrc, sqlWasmDst);
+console.log(`copied ${sqlWasmSrc} → ${sqlWasmDst}`);

@@ -105,11 +105,13 @@
   },
   "dependencies": {
     "@deliveryos/contracts": "*",
+    "sql.js": "^1.14.1",
     "vscode-messenger": "^0.4.5",
     "vscode-messenger-common": "^0.4.5"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "@types/sql.js": "^1.4.11",
     "@types/vscode": "^1.85.0",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.24.0",
