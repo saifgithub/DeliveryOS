@@ -1,0 +1,15 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "vscode": ["./vscode-stub.ts"],
+      "@deliveryos/contracts": ["../../contracts/src/index.ts"],
+      "@deliveryos/contracts/*": ["../../contracts/src/*.ts"]
+    }
+  },
+  "include": ["./**/*.ts", "../src/memory/**/*.ts"]
+}
