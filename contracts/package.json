@@ -7,6 +7,8 @@
   "types": "dist/index.d.ts",
   "exports": {
     ".": { "import": "./dist/index.js", "types": "./dist/index.d.ts" },
+    "./memory": { "import": "./dist/memory.js", "types": "./dist/memory.d.ts" },
+    "./links": { "import": "./dist/links.js", "types": "./dist/links.d.ts" },
     "./panels/*": {
       "import": "./dist/panels/*.js",
       "types": "./dist/panels/*.d.ts"
