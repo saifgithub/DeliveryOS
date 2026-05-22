@@ -92,7 +92,17 @@ for editor in $EDITORS; do
       summary="$summary  $editor	FAIL	($version)\n"
     fi
   else
-    summary="$summary  $editor	SKIP	(not on PATH)\n"
+    skip_reason="not on PATH"
+    # Antigravity 2.x dropped the `antigravity` CLI binary entirely (bundle
+    # restructure: /Contents/Resources/app/bin/antigravity no longer exists,
+    # /Contents/Resources/bin/ now contains only language_server +
+    # webm_encoder). Surface a clearer SKIP reason when the app bundle is
+    # present so the user knows to install via the app UI instead of going
+    # hunting for a missing CLI symlink.
+    if [ "$editor" = "antigravity" ] && [ -d "/Applications/Antigravity.app" ]; then
+      skip_reason="Antigravity 2.x — CLI removed; install manually via app UI"
+    fi
+    summary="$summary  $editor	SKIP	($skip_reason)\n"
   fi
 done
 

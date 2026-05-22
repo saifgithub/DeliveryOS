@@ -88,7 +88,7 @@ DeliveryOS checks GitHub Releases on startup and notifies you when a newer versi
 
 - **`command not found: code` (or `cursor` / `windsurf` / `codium` / `antigravity`).** Open the editor, hit `Cmd/Ctrl+Shift+P`, search for `Shell Command: Install '<editor>' command in PATH` (the wording matches the editor). Re-run the install script.
 - **Extension installs but the activity-bar icon doesn't appear.** Reload the window (`Cmd/Ctrl+Shift+P → Developer: Reload Window`). Some editors need a reload before custom activity-bar contributions render.
-- **Antigravity not detected.** Antigravity's CLI ships at `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` on macOS. If it's not on `PATH`, add that directory or use "Install from VSIX" from the command palette as a manual fallback.
+- **Antigravity not detected.** Antigravity 1.x ships a CLI at `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` (macOS); add that directory to `PATH` if needed. **Antigravity 2.x dropped the CLI entirely** — the install script now surfaces a specific SKIP reason (`Antigravity 2.x — CLI removed; install manually via app UI`) when the `Antigravity.app` bundle is present without a CLI on `PATH`. To sideload into Antigravity 2.x, open the app → Extensions → `…` menu → "Install from VSIX" and pick the `.vsix` you downloaded.
 - **GitHub rate limit on update check.** Harmless — the check fails silently and you won't see the notification. To suppress entirely, set `deliveryos.checkForUpdates` to `false`.
 
 ## Repo layout
