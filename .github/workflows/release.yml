@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Package extension
+        id: package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd extension
+          npx --no-install @vscode/vsce package --no-dependencies --out "../deliveryos-${VERSION}.vsix"
+          cd ..
+          echo "vsix=deliveryos-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
+
+      - name: Compute SHA-256 sums
+        run: |
+          ASSETS="${{ steps.package.outputs.vsix }} scripts/install.sh scripts/install.ps1"
+          if [ -f demo.mp4 ]; then ASSETS="$ASSETS demo.mp4"; fi
+          # shellcheck disable=SC2086
+          sha256sum $ASSETS > SHA256SUMS.txt
+          echo "--- SHA256SUMS.txt ---"
+          cat SHA256SUMS.txt
+
+      - name: Ensure RELEASE_NOTES.md exists
+        run: |
+          if [ ! -f RELEASE_NOTES.md ]; then
+            echo "RELEASE_NOTES.md missing — generating a minimal default for ${GITHUB_REF_NAME}." >&2
+            printf 'DeliveryOS %s — sideloadable .vsix release.\n' "$GITHUB_REF_NAME" > RELEASE_NOTES.md
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ASSETS="${{ steps.package.outputs.vsix }} scripts/install.sh scripts/install.ps1 SHA256SUMS.txt"
+          if [ -f demo.mp4 ]; then ASSETS="$ASSETS demo.mp4"; fi
+          # shellcheck disable=SC2086
+          gh release create "$GITHUB_REF_NAME" $ASSETS \
+            --title "DeliveryOS $GITHUB_REF_NAME" \
+            --notes-file RELEASE_NOTES.md
