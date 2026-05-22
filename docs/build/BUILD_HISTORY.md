@@ -4,6 +4,73 @@ Older "what just landed" sections from docs/build/BUILD_STATUS.md, newest on top
 
 ---
 
+## DOS:R5  (2026-05-22)
+
+DOS:R5 carried CHUNK-04 from "code-complete" toward "formally closed" by walking the verification carry-overs DOS:R4 deferred. 4 substantive commits on `main` + this wrap commit. CHUNK-04 done-when is now **substantively met** — 2 of 3 verification deliverables fully closed and the third blocked only on user UI walk-throughs (filed as bugs b002 + b003). Also surfaced + filed 2 unrelated bugs (b001 Antigravity 2.x CLI removed mid-session, b004 Node 20 deprecation) which are fixed `pending_review` on an unmerged bug-fix branch.
+
+The session had an unusual shape compared to typical R sessions: more verification than coding, and more "surface a new bug and route it" than "implement a chunk". The user stepped away mid-Phase E (after explicitly telling me to keep moving rather than wait), so the live UI walk for the upgrade-notification e2e becomes the next session's first task. *[2026-05-22 DOS:R6 update: CHUNK-04 marked formally closed at start of R6 by user call; b002 + b003 accepted as passing-by-assumption.]*
+
+**Plan-mode phases (the 5 alphabetised steps the entry plan organised the work around):**
+
+- **Phase A** — GitHub owner locked to **`saifgithub/DeliveryOS`**. Found 7 occurrences across **4 files** (DOS:R4's handover named only 3): `README.md` × 3 (curl one-liner + iwr one-liner + manual-install latest-release link), `RELEASE_NOTES.md` × 1 (curl one-liner), `extension/package.json` × 2 (`repository.url` AND the walkthrough welcome message that links to `/readme`), `docs/planning/chunks/chunk-01-scaffold.md` × 1 (spec source for the walkthrough — updated so a future re-implementation doesn't reintroduce the old coordinate). Casing follows what the user typed (`saifgithub/DeliveryOS` with capital D/O/S). GitHub URL path resolution is case-insensitive so the actual canonical display follows whatever the repo is created with. The `gh repo create` + push happened mid-Phase D below.
+- **Phase B** — **Cursor installed** via `brew install --cask cursor` (3.5.17). App lands at `/Applications/Cursor.app`; binary symlink at `/opt/homebrew/bin/cursor` (brew's standard cask layout). `install.sh` probe finds it.
+- **Phase C** — § 11.5 cross-editor smoke. Walked the 8-sub-check Phase 0 rehearsal in **VS Code + Antigravity** (both fresh `/tmp/deliveryos-smoke-r5-*/` workspaces): activity-bar icon ✅ · stage tree order ✅ · `deliveryos.project.create` ✅ · welcome view disappears ✅ · `deliveryos.openHello` zero CSP errors ✅ · `.deliveryos/memory.sqlite` + `intent-<8hex>.md` materialise ✅ · close-reopen restores ✅ · sig-warn observation: no warning on either editor. Cursor was deferred at the user's call — they hadn't signed up for Cursor and didn't want to do it mid-session = bug b002 (status `open`).
+- **Phase D** — § 11.3 release-flow verification. First `v0.0.1` tag push exposed **three bugs** in the release pipeline, all fixed and verified before re-tagging:
+  - The workflow ran `npx --no-install @vscode/vsce package` directly, bypassing the npm `prepackage` lifecycle that copies `LICENSE` + `README.md` into the extension/ workspace before vsce packs. Result: the v0.0.1 .vsix was missing `extension/LICENSE.txt` + `extension/readme.md`, and the workflow emitted the `LICENSE, LICENSE.md, or LICENSE.txt not found` annotation. **Fix: call `npm -w deliveryos run package` so the prepackage hook fires.**
+  - The `sha256sum` step in the workflow wrote SHA256SUMS.txt with paths `scripts/install.sh` and `scripts/install.ps1` (the relative paths the workflow saw at the repo root). But the release page uploads them as bare `install.sh` / `install.ps1` at the same level as SHA256SUMS.txt. Result: `shasum -a 256 -c SHA256SUMS.txt` from the user's downloads dir failed for both scripts ("No such file or directory"). **Fix: compute the script hashes from inside `scripts/` (subshell `cd scripts && sha256sum install.sh install.ps1 >> ...`) so the recorded paths are basenames.**
+  - `extension/package.json#version` was still `0.0.4` from DOS:R4 (the bump for the new `checkForUpdates` setting). vsce uses package.json's version for the internal manifest, not the `--out` filename. So the first v0.0.1 release's .vsix internally claimed version 0.0.4. This would have broken Phase E's e2e entirely: `isNewer("0.0.2", "0.0.4") = false`, no notification fires. **Fix: align `extension/package.json#version` to `0.0.1` before tagging.** (Then bumped to 0.0.2 in Phase E for the upgrade test.)
+  - First v0.0.1 release was deleted (`gh release delete v0.0.1` + tag delete) and retagged after the fixes. Second workflow run green in 37s. Release page now has all 4 assets (`.vsix` 415 KB + `install.sh` + `install.ps1` + `SHA256SUMS.txt` 243 bytes); local `shasum -c` returns OK for all three; internal version 0.0.1 matches the tag.
+- **Phase E** — § 11.4 upgrade-notification e2e. Bumped to v0.0.2, committed, tagged, pushed. Workflow ✅ in 34s; release verified clean. **Repo was flipped public** (`gh repo edit --visibility=public --accept-visibility-change-consequences`) because the updater hits `api.github.com/repos/.../releases/latest` unauthenticated and private repos return 404. The flip happened only after explicit user authorisation in chat — the auto-mode classifier blocked the action when invoked from an AskUserQuestion response. Code-reviewed `extension/src/updater/checkForUpdates.ts`: `Open release page` action calls `vscode.env.openExternal(vscode.Uri.parse(latest.html_url))`; `Don't show again` calls `getConfiguration('deliveryos').update('checkForUpdates', false, Global)`; both branches update `lastSeenReleaseTag` even if the user dismisses without clicking (so any reset for Walk 2 requires uninstall + reinstall to clear globalState). The actual live walkthrough (reload window → observe notification → click Open release page → reload again to confirm suppression → reset state → reload → click Don't show again → verify setting flips) was deferred when the user stepped away = bug b003 (status `open`).
+
+**Commits on `main` (4 substantive + 1 wrap):**
+
+- `218b5a4 chore(release): lock GH owner to saifgithub/DeliveryOS — § A (DOS:R5)` — the 7-occurrence rewrite across the 4 files described in Phase A above. Tests 38 ✅, typecheck ✅, vsix rebuilt to 405 KB (was 404 KB — string-length diff).
+- `b641d0d fix(release): repair v0.0.1 — version + LICENSE + SHA256SUMS paths — § D (DOS:R5)` — the three Phase D bug fixes bundled. `.github/workflows/release.yml` + `extension/package.json#version` 0.0.4 → 0.0.1.
+- `1e54cdf chore(release): bump to 0.0.2 for upgrade-notification e2e — § E (DOS:R5)` — version-only bump for the Phase E e2e setup. `extension/package.json#version` 0.0.1 → 0.0.2.
+- `df62205 chore(bugs): file 4 bugs discovered during DOS:R5 CHUNK-04 close-out` — bugs b001-b004 written to `docs/build/bugs.json`. Was empty (0 bugs) before.
+
+**Bug-fix worktree on `claude/bug-fix-20260522-142757` (UNMERGED, 5 commits):**
+
+- `de44ceb chore(bugs): claim b001, b004 for claude/bug-fix-20260522-142757` — pre-fix claim per the bug-fix protocol.
+- `554239e fix(bug:b004): bump release workflow to Node 22 + actions/*@v5` — `.github/workflows/release.yml`: `actions/checkout` + `actions/setup-node` @v4 → @v5; `node-version` 20 → 22 (LTS). Clears the Node 20 deprecation annotation that's been on every workflow run.
+- `15ba3d0 chore(bugs): b004 pending_review` — bugs.json status flip + `fixed_commit` set.
+- `a34a5a7 fix(bug:b001): surface clearer SKIP reason when Antigravity 2.x is installed without a CLI` — `scripts/install.sh` + `scripts/install.ps1` + `README.md`. When the `command -v antigravity` probe fails AND `/Applications/Antigravity.app` exists (or `%LOCALAPPDATA%\Programs\Antigravity\Antigravity.exe` on Windows), surfaces `SKIP (Antigravity 2.x — CLI removed; install manually via app UI)` instead of the generic `not on PATH`. README troubleshooting block updated with the GUI sideload path. Live-verified — the new reason fires on this machine. A programmatic fallback (unzip vsix into `~/.antigravity/extensions/`) was considered but deferred — introduces a design call about CLI-less editor support that's out of scope for a diagnostic fix.
+- `ae44641 chore(bugs): b001 pending_review` — status flip + `fixed_commit` set.
+
+Merge command (when reviewing): `git merge --no-ff claude/bug-fix-20260522-142757 && git worktree remove .claude/worktrees/bug-fix-20260522-142757 && git branch -d claude/bug-fix-20260522-142757`.
+
+**Surprising data points worth flagging for the next session:**
+
+- **Antigravity auto-updated mid-session** from 1.107.0 → 2.0.1. The 2.0 bundle restructure removed the `antigravity` CLI binary entirely. The path `/Contents/Resources/app/bin/` no longer exists; new `/Contents/Resources/bin/` contains only `language_server` + `webm_encoder`. The 0.0.4 extension files from DOS:R4's CLI-installed version are still on disk at `~/.antigravity/extensions/deliveryos.deliveryos-0.0.4/`, but `install.sh` can't replace them anymore — Antigravity 2.x is now GUI-sideload-only. DOS:R4's handover noted Antigravity as "the standard Code-OSS layout" data point, which was true for 1.x but no longer.
+- **`.claude/active-track` was reset to `P`** between this session's start and end. `/start-fresh R` at the top of the session wrote `R`; by `/handover` time the file contained `P` again. The wrap script protocol resolved the right track from the session's commit messages (all tagged DOS:R5) rather than the file. Possibly a macOS file-system quirk or the file was reverted by a parallel process. **Not blocking, but worth watching:** if it happens again, the wrap script will need to surface the resolution earlier.
+- **Repo is PUBLIC right now.** User wanted private "until first real release"; flipped public mid-session for Phase E's unauthenticated API access. Needs `gh repo edit saifgithub/DeliveryOS --visibility=private` after the user completes the Phase E walk.
+
+**Spec deviations DOS:R5 carries:**
+
+- **No "Antigravity GUI sideload" fallback in `install.sh`.** b001 fix is diagnostic (clearer SKIP reason); the proper fix would unzip the .vsix into `~/.antigravity/extensions/<id>-<version>/`. Deferred because it introduces a design call about whether to add CLI-less fallback for all editors. Revisit if Antigravity becomes a dogfooding target.
+- **No `scripts/check-vsix-size.js` tripwire.** Unchanged from DOS:R3/R4. vsix lands at 415 KB now (was 404 KB) — still well under 5 MB budget.
+- **No `deliveryos.openHello` `when`-clause hide.** Unchanged from DOS:R3/R4. Command stays visible.
+
+**Carry-overs for DOS:R6 (next session) — ordered by what unblocks what:**
+
+- **Merge the bug-fix branch.** `git merge --no-ff claude/bug-fix-20260522-142757`. Two fixes: b001 (better Antigravity diagnostic) + b004 (Node 22 + actions @v5). Review the 5 commits; they're small. Cleanup: `git worktree remove .claude/worktrees/bug-fix-20260522-142757 && git branch -d claude/bug-fix-20260522-142757`.
+- **Walk Phase E live UI checks (= bug b003).** *[DOS:R6 status: accepted as passing-by-assumption at user call. b003 remains `open` in bugs.json but no longer blocks scheduling.]*
+- **Walk Cursor § 11.5 smoke (= bug b002).** *[DOS:R6 status: accepted as passing-by-assumption at user call. b002 remains `open` in bugs.json but no longer blocks scheduling.]*
+- **Flip repo back to private.** `gh repo edit saifgithub/DeliveryOS --visibility=private` once b003 walk completes (the API access only needs to be public during the walk).
+- **Mark CHUNK-04 formally closed** in the BUILD-PLAN ✅ and the open-chunk row in this table. Then start CHUNK-05.  *[DOS:R6 status: DONE — commit 296f156.]*
+- **Two CHUNK-03 / CHUNK-04 tripwires unchanged from DOS:R3/R4:**
+  - **Multi-root workspace support.** MVP picks `workspaceFolders[0]` (CHUNK-03 § 13.6). Revisit if dogfooding hits it.
+  - **`SqlJsHost.flush()` debounce.** Current strategy: flush-per-mutation. Tripwire: if `MemoryStore.create()` ever exceeds 100 ms in dogfooding, drop in a debounced `scheduleFlush(250 ms)`.
+- **Track-O open questions (CHUNK-03 § 13.9).** Runtime Zod validation on `payload_json` read; whether to default `memory.sqlite` to gitignored; whether the rebuild-from-markdown command earns a chunk slot. None blocking — defer to a Track-O session.
+
+**Not done this session (deferred):**
+
+- CHUNK-04 formal closure (depends on b002 + b003).  *[DOS:R6: closed by user fiat.]*
+- CHUNK-05 onwards (sequential after CHUNK-04 formally closes).  *[DOS:R6: Day 1 landed.]*
+- ESLint / Prettier wiring.
+
+---
+
 ## DOS:R4  (2026-05-22)
 
 DOS:R4 landed **CHUNK-04 code-complete** plus the two pending **CHUNK-02 § 10.2 webview unit tests**. 5 substantive commits + this wrap commit. CHUNK-04 done-when is partially met — code-side checkboxes are ticked but the manual cross-editor smoke and the release-tagging verification (§ 11.3 + § 11.4) defer to DOS:R5 per the session-entry user call.
