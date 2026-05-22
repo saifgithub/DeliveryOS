@@ -2,7 +2,7 @@
   "name": "deliveryos",
   "displayName": "DeliveryOS",
   "description": "A meta-harness for AI-assisted software delivery. Sits above Claude Code / Codex / Cursor as the SDLC memory and orchestration layer.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "publisher": "deliveryos",
   "license": "MIT",
   "icon": "media/deliveryos-logo.png",
