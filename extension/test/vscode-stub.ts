@@ -77,6 +77,23 @@ export interface WorkspaceFolder {
   readonly index: number;
 }
 
+export interface Webview {
+  asWebviewUri(uri: Uri): Uri;
+  readonly cspSource: string;
+}
+
+export function __makeStubWebview(opts?: {
+  cspSource?: string;
+  asWebviewUri?: (uri: Uri) => Uri;
+}): Webview {
+  return {
+    cspSource: opts?.cspSource ?? 'vscode-cdn.net',
+    asWebviewUri:
+      opts?.asWebviewUri ??
+      ((uri) => Uri.file(`https://vscode-cdn.net${uri.fsPath}`)),
+  };
+}
+
 export function __resetVscodeStub(): void {
   fileStore.clear();
   directories.clear();

@@ -26,6 +26,10 @@ async function loadManifest(extensionUri: vscode.Uri): Promise<ViteManifest> {
   return cachedManifest;
 }
 
+export function __resetManifestCache(): void {
+  cachedManifest = undefined;
+}
+
 export interface RenderPanelHtmlOptions {
   webview: vscode.Webview;
   extensionUri: vscode.Uri;
