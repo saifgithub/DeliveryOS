@@ -11,6 +11,7 @@ import {
 } from './projectRegistry';
 import { helloPanelSerializer } from './serializers/helloPanelSerializer';
 import { StageTreeProvider } from './tree/stageTreeProvider';
+import { checkForUpdates } from './updater/checkForUpdates';
 import { HELLO_VIEW_TYPE } from './webview/helloPanel';
 import { HostMessenger } from './webview/messenger';
 
@@ -85,6 +86,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
     }),
   );
+
+  void checkForUpdates(context);
 }
 
 export function deactivate(): void {}
