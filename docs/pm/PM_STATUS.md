@@ -1,6 +1,6 @@
 # Handover — Project Management (DOS:P)
 
-**Last updated:** 2026-05-22 (end of DOS:P1 — Track P bootstrap: charter + first schedule dashboard. No code, no planning corpus edits, no bug-list changes — write-set strictly `docs/pm/`.)
+**Last updated:** 2026-05-22 (end of DOS:P1 wrap — Track P bootstrap: charter + first schedule dashboard committed in `b515be1`; wrap commit landed on top. No code, no planning corpus edits, no bug-list changes — write-set strictly `docs/pm/`.)
 
 Read this file **first** when starting a new Project Management session (`/start-fresh P`). It is the single rolling source of truth for track P: state, narrative, and carry-overs all in one doc. Older "what just landed" sections rotate out to `docs/pm/PM_HISTORY.md` newest-on-top.
 
@@ -10,8 +10,8 @@ Read this file **first** when starting a new Project Management session (`/start
 
 | Field | Value |
 | --- | --- |
-| Commits on `main` | 38 (will be 39 after this wrap commit lands) |
-| HEAD | `9d90e2a chore(handover): wrap DOS:R4` |
+| Commits on `main` | 39 (will be 40 after this wrap commit lands) |
+| HEAD | _will be_ the DOS:P1 wrap commit on top of `b515be1 docs(pm): bootstrap Track P — schedule + cadence (DOS:P1)`. |
 | Tags | none yet (planned: `v0.0.1` in DOS:R5; `v0.1.0` at CHUNK-16 = Week 14) |
 | Tests | 38 passing (R track) |
 | Bugs (`docs/build/bugs.json`) | 0 |
@@ -97,7 +97,7 @@ Done: **3 / 16** (CHUNK-01, 02, 03). In flight: **1** (CHUNK-04). Remaining: **1
 
 ### Drift signals
 
-None yet — DOS:P1 is the first measurement, so there's no historical baseline to compare against. Future P sessions log drift here as: *chunk-N ran X days over/under nominal — implication for downstream weeks*.
+None yet — DOS:P1 is the first measurement, so there's no historical baseline to compare against. Future P sessions log drift here as: _chunk-N ran X days over/under nominal — implication for downstream weeks_.
 
 ---
 
@@ -124,7 +124,7 @@ No code touched. No planning corpus edits. No bug-list changes. No `.claude/sess
 
 Next session: **DOS:P2**.
 
-```
+```text
 /start-fresh P
 ```
 
@@ -132,6 +132,6 @@ The skill reads this file, runs the (empty) P-track sanity checks + (disabled) b
 
 **Suggested first P2 work** (none of these are commitments — the user picks):
 
-- Refresh the schedule dashboard against the next R-track wrap (DOS:R5 will close CHUNK-04 with smoke + `v0.0.1` tag push). Update *chunk burn-down*, *pace + slack*, and *days ahead of nominal*.
+- Refresh the schedule dashboard against the next R-track wrap (DOS:R5 will close CHUNK-04 with smoke + `v0.0.1` tag push). Update _chunk burn-down_, _pace + slack_, and _days ahead of nominal_.
 - If CHUNK-04 closes in DOS:R5, decide whether to start logging Phase-1 per-chunk drift estimates eagerly (CHUNK-05 is the first Phase-1 chunk; the BUILD-PLAN gives it 1 week).
-- Optionally extend the dashboard with a *cumulative chunk-day spend* metric — actual session-days per chunk vs nominal — if drift signals start to need finer-grained tracking.
+- Optionally extend the dashboard with a _cumulative chunk-day spend_ metric — actual session-days per chunk vs nominal — if drift signals start to need finer-grained tracking.
