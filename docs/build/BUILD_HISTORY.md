@@ -4,6 +4,80 @@ Older "what just landed" sections from docs/build/BUILD_STATUS.md, newest on top
 
 ---
 
+## DOS:R8  (2026-05-23)
+
+DOS:R8 was a single-focus session opened the same day as DOS:R7's wrap (back-to-back). The user picked the recommended option from a 3-option `/start-fresh` prompt: **"CHUNK-05 Day 3 (webview build)"** — the natural next slice after DOS:R7's host wiring, closing the "throws on open" gap that Day 2 left ("vite manifest missing entry"). The session ran the implementation in the order the plan called for: deps + vite config first (so `npm install` covers the new packages), then entry-point scaffold, then the four React panel components, then build + typecheck + tests.
+
+1 substantive commit on `main` + this wrap. The session's shape was the cleanest yet: no rework, two minor type-fix iterations during the build, tests stayed at 54 passing throughout.
+
+**Commits on `main` (1 substantive + 1 wrap):**
+
+- `fadbb68 feat(discover): CHUNK-05 Day 3 — webview build (DOS:R8)` — the full Day 3 deliverable. 10 files: 7 new under `webview/src/panels/discover/` + `webview/vite.config.ts` updated + `webview/package.json` + `package-lock.json` for the 25 added packages. +1173/−5.
+
+**CHUNK-05 Day 3 deliverables (file-by-file):**
+
+- `webview/src/panels/discover/index.html` (new, 11 lines) — entry HTML mirroring `panels/hello/index.html`. Title "DeliveryOS — Discover", `#root` div, `./main.tsx` module script.
+- `webview/src/panels/discover/main.tsx` (new, 9 lines) — mounts `DiscoverApp` into `#root` with the shared Tailwind import (`../../shared/styles/tailwind.css`). Throws if `#root` is missing. Mirrors `panels/hello/main.tsx`.
+- `webview/src/panels/discover/DiscoverApp.tsx` (new, 169 lines) — root component. Hydrates from `messenger.sendRequest(DiscoverGetInitialState, HOST_EXTENSION, {})`, holds `{ projectTitle, rawIdea, discovery, questions, mode }` in `useState`, renders Radix `Tabs.Root` with 4 tabs (Raw Idea / Prompt / Answers / Summary). Tab gating: prompt disabled until `rawIdea?.text`; answers disabled until `promptGeneratedThisSession || discovery !== null`; summary disabled until `discovery?.answers.length > 0`. Subscribes to two notifications via `messenger.onNotification`: `DiscoverStateChanged` (merges new `rawIdea`/`discovery` into state for out-of-band updates) and `DiscoverSetMode` (switches active tab). Radix Toast provider for save/copy confirmations. Inline `TabTrigger` helper for consistent styling.
+- `webview/src/panels/discover/RawIdeaInput.tsx` (new, 77 lines) — Tab 1. Project-name input + raw-idea textarea (10 rows). Save button wires `DiscoverSaveRawIdea` with `{ body, title? }`; `title` is conditionally spread (`...(trimmedTitle ? { title: trimmedTitle } : {})`) to satisfy `exactOptionalPropertyTypes: true`. Shows last-saved timestamp on success.
+- `webview/src/panels/discover/DiscoveryPromptPreview.tsx` (new, 108 lines) — Tab 2. "Generate prompt" button calls `DiscoverGeneratePrompt` (passing `{}` for the `_empty?: never` params shape), shows the prompt in a `<pre>` block with `max-h-[28rem] overflow-y-auto`. Copy button calls `DiscoverCopyPrompt`; on success the parent `DiscoverApp` shows a Radix Toast. lucide-react icons (`Copy`, `RefreshCw` with spin animation while generating). `projectTitle` prop was originally on this component per the design but removed during the type-error fix pass — the host owns project context; the webview doesn't need it at this layer.
+- `webview/src/panels/discover/DiscoveryAnswersInput.tsx` (new, 169 lines) — Tab 3, most complex component. Paste textarea (6 rows) + "Parse answers" button → `DiscoverParseAnswers` (no-save preview) → updates per-card state by matching parsed `answer.question` (full prompt text) to `card.question`, with a `findIndex` fallback to array position. Radix `Accordion.Root type="multiple"` renders one card per `DISCOVERY_QUESTIONS_MVP` entry (`q.id` as key, `q.topic` in trigger, `q.prompt` + `q.helperText` in content, editable textarea for the answer). Save button wires `DiscoverSaveAnswers` with `{ rawAnswersPaste, answers, unmatchedText }` — filters out blank answers before sending. lucide-react `ChevronDown` rotates via `data-[state=open]:rotate-180`.
+- `webview/src/panels/discover/DiscoverySummary.tsx` (new, 57 lines) — Tab 4. Read-only render of saved `DiscoveryRecord`. Each answer shown as a card (`q.id` + `q.topic` header, full prompt as muted helper, answer as `whitespace-pre-wrap`). Empty-state placeholder when `discovery === null` or has no answers. Surfaces `unmatchedText` from the paste in a warning box if present.
+- `webview/vite.config.ts` (+1 line) — added `discover: resolve(__dirname, 'src/panels/discover/index.html')` to `rollupOptions.input` alongside the existing `hello` entry. Manifest now contains both entries; `renderPanelHtml({ entry: 'discover' })` resolves cleanly post-build.
+- `webview/package.json` (+6 lines) — added `@radix-ui/react-tabs` ^1.1.0 + `@radix-ui/react-accordion` ^1.2.0 + `@radix-ui/react-toast` ^1.2.0 + `@radix-ui/react-scroll-area` ^1.2.0 + `@radix-ui/react-collapsible` ^1.1.0 + `lucide-react` ^0.460.0 to `dependencies`. `package-lock.json` re-resolved at workspace root; `npm install` added 25 packages total (transitive deps included). 2 moderate severity vulnerabilities reported — pre-existing, not in any new dep, no action this session.
+
+**Spec deviations DOS:R8 carries (flagged in commit body for the audit trail):**
+
+- **`@radix-ui/react-form` omitted** — chunk-05 § 9 step 13 mentions it but notes "(or just native form + Radix Label)". Used native `<form>` elements / direct labels instead. No user-facing surface affected.
+- **`projectTitle` prop removed from `DiscoveryPromptPreview`** — the spec sketch passes it through but the host already owns project context (the prompt is generated server-side). Removing it cleared an `unused declared variable` typecheck error without losing function.
+
+**Type-fix iterations during the session (worth noting for next time):**
+
+- `DiscoverSaveRawIdeaParams` field is `body`, not `text` — first attempt failed typecheck; fixed before commit.
+- `DiscoverGetInitialState` and `DiscoverGeneratePrompt` params take `{}` not `undefined` (their declared type is `{ _empty?: never }`) — same fix pattern. Worth remembering for Day 4 if any new request types follow the same convention.
+- `exactOptionalPropertyTypes: true` in the webview tsconfig forbids passing `string | undefined` to an optional `title?: string` field — must use conditional spread (`...(title ? { title } : {})`).
+
+**Build artefacts confirmed:**
+
+- `webview/dist/.vite/manifest.json` lists both `src/panels/discover/index.html` (→ `assets/discover-*.js` ~49 KB / 15 KB gzip) and `src/panels/hello/index.html` (→ `assets/hello-*.js` ~1.1 KB). Shared `messenger-*.js` chunk + CSS bundle.
+- `extension/dist/extension.js` still ~147 KB (extension-side untouched).
+- `extension/dist/webview/` copied from `webview/dist/` via `scripts/build.mjs`.
+
+**Open carries-over from DOS:R7 that DOS:R8 cleared:**
+
+- ✅ CHUNK-05 Day 3 (webview build) — landed in `fadbb68`.
+
+**Open carries-over from DOS:R7 still standing:**
+
+- ⏳ Smoke workspaces under `/tmp/` — still on disk; minor housekeeping (carries from DOS:R5).
+- ⏳ b001 + b004 still `pending_review` in `bugs.json` — merged but not live-verified.
+- ⏳ `origin/main` push — now 13 commits ahead (12 from DOS:R7 + 1 substantive from DOS:R8; will be 14 after this wrap).
+
+**Carry-overs for DOS:R9 (next session) — ordered by what unblocks what:**
+
+- **CHUNK-05 Day 4 — tree integration + full-loop smoke** — primary work. Extend `extension/src/tree/` (TreeDataProvider) with DISCOVER children that surface raw idea / discovery state; wire `MemoryStore.onDidChange` → `_onDidChangeTreeData.fire` so the tree refreshes when the webview saves. Tree-item clicks pass a `mode: DiscoverMode` arg to `deliveryos.openDiscover` (the command already accepts the arg per DOS:R7 wiring). Then the full loop hand-test: idea → save → generate prompt → copy → paste into Claude.ai (or any AI tool) → paste reply back → parse → save → see summary. Spec: `docs/planning/chunks/chunk-05-discover-capture.md § 9 Day 4` steps 19-22.
+- **CHUNK-05 Day 5 — polish**: empty states, long-input autosize cap, markdown sanitisation in `DiscoverySummary`, README touch-up with a screenshot. § 11 risks list applies.
+- **Optional**: live-verify b001 + b004 fixes by re-running `scripts/install.sh` against Antigravity 2.x + tagging a no-op release to confirm the workflow has no Node 20 deprecation annotation. If both pass, flip both bug statuses `pending_review → resolved` in `docs/build/bugs.json`.
+- **`/tmp/deliveryos-smoke-r5*/` + `/tmp/release-verify-v2/` + `/tmp/v002-verify/`** cleanup — minor housekeeping; no longer needed.
+- **Push commits to `origin/main`** — 13 ahead (14 after this wrap). User's call.
+
+**Two CHUNK-03 / CHUNK-04 tripwires unchanged (chronic since DOS:R3):**
+
+- **Multi-root workspace support.** MVP picks `workspaceFolders[0]` (CHUNK-03 § 13.6). Revisit if dogfooding hits it.
+- **`SqlJsHost.flush()` debounce.** Current strategy: flush-per-mutation. Tripwire: if `MemoryStore.create()` ever exceeds 100 ms in dogfooding, drop in a debounced `scheduleFlush(250 ms)`.
+
+**Track-O open questions** (CHUNK-03 § 13.9 + CHUNK-05's own §11 risks list). Runtime Zod validation on `payload_json` read; whether to default `memory.sqlite` to gitignored; whether the rebuild-from-markdown command earns a chunk slot. None blocking — defer to a Track-O session.
+
+**Not done this session (deferred):**
+
+- CHUNK-05 Day 4 + Day 5 (tree integration + smoke + polish). Sequential; Day 4 is the natural next slice.
+- ESLint / Prettier wiring (chronic carry-over).
+- Smoke workspaces cleanup under `/tmp/` (minor; carries from DOS:R5).
+- Push to `origin/main` (carries from DOS:R7 — now 13 commits ahead).
+- Live-verify b001 + b004 (optional; sequence-independent).
+
+---
+
 ## DOS:R7  (2026-05-23)
 
 DOS:R7 was a clean three-phase session opened the day after DOS:R6's wrap. The user picked from a 3-option `/start-fresh` prompt: **"Merge bug-fix branch + flip repo private, then CHUNK-05 Day 2"** — the recommended order, because the b004 fix in the bug-fix branch bumps `actions/checkout` + `actions/setup-node` v4 → v5 and should be on `main` before the next release tag. The session executed all three phases without rework; tests stayed at 54 passing throughout.
