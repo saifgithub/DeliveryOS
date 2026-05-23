@@ -22,6 +22,8 @@ export interface ArtefactNode {
   readonly iconId?: string;
   readonly tooltip?: string;
   readonly discoverMode?: DiscoverMode;
+  readonly commandId?: string;
+  readonly commandArgs?: unknown[];
 }
 
 export type StageTreeNode = StageNode | ArtefactNode;
@@ -64,7 +66,13 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
       if (node.tooltip) {
         item.tooltip = node.tooltip;
       }
-      if (node.discoverMode) {
+      if (node.commandId) {
+        item.command = {
+          command: node.commandId,
+          title: node.displayName,
+          ...(node.commandArgs !== undefined && { arguments: node.commandArgs }),
+        };
+      } else if (node.discoverMode) {
         item.command = {
           command: 'deliveryos.openDiscover',
           title: 'Open Discover',

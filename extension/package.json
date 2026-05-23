@@ -87,6 +87,16 @@
         "command": "deliveryos.openDiscover",
         "title": "DeliveryOS: Open Discover",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.prd.generate",
+        "title": "DeliveryOS: Generate PRD Draft Prompt",
+        "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.prd.open",
+        "title": "DeliveryOS: Open PRD Editor",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {

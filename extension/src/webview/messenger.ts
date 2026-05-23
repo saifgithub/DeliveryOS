@@ -11,17 +11,25 @@ import {
   DiscoverSetMode,
   DiscoverStateChanged,
   Hello,
+  PrdGenerateDraftPrompt,
+  PrdLoad,
+  PrdPasteDraft,
+  PrdReviseSectionPrompt,
+  PrdSaveSection,
   type DiscoverGetInitialStateResult,
   type DiscoverMode,
   type DiscoveryAnswer,
   type DiscoveryRecord,
   type IntentPayload,
+  type PrdSection,
   type RawIdea,
 } from '@deliveryos/contracts';
 import { parseAnswers } from '../discovery/answersParser';
 import { buildDiscoveryPrompt } from '../discovery/promptBuilder';
 import { DISCOVERY_QUESTIONS_MVP } from '../discovery/questionLibrary';
 import type { MemoryStore } from '../memory/MemoryStore';
+import { buildGenerateDraftPrompt, buildReviseSectionPrompt } from '../prd/promptBuilder';
+import { parsePrdMarkdown } from '../prd/sectionSchema';
 import type { IProjectRegistry } from '../projectRegistry';
 import { consumePendingDiscoverMode } from './discoverPanel';
 
@@ -173,6 +181,92 @@ export class HostMessenger {
       // Webview-originated tab switches are panel-local; no host state to
       // mutate here. Future restore-after-reload flows may read this.
     });
+  }
+
+  registerPrdHandlers(deps: DiscoverDeps): void {
+    const { registry, memoryStore } = deps;
+
+    this.messenger.onRequest(PrdLoad, async (params) => {
+      const prd = await memoryStore.loadPrdParent(params.projectId);
+      return { prd };
+    });
+
+    this.messenger.onRequest(PrdGenerateDraftPrompt, async (params) => {
+      const entry = await memoryStore.read(params.projectId);
+      if (!entry || entry.type !== 'intent') {
+        throw new Error(`prd.generateDraftPrompt: no intent entry for ${params.projectId}`);
+      }
+      const payload = entry.payload as IntentPayload;
+      const prompt = buildGenerateDraftPrompt({
+        projectTitle: entry.title,
+        rawIdea: payload.rawIdea?.text ?? '',
+        discoveryRecord: payload.discovery ?? { promptSnapshot: '', answers: [], completedAt: 0 },
+      });
+      await vscode.env.clipboard.writeText(prompt);
+      const bytesCopied = new TextEncoder().encode(prompt).length;
+      return { ok: true as const, bytesCopied };
+    });
+
+    this.messenger.onRequest(PrdPasteDraft, async (params) => {
+      const entry = await memoryStore.read(params.projectId);
+      if (!entry || entry.type !== 'intent') {
+        throw new Error(`prd.pasteDraft: no intent entry for ${params.projectId}`);
+      }
+      const intentEntry = { id: entry.id, title: entry.title };
+      const { sections, report } = parsePrdMarkdown(params.rawMarkdown, entry.title);
+      const existing = await memoryStore.loadPrdParent(params.projectId);
+      const prd = await memoryStore.upsertPrdParent(intentEntry, sections, existing?.prdId);
+      return { prd, report };
+    });
+
+    this.messenger.onRequest(PrdSaveSection, async (params) => {
+      const entry = await memoryStore.read(params.prdId);
+      if (!entry) {
+        throw new Error(`prd.saveSection: PRD entry ${params.prdId} not found`);
+      }
+      const stored = entry.payload as unknown as {
+        projectId: string;
+        projectTitle: string;
+        sections: PrdSection[];
+      };
+      const nextSections = stored.sections.map((s) =>
+        s.id === params.sectionId ? { ...s, body: params.body } : s,
+      );
+      const intentEntry = { id: stored.projectId, title: stored.projectTitle };
+      const result = await memoryStore.upsertPrdParent(intentEntry, nextSections, params.prdId);
+      return { ok: true as const, updatedAt: result.updatedAt };
+    });
+
+    this.messenger.onRequest(PrdReviseSectionPrompt, async (params) => {
+      const entry = await memoryStore.read(params.prdId);
+      if (!entry) {
+        throw new Error(`prd.reviseSectionPrompt: PRD ${params.prdId} not found`);
+      }
+      const stored = entry.payload as unknown as {
+        projectTitle: string;
+        sections: PrdSection[];
+      };
+      const section = stored.sections.find((s) => s.id === params.sectionId);
+      if (!section) {
+        throw new Error(`prd.reviseSectionPrompt: section ${params.sectionId} not found`);
+      }
+      const otherSectionSummaries: Record<string, string> = {};
+      for (const s of stored.sections) {
+        if (s.id !== params.sectionId) {
+          otherSectionSummaries[s.id] = s.body;
+        }
+      }
+      const prompt = buildReviseSectionPrompt({
+        section,
+        instruction: params.instruction,
+        prdContext: { projectTitle: stored.projectTitle, otherSectionSummaries },
+      });
+      await vscode.env.clipboard.writeText(prompt);
+      const bytesCopied = new TextEncoder().encode(prompt).length;
+      return { ok: true as const, bytesCopied };
+    });
+
+    void registry; // registry available for future handlers
   }
 
   broadcastDiscoverMode(mode: DiscoverMode): void {

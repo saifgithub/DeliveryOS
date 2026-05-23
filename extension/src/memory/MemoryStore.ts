@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import {
+  type DraftPrd,
   type IntentPayload,
   type LinkKind,
   type MemoryEntry,
@@ -15,7 +16,10 @@ import {
   type MemoryPayloadOfType,
   type MemoryLink,
   type MemoryType,
+  type PrdSection,
+  type RequirementPayload,
 } from '@deliveryos/contracts';
+import { renderPrdMarkdown } from '../prd/sectionSchema';
 
 export type MemoryChangeEvent =
   | { readonly kind: 'create' | 'update'; readonly entryId: string; readonly entryType: MemoryType }
@@ -321,6 +325,104 @@ export class MemoryStore {
       payload,
       body: rawIdea,
     });
+  }
+
+  /** Find the PRD parent Requirement Memory entry for a project (by projectId in payload_json). */
+  async loadPrdParent(projectId: string): Promise<DraftPrd | null> {
+    const stmt = this.host.db.prepare(
+      `SELECT id, type, title, payload_json, created_at, updated_at
+         FROM memory_entries
+        WHERE type = 'requirement'
+          AND json_extract(payload_json, '$.kind') = 'prd'
+          AND json_extract(payload_json, '$.projectId') = ?
+        LIMIT 1`,
+    );
+    try {
+      stmt.bind([projectId]);
+      if (!stmt.step()) return null;
+      const row = stmt.getAsObject() as unknown as import('./types').MemoryEntryRow;
+      const stored = JSON.parse(row.payload_json) as {
+        kind: 'prd';
+        projectId: string;
+        projectTitle: string;
+        sections: PrdSection[];
+        createdAt: number;
+        updatedAt: number;
+      };
+      return {
+        prdId: row.id,
+        projectId: stored.projectId,
+        projectTitle: stored.projectTitle,
+        sections: stored.sections,
+        createdAt: stored.createdAt,
+        updatedAt: stored.updatedAt,
+      };
+    } finally {
+      stmt.free();
+    }
+  }
+
+  /**
+   * Create or update the PRD parent Requirement Memory entry.
+   * The entry's id IS the prdId — no duplication in stored payload.
+   * Pass existingPrdId to update; omit to create a new entry + link.
+   */
+  async upsertPrdParent(
+    intentEntry: { readonly id: string; readonly title: string },
+    sections: readonly PrdSection[],
+    existingPrdId?: string,
+  ): Promise<DraftPrd> {
+    const now = Date.now();
+    const body = renderPrdMarkdown({ projectTitle: intentEntry.title, sections });
+
+    if (existingPrdId) {
+      const existing = await this.read(existingPrdId);
+      const createdAt = existing?.createdAt ?? now;
+      const storedPayload = {
+        kind: 'prd' as const,
+        projectId: intentEntry.id,
+        projectTitle: intentEntry.title,
+        sections: [...sections],
+        createdAt,
+        updatedAt: now,
+      };
+      await this.update<'requirement'>(existingPrdId, {
+        payload: storedPayload as unknown as Partial<RequirementPayload>,
+        body,
+      });
+      return {
+        prdId: existingPrdId,
+        projectId: intentEntry.id,
+        projectTitle: intentEntry.title,
+        sections: [...sections],
+        createdAt,
+        updatedAt: now,
+      };
+    }
+
+    const storedPayload = {
+      kind: 'prd' as const,
+      projectId: intentEntry.id,
+      projectTitle: intentEntry.title,
+      sections: [...sections],
+      createdAt: now,
+      updatedAt: now,
+    };
+    const entry = await this.create<'requirement'>({
+      type: 'requirement',
+      title: intentEntry.title,
+      payload: storedPayload as unknown as RequirementPayload,
+      body,
+    });
+    await this.link(entry.id, intentEntry.id, 'derives-from');
+    return {
+      prdId: entry.id,
+      projectId: intentEntry.id,
+      projectTitle: intentEntry.title,
+      sections: [...sections],
+      createdAt: now,
+      updatedAt: now,
+    };
   }
 
   // --- Internals ---------------------------------------------------------

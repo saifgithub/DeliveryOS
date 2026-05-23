@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { registerOpenDiscover } from './commands/openDiscover';
 import { registerOpenHello } from './commands/openHello';
+import { registerOpenPrdEditor } from './commands/openPrdEditor';
 import { registerProjectCreate } from './commands/projectCreate';
 import { registerStagesRefresh } from './commands/stagesRefresh';
 import { CONTEXT_KEYS } from './contextKeys';
@@ -12,11 +13,13 @@ import {
 } from './projectRegistry';
 import { discoverPanelSerializer } from './serializers/discoverPanelSerializer';
 import { helloPanelSerializer } from './serializers/helloPanelSerializer';
+import { prdEditorSerializer } from './serializers/prdEditorSerializer';
 import { StageTreeProvider } from './tree/stageTreeProvider';
 import { checkForUpdates } from './updater/checkForUpdates';
 import { DISCOVER_VIEW_TYPE } from './webview/discoverPanel';
 import { HELLO_VIEW_TYPE } from './webview/helloPanel';
 import { HostMessenger } from './webview/messenger';
+import { PRD_VIEW_TYPE } from './webview/prdPanel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('DeliveryOS activated');
@@ -56,6 +59,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   host.registerHelloHandlers();
   if (memoryStore) {
     host.registerDiscoverHandlers({ registry, memoryStore });
+    host.registerPrdHandlers({ registry, memoryStore });
   }
 
   context.subscriptions.push(
@@ -67,6 +71,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerStagesRefresh(stageTreeProvider),
     registerOpenHello(context, host),
     registerOpenDiscover(context, host),
+    registerOpenPrdEditor(context, host),
     vscode.window.registerWebviewPanelSerializer(
       HELLO_VIEW_TYPE,
       helloPanelSerializer(context, host),
@@ -74,6 +79,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerWebviewPanelSerializer(
       DISCOVER_VIEW_TYPE,
       discoverPanelSerializer(context, host),
+    ),
+    vscode.window.registerWebviewPanelSerializer(
+      PRD_VIEW_TYPE,
+      prdEditorSerializer(context, host),
     ),
   );
 
