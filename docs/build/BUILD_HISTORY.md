@@ -4,6 +4,30 @@ Older "what just landed" sections from docs/build/BUILD_STATUS.md, newest on top
 
 ---
 
+## DOS:R9  (2026-05-23)
+
+DOS:R9 was a tight, single-focus session opened the same day as DOS:R7 + DOS:R8 (three sessions back-to-back). The user picked the recommended option from a 4-option `/start-fresh` prompt: **"CHUNK-05 Day 4"** — the natural next slice after DOS:R8's webview build, closing the "panel exists but isn't discoverable in the UI" gap. The two real gaps were (a) `MemoryStore` had no change event, and (b) the tree's `getChildren()` returned an empty array for stage children.
+
+1 substantive commit on `main` + this wrap. No rework. One unexpected step: the test typecheck failed because `vscode-stub.ts` had no `EventEmitter`/`Event`/`Disposable` surface — added a minimal shim.
+
+**Commits on `main` (1 substantive + 1 wrap):**
+
+- `c54ab05 feat(discover): CHUNK-05 Day 4 — tree integration (DOS:R9)` — closes chunk-05 § 9 Day 4 steps 19-20. 5 files modified, +163/−7.
+
+**CHUNK-05 Day 4 deliverables (file-by-file):**
+
+- `extension/src/memory/MemoryStore.ts` (+12) — added `MemoryChangeEvent` discriminated union + private `_onDidChangeMemory = new vscode.EventEmitter<MemoryChangeEvent>()` + public `readonly onDidChangeMemory: vscode.Event<MemoryChangeEvent>`. Fires after the SQL commit + markdown flush + `flushOrThrow()` succeed in `create`/`update`/`link`/`unlink` — never on failure. Disposed in `close()`.
+- `extension/src/tree/stageTreeProvider.ts` (+100/−4) — constructor takes optional `memoryStore: MemoryStore`. Subscribes to `onDidChangeMemory` with a focused filter (intent-create OR active-project update / link/unlink). `getChildren()` is now `async`; under DISCOVER yields two `ArtefactNode`s: Raw idea (description = 60-char snippet or "(not yet captured)", `discoverMode: 'rawIdea'`) and Discovery interview (description = `N/12 answered` or "not started", `discoverMode: 'summary'` if any answer else `'answers'`). Provider is `Disposable`.
+- `extension/src/tree/stageTreeNodes.ts` (+21) — `ArtefactNode` gained optional `description`/`iconId`/`tooltip`/`discoverMode`; `toTreeItem()` attaches `deliveryos.openDiscover` command with mode arg when `discoverMode` is set.
+- `extension/src/extension.ts` (+2/−2) — passes `memoryStore` into `new StageTreeProvider(registry, memoryStore)` and pushes the provider into `context.subscriptions`.
+- `extension/test/vscode-stub.ts` (+29) — minimal `EventEmitter<T>` (Set-backed; spread snapshot during fire) + `Event<T>` + `Disposable` shim.
+
+**Spec deviation:** `onDidChangeMemory` (not `onDidChange` as chunk-05 § 9 step 19 calls it) — avoids name collision with `IProjectRegistry.onDidChange`.
+
+**Open carries into DOS:R10:** CHUNK-05 Day 5 polish + Day 4 manual smoke (user-driven) + b001/b004 pending_review + `/tmp/` workspace cleanup + origin/main push (16 ahead after wrap).
+
+---
+
 ## DOS:R8  (2026-05-23)
 
 DOS:R8 was a single-focus session opened the same day as DOS:R7's wrap (back-to-back). The user picked the recommended option from a 3-option `/start-fresh` prompt: **"CHUNK-05 Day 3 (webview build)"** — the natural next slice after DOS:R7's host wiring, closing the "throws on open" gap that Day 2 left ("vite manifest missing entry"). The session ran the implementation in the order the plan called for: deps + vite config first (so `npm install` covers the new packages), then entry-point scaffold, then the four React panel components, then build + typecheck + tests.
