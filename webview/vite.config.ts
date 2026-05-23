@@ -13,6 +13,7 @@ export default defineConfig({
       input: {
         hello: resolve(__dirname, 'src/panels/hello/index.html'),
         discover: resolve(__dirname, 'src/panels/discover/index.html'),
+        'prd-editor': resolve(__dirname, 'src/panels/prd-editor/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

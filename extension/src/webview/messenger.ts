@@ -186,9 +186,13 @@ export class HostMessenger {
   registerPrdHandlers(deps: DiscoverDeps): void {
     const { registry, memoryStore } = deps;
 
-    this.messenger.onRequest(PrdLoad, async (params) => {
-      const prd = await memoryStore.loadPrdParent(params.projectId);
-      return { prd };
+    this.messenger.onRequest(PrdLoad, async (_params) => {
+      const active = registry.getActive();
+      if (!active) {
+        return { prd: null, projectId: '', projectTitle: '' };
+      }
+      const prd = await memoryStore.loadPrdParent(active.id);
+      return { prd, projectId: active.id, projectTitle: active.name };
     });
 
     this.messenger.onRequest(PrdGenerateDraftPrompt, async (params) => {
@@ -266,7 +270,6 @@ export class HostMessenger {
       return { ok: true as const, bytesCopied };
     });
 
-    void registry; // registry available for future handlers
   }
 
   broadcastDiscoverMode(mode: DiscoverMode): void {

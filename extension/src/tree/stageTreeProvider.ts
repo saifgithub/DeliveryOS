@@ -41,6 +41,14 @@ export class StageTreeProvider
             this.refresh();
             return;
           }
+          if (event.kind === 'create' && event.entryType === 'requirement') {
+            this.refresh();
+            return;
+          }
+          if (event.kind === 'update' && event.entryType === 'requirement') {
+            this.refresh();
+            return;
+          }
           if (
             (event.kind === 'link' || event.kind === 'unlink') &&
             (event.fromId === active.id || event.toId === active.id)
@@ -71,6 +79,9 @@ export class StageTreeProvider
     if (element.kind === 'stage' && element.stageId === 'discover') {
       return this.discoverChildren(active.id);
     }
+    if (element.kind === 'stage' && element.stageId === 'define') {
+      return this.defineChildren(active.id);
+    }
     return [];
   }
 
@@ -79,6 +90,30 @@ export class StageTreeProvider
       d.dispose();
     }
     this._onDidChangeTreeData.dispose();
+  }
+
+  private async defineChildren(projectId: string): Promise<ArtefactNode[]> {
+    const prd = await this.memoryStore?.loadPrdParent(projectId);
+    const sectionCount = prd
+      ? prd.sections.filter((s) => s.body.trim().length > 0).length
+      : 0;
+    const started = prd !== null && prd !== undefined;
+    return [
+      {
+        kind: 'artefact',
+        stageId: 'define',
+        artefactId: 'define.prd',
+        artefactKind: 'define.prd',
+        displayName: 'Draft PRD',
+        description: started ? `${sectionCount}/8 sections` : '(not started)',
+        iconId: started ? 'file-text' : 'circle-outline',
+        tooltip: started
+          ? `${sectionCount} of 8 sections have content`
+          : 'Click to open the PRD Editor.',
+        commandId: 'deliveryos.prd.open',
+        commandArgs: [],
+      },
+    ];
   }
 
   private async discoverChildren(intentId: string): Promise<ArtefactNode[]> {

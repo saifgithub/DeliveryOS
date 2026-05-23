@@ -45,6 +45,8 @@ export interface PrdLoadParams {
 
 export interface PrdLoadResult {
   readonly prd: DraftPrd | null;
+  readonly projectId: string;
+  readonly projectTitle: string;
 }
 
 export interface PrdGenerateDraftPromptParams {
