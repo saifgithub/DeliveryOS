@@ -82,6 +82,35 @@ export interface Webview {
   readonly cspSource: string;
 }
 
+export interface Disposable {
+  dispose(): unknown;
+}
+
+export type Event<T> = (listener: (e: T) => unknown) => Disposable;
+
+export class EventEmitter<T> {
+  private readonly listeners: Set<(e: T) => unknown> = new Set();
+
+  readonly event: Event<T> = (listener) => {
+    this.listeners.add(listener);
+    return {
+      dispose: () => {
+        this.listeners.delete(listener);
+      },
+    };
+  };
+
+  fire(value: T): void {
+    for (const listener of [...this.listeners]) {
+      listener(value);
+    }
+  }
+
+  dispose(): void {
+    this.listeners.clear();
+  }
+}
+
 export function __makeStubWebview(opts?: {
   cspSource?: string;
   asWebviewUri?: (uri: Uri) => Uri;

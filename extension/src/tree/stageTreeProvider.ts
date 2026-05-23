@@ -1,22 +1,55 @@
 import * as vscode from 'vscode';
+import type { IntentMemory } from '@deliveryos/contracts';
+import { DISCOVERY_QUESTIONS_MVP } from '../discovery/questionLibrary';
+import { MemoryStore } from '../memory/MemoryStore';
 import { IProjectRegistry } from '../projectRegistry';
 import { STAGE_DEFS } from './stageDefinitions';
 import {
+  ArtefactNode,
   StageTreeNode,
   stageDefToNode,
   toTreeItem,
 } from './stageTreeNodes';
 
+const TOTAL_QUESTIONS = DISCOVERY_QUESTIONS_MVP.length;
+
 export class StageTreeProvider
-  implements vscode.TreeDataProvider<StageTreeNode>
+  implements vscode.TreeDataProvider<StageTreeNode>, vscode.Disposable
 {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<
     StageTreeNode | undefined | void
   >();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
-  constructor(private readonly registry: IProjectRegistry) {
-    registry.onDidChange(() => this.refresh());
+  private readonly disposables: vscode.Disposable[] = [];
+
+  constructor(
+    private readonly registry: IProjectRegistry,
+    private readonly memoryStore?: MemoryStore,
+  ) {
+    this.disposables.push(registry.onDidChange(() => this.refresh()));
+    if (memoryStore) {
+      this.disposables.push(
+        memoryStore.onDidChangeMemory((event) => {
+          const active = this.registry.getActive();
+          if (!active) return;
+          if (event.kind === 'create' && event.entryType === 'intent') {
+            this.refresh();
+            return;
+          }
+          if (event.kind === 'update' && event.entryId === active.id) {
+            this.refresh();
+            return;
+          }
+          if (
+            (event.kind === 'link' || event.kind === 'unlink') &&
+            (event.fromId === active.id || event.toId === active.id)
+          ) {
+            this.refresh();
+          }
+        }),
+      );
+    }
   }
 
   refresh(node?: StageTreeNode): void {
@@ -27,13 +60,74 @@ export class StageTreeProvider
     return toTreeItem(element);
   }
 
-  getChildren(element?: StageTreeNode): vscode.ProviderResult<StageTreeNode[]> {
-    if (!this.registry.getActive()) {
+  async getChildren(element?: StageTreeNode): Promise<StageTreeNode[]> {
+    const active = this.registry.getActive();
+    if (!active) {
       return [];
     }
     if (!element) {
       return STAGE_DEFS.map(stageDefToNode);
     }
+    if (element.kind === 'stage' && element.stageId === 'discover') {
+      return this.discoverChildren(active.id);
+    }
     return [];
   }
+
+  dispose(): void {
+    for (const d of this.disposables) {
+      d.dispose();
+    }
+    this._onDidChangeTreeData.dispose();
+  }
+
+  private async discoverChildren(intentId: string): Promise<ArtefactNode[]> {
+    const intent = (await this.memoryStore?.read(intentId)) as IntentMemory | null | undefined;
+    return [
+      this.buildRawIdeaNode(intent ?? null),
+      this.buildDiscoveryNode(intent ?? null),
+    ];
+  }
+
+  private buildRawIdeaNode(intent: IntentMemory | null): ArtefactNode {
+    const text = intent?.payload.rawIdea.text.trim() ?? '';
+    const captured = text.length > 0;
+    return {
+      kind: 'artefact',
+      stageId: 'discover',
+      artefactId: 'discover.rawIdea',
+      artefactKind: 'discover.rawIdea',
+      displayName: 'Raw idea',
+      description: captured ? snippet(text) : '(not yet captured)',
+      iconId: captured ? 'edit' : 'circle-outline',
+      tooltip: captured ? text : 'Click to capture your raw idea.',
+      discoverMode: 'rawIdea',
+    };
+  }
+
+  private buildDiscoveryNode(intent: IntentMemory | null): ArtefactNode {
+    const discovery = intent?.payload.discovery ?? null;
+    const answered = discovery
+      ? discovery.answers.filter((a) => a.answer.trim().length > 0).length
+      : 0;
+    const started = answered > 0;
+    return {
+      kind: 'artefact',
+      stageId: 'discover',
+      artefactId: 'discover.interview',
+      artefactKind: 'discover.interview',
+      displayName: 'Discovery interview',
+      description: started ? `${answered}/${TOTAL_QUESTIONS} answered` : 'not started',
+      iconId: started ? 'comment-discussion' : 'circle-outline',
+      tooltip: started
+        ? `${answered} of ${TOTAL_QUESTIONS} questions answered`
+        : 'Click to generate the discovery prompt and capture answers.',
+      discoverMode: started ? 'summary' : 'answers',
+    };
+  }
+}
+
+function snippet(text: string): string {
+  const collapsed = text.replace(/\s+/g, ' ').trim();
+  return collapsed.length > 60 ? `${collapsed.slice(0, 57)}…` : collapsed;
 }

@@ -16,6 +16,10 @@ import {
   type MemoryLink,
   type MemoryType,
 } from '@deliveryos/contracts';
+
+export type MemoryChangeEvent =
+  | { readonly kind: 'create' | 'update'; readonly entryId: string; readonly entryType: MemoryType }
+  | { readonly kind: 'link' | 'unlink'; readonly fromId: string; readonly toId: string; readonly linkKind: LinkKind };
 import { generateMemoryId, parseMemoryIdType } from './ids';
 import {
   bodyPath,
@@ -56,6 +60,9 @@ export interface UpdatePatch<T extends MemoryType> {
 }
 
 export class MemoryStore {
+  private readonly _onDidChangeMemory = new vscode.EventEmitter<MemoryChangeEvent>();
+  readonly onDidChangeMemory: vscode.Event<MemoryChangeEvent> = this._onDidChangeMemory.event;
+
   private constructor(
     private readonly host: SqlJsHost,
     private readonly workspaceUri: vscode.Uri,
@@ -94,6 +101,7 @@ export class MemoryStore {
       await this.host.flush();
     } finally {
       this.host.close();
+      this._onDidChangeMemory.dispose();
     }
   }
 
@@ -126,6 +134,7 @@ export class MemoryStore {
       throw err;
     }
     await this.flushOrThrow();
+    this._onDidChangeMemory.fire({ kind: 'create', entryId: id, entryType: input.type });
 
     // Round-trip the entry as the union member.
     const entry: MemoryEntry = {
@@ -203,6 +212,7 @@ export class MemoryStore {
       throw err;
     }
     await this.flushOrThrow();
+    this._onDidChangeMemory.fire({ kind: 'update', entryId: id, entryType: row.type });
 
     const fresh = await this.read(id);
     if (!fresh) {
@@ -239,6 +249,7 @@ export class MemoryStore {
       [from, to, kind],
     );
     await this.flushOrThrow();
+    this._onDidChangeMemory.fire({ kind: 'link', fromId: from, toId: to, linkKind: kind });
   }
 
   async unlink(from: string, to: string, kind: LinkKind): Promise<void> {
@@ -247,6 +258,7 @@ export class MemoryStore {
       [from, to, kind],
     );
     await this.flushOrThrow();
+    this._onDidChangeMemory.fire({ kind: 'unlink', fromId: from, toId: to, linkKind: kind });
   }
 
   async walk(from: string, kind: LinkKind): Promise<MemoryEntry[]> {

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { DiscoverMode } from '@deliveryos/contracts';
 import { STAGE_DEFS } from './stageDefinitions';
 
 export type StageId = 'discover' | 'define' | 'execute' | 'verify';
@@ -17,6 +18,10 @@ export interface ArtefactNode {
   readonly artefactId: string;
   readonly displayName: string;
   readonly artefactKind: string;
+  readonly description?: string;
+  readonly iconId?: string;
+  readonly tooltip?: string;
+  readonly discoverMode?: DiscoverMode;
 }
 
 export type StageTreeNode = StageNode | ArtefactNode;
@@ -50,6 +55,22 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
         vscode.TreeItemCollapsibleState.None,
       );
       item.contextValue = `deliveryos.artefact.${node.artefactKind}`;
+      if (node.description) {
+        item.description = node.description;
+      }
+      if (node.iconId) {
+        item.iconPath = new vscode.ThemeIcon(node.iconId);
+      }
+      if (node.tooltip) {
+        item.tooltip = node.tooltip;
+      }
+      if (node.discoverMode) {
+        item.command = {
+          command: 'deliveryos.openDiscover',
+          title: 'Open Discover',
+          arguments: [node.discoverMode],
+        };
+      }
       return item;
     }
   }

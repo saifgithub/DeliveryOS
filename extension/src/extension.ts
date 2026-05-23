@@ -45,12 +45,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   }
   context.subscriptions.push(registry);
 
-  const stageTreeProvider = new StageTreeProvider(registry);
+  const stageTreeProvider = new StageTreeProvider(registry, memoryStore);
   const stageTreeView = vscode.window.createTreeView('deliveryos.stages', {
     treeDataProvider: stageTreeProvider,
     showCollapseAll: true,
   });
-  context.subscriptions.push(stageTreeView);
+  context.subscriptions.push(stageTreeView, stageTreeProvider);
 
   const host = new HostMessenger();
   host.registerHelloHandlers();
