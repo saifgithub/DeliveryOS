@@ -12,6 +12,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         hello: resolve(__dirname, 'src/panels/hello/index.html'),
+        discover: resolve(__dirname, 'src/panels/discover/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
