@@ -1,8 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import { DiscoverSaveRawIdea } from '@deliveryos/contracts';
 import type { RawIdea } from '@deliveryos/contracts';
 import { messenger } from '../../shared/messenger';
+
+const MAX_BYTES = 2_000_000;
+const LARGE_THRESHOLD = 50_000;
+const LINE_PX = 20;
+const MAX_ROWS = 80;
 
 interface Props {
   projectTitle: string;
@@ -15,13 +20,34 @@ export function RawIdeaInput({ projectTitle, rawIdea, onSaved }: Props) {
   const [title, setTitle] = useState(projectTitle);
   const [saving, setSaving] = useState(false);
 
-  const handleSave = async () => {
-    if (!body.trim()) return;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestBody = useRef(body);
+  const latestTitle = useRef(title);
+  latestBody.current = body;
+  latestTitle.current = title;
+
+  useEffect(() => {
+    autosizeTextarea(textareaRef.current);
+  }, []);
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
+  const autosizeTextarea = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, MAX_ROWS * LINE_PX) + 'px';
+  };
+
+  const doSave = async (b: string, t: string) => {
+    if (!b.trim()) return;
     setSaving(true);
     try {
-      const trimmedTitle = title.trim();
+      const trimmedTitle = t.trim();
       const res = await messenger.sendRequest(DiscoverSaveRawIdea, HOST_EXTENSION, {
-        body: body.trim(),
+        body: b.trim(),
         ...(trimmedTitle ? { title: trimmedTitle } : {}),
       });
       onSaved(res.rawIdea);
@@ -32,9 +58,30 @@ export function RawIdeaInput({ projectTitle, rawIdea, onSaved }: Props) {
     }
   };
 
-  const savedAt = rawIdea?.capturedAt
-    ? new Date(rawIdea.capturedAt).toLocaleString()
-    : null;
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    if (val.length > MAX_BYTES) return;
+    setBody(val);
+    autosizeTextarea(e.target);
+
+    const isLarge = val.length > LARGE_THRESHOLD;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!isLarge && val.trim()) {
+      debounceRef.current = setTimeout(
+        () => doSave(latestBody.current, latestTitle.current),
+        1000,
+      );
+    }
+  };
+
+  const handleBlur = () => {
+    if (body.length > LARGE_THRESHOLD && body.trim()) {
+      doSave(latestBody.current, latestTitle.current);
+    }
+  };
+
+  const isLarge = body.length > LARGE_THRESHOLD;
+  const savedAt = rawIdea?.capturedAt ? new Date(rawIdea.capturedAt).toLocaleString() : null;
 
   return (
     <section className="max-w-2xl space-y-5">
@@ -54,18 +101,25 @@ export function RawIdeaInput({ projectTitle, rawIdea, onSaved }: Props) {
         <p className="text-xs text-dos-muted mb-2">
           Describe your idea in your own words — rough is fine. You'll refine it in the next steps.
         </p>
+        {isLarge && (
+          <p className="text-xs text-dos-muted mb-1">
+            Body is large ({(body.length / 1024).toFixed(0)} KB) — saving on blur.
+          </p>
+        )}
         <textarea
+          ref={textareaRef}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={10}
+          onChange={handleChange}
+          onBlur={handleBlur}
           placeholder="What are you trying to build? What problem does it solve?"
-          className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-y font-[var(--vscode-editor-font-family)]"
+          style={{ minHeight: '10rem', overflowY: 'auto' }}
+          className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-none font-[var(--vscode-editor-font-family)]"
         />
       </div>
 
       <div className="flex items-center gap-4">
         <button
-          onClick={handleSave}
+          onClick={() => doSave(body, title)}
           disabled={saving || !body.trim()}
           className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
         >

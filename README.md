@@ -2,7 +2,7 @@
 
 A meta-harness for AI-assisted software delivery. A harness around your harness.
 
-**Status:** Build in progress. Phase A planning complete (PRD v0.3, 14-week BUILD-PLAN, 16 chunk specs, `docs/planning/READY.md` green-light). CHUNK-01 + CHUNK-02 complete as of 2026-05-21 — `npm run package` produces a `deliveryos-0.0.2.vsix` (~65 KB) that installs into VS Code, contributes the activity-bar rocket icon, renders the four-stage tree behind a `Create a project` welcome flow, and exposes a `DeliveryOS: Open Hello (dev smoke test)` command that opens a React + Tailwind webview panel with a CSP-locked round trip to the extension host via `vscode-messenger`. Memory persistence + multi-editor verification land next ([CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md) + [CHUNK-04](docs/planning/chunks/chunk-04-multi-editor-verify.md)).
+**Status:** Build in progress — Phase 1 Week 3 complete. CHUNK-05 (raw idea capture + discovery interview workspace) shipped. `npm run package` produces a `deliveryos-0.0.2.vsix` that installs into VS Code, Cursor, Windsurf, VSCodium, and Antigravity. The extension persists project memory in a local SQLite database, renders a four-stage tree with live DISCOVER children, and opens the Discover panel for the full manual-mode loop: raw idea → AI-generated interview prompt → paste answers back → structured discovery record. PRD generation lands next (CHUNK-06).
 
 ## What this is
 
@@ -90,6 +90,18 @@ DeliveryOS checks GitHub Releases on startup and notifies you when a newer versi
 - **Extension installs but the activity-bar icon doesn't appear.** Reload the window (`Cmd/Ctrl+Shift+P → Developer: Reload Window`). Some editors need a reload before custom activity-bar contributions render.
 - **Antigravity not detected.** Antigravity 1.x ships a CLI at `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` (macOS); add that directory to `PATH` if needed. **Antigravity 2.x dropped the CLI entirely** — the install script now surfaces a specific SKIP reason (`Antigravity 2.x — CLI removed; install manually via app UI`) when the `Antigravity.app` bundle is present without a CLI on `PATH`. To sideload into Antigravity 2.x, open the app → Extensions → `…` menu → "Install from VSIX" and pick the `.vsix` you downloaded.
 - **GitHub rate limit on update check.** Harmless — the check fails silently and you won't see the notification. To suppress entirely, set `deliveryos.checkForUpdates` to `false`.
+
+## Quick Start — manual-mode loop
+
+1. Install the extension and open a workspace.
+2. Click the DeliveryOS rocket icon in the activity bar and create a project.
+3. In the tree, expand **DISCOVER** and click **Raw idea** — or run `DeliveryOS: Open Discover` from the command palette.
+4. Type your raw idea and save. Switch to the **Prompt** tab and click **Generate prompt**.
+5. Copy the prompt and paste it into Claude, ChatGPT, or your AI tool of choice.
+6. Paste the AI's response into the **Answers** tab, click **Parse answers**, then **Save answers**.
+7. The **Summary** tab shows your structured discovery record — ready for PRD generation (CHUNK-06).
+
+<!-- screenshot: docs/assets/discover-panel.png -->
 
 ## Repo layout
 

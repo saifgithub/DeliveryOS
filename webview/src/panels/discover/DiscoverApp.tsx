@@ -25,6 +25,7 @@ export interface DiscoverState {
 
 export function DiscoverApp() {
   const [state, setState] = useState<DiscoverState | null>(null);
+  const [noProject, setNoProject] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('rawIdea');
   const [promptGeneratedThisSession, setPromptGeneratedThisSession] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
@@ -45,7 +46,10 @@ export function DiscoverApp() {
         });
         setActiveTab(res.mode ?? 'rawIdea');
       })
-      .catch((err: unknown) => console.error('DiscoverApp: getInitialState failed', err));
+      .catch((err: unknown) => {
+        console.error('DiscoverApp: getInitialState failed', err);
+        if (!cancelled) setNoProject(true);
+      });
     return () => { cancelled = true; };
   }, []);
 
@@ -74,6 +78,16 @@ export function DiscoverApp() {
   const hasRawIdea = Boolean(state?.rawIdea?.text);
   const hasPrompt = promptGeneratedThisSession || state?.discovery !== null;
   const hasAnswers = (state?.discovery?.answers.length ?? 0) > 0;
+
+  if (noProject) {
+    return (
+      <main className="min-h-screen p-8 bg-vscode-bg text-vscode-fg">
+        <p className="text-sm text-dos-muted">
+          No project open — use the sidebar to create one first.
+        </p>
+      </main>
+    );
+  }
 
   if (!state) {
     return (

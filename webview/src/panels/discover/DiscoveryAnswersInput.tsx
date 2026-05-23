@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import * as Accordion from '@radix-ui/react-accordion';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import { DiscoverParseAnswers, DiscoverSaveAnswers } from '@deliveryos/contracts';
@@ -6,6 +6,11 @@ import type { DiscoveryQuestion, DiscoveryRecord } from '@deliveryos/contracts';
 import type { DiscoveryAnswer } from '@deliveryos/contracts';
 import { ChevronDown } from 'lucide-react';
 import { messenger } from '../../shared/messenger';
+
+const MAX_BYTES = 2_000_000;
+const LARGE_THRESHOLD = 50_000;
+const LINE_PX = 20;
+const MAX_ROWS = 80;
 
 interface Props {
   questions: readonly DiscoveryQuestion[];
@@ -25,12 +30,27 @@ function initCards(
   });
 }
 
+function autosizeTextarea(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, MAX_ROWS * LINE_PX) + 'px';
+}
+
 export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }: Props) {
   const [rawPaste, setRawPaste] = useState('');
   const [cards, setCards] = useState<CardAnswers>(() => initCards(questions, existingDiscovery));
   const [unmatchedText, setUnmatchedText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const pasteTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handlePasteChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    if (val.length > MAX_BYTES) return;
+    setRawPaste(val);
+    autosizeTextarea(e.target);
+  };
 
   const handleParse = async () => {
     if (!rawPaste.trim()) return;
@@ -42,7 +62,7 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
       setUnmatchedText(res.unmatchedText);
       setCards((prev) => {
         const next = [...prev];
-        // Parser returns answers in question order — match by array position with fallback to text match
+        // Parser returns answers in question order — match by text then fall back to position
         res.answers.forEach((parsed: DiscoveryAnswer, idx: number) => {
           const cardIdx = next.findIndex((c) => c.question === parsed.question);
           if (cardIdx !== -1) {
@@ -79,6 +99,7 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
   };
 
   const answeredCount = cards.filter((c) => c.answer.trim()).length;
+  const pasteIsLarge = rawPaste.length > LARGE_THRESHOLD;
 
   return (
     <section className="max-w-2xl space-y-6">
@@ -88,12 +109,18 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
           Copy the AI's answers from your tool and paste them here. Click "Parse" to pre-fill the
           question cards below.
         </p>
+        {pasteIsLarge && (
+          <p className="text-xs text-dos-muted mb-1">
+            Body is large ({(rawPaste.length / 1024).toFixed(0)} KB).
+          </p>
+        )}
         <textarea
+          ref={pasteTextareaRef}
           value={rawPaste}
-          onChange={(e) => setRawPaste(e.target.value)}
-          rows={6}
+          onChange={handlePasteChange}
           placeholder="Paste the AI's discovery interview response here…"
-          className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-y font-[var(--vscode-editor-font-family)]"
+          style={{ minHeight: '6rem', overflowY: 'auto' }}
+          className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-none font-[var(--vscode-editor-font-family)]"
         />
         <button
           onClick={handleParse}

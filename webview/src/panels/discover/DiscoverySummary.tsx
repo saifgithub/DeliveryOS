@@ -1,4 +1,7 @@
+import MarkdownIt from 'markdown-it';
 import type { DiscoveryRecord, DiscoveryQuestion } from '@deliveryos/contracts';
+
+const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
 interface Props {
   discovery: DiscoveryRecord | null;
@@ -43,7 +46,10 @@ export function DiscoverySummary({ discovery, questions }: Props) {
                 </span>
               </div>
               <p className="text-xs text-dos-muted">{answer.question}</p>
-              <p className="text-sm text-vscode-fg whitespace-pre-wrap mt-2">{answer.answer}</p>
+              <div
+                className="text-sm text-vscode-fg mt-2 [&_p]:mb-2 [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_li]:mb-0.5 [&_code]:font-mono [&_code]:text-xs [&_strong]:font-semibold [&_em]:italic"
+                dangerouslySetInnerHTML={{ __html: md.render(answer.answer) }}
+              />
             </div>
           );
         })}
