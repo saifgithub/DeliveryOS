@@ -4,6 +4,78 @@ Older "what just landed" sections from docs/build/BUILD_STATUS.md, newest on top
 
 ---
 
+## DOS:R7  (2026-05-23)
+
+DOS:R7 was a clean three-phase session opened the day after DOS:R6's wrap. The user picked from a 3-option `/start-fresh` prompt: **"Merge bug-fix branch + flip repo private, then CHUNK-05 Day 2"** — the recommended order, because the b004 fix in the bug-fix branch bumps `actions/checkout` + `actions/setup-node` v4 → v5 and should be on `main` before the next release tag. The session executed all three phases without rework; tests stayed at 54 passing throughout.
+
+2 substantive commits on `main` + this wrap. The session's shape was a contrast to DOS:R5 (verification-heavy) and DOS:R6 (one-commit feature push): three discrete phases each in its own scope.
+
+**Commits on `main` (2 substantive + 1 wrap):**
+
+- `f41a697 Merge branch 'claude/bug-fix-20260522-142757' — b001 + b004 fixes (DOS:R7)` — no-ff merge of the 5-commit bug-fix branch carried from DOS:R5. Files touched on the merge: `.github/workflows/release.yml` (Node 22 + actions/*@v5 — b004), `README.md` (small touch-up that rode along), `docs/build/bugs.json` (b001 + b004 → `pending_review`), `scripts/install.sh` + `scripts/install.ps1` (clearer SKIP reason for Antigravity 2.x — b001). +40/−14. After merge: `git worktree remove .claude/worktrees/bug-fix-20260522-142757` + `git branch -d claude/bug-fix-20260522-142757`.
+- `e9add16 feat(discover): CHUNK-05 Day 2 — host wiring + command + serializer (DOS:R7)` — the CHUNK-05 host stack on top of Day 1's pure modules. 6 files (3 new + 3 modified), +286/−1.
+
+**Phase B — repo flipped private** (no commit; remote state change). Single `gh repo edit saifgithub/DeliveryOS --visibility=private --accept-visibility-change-consequences` call. Confirmed via `gh repo view ... --json visibility -q .visibility` returning `PRIVATE`. Side effect: the updater's unauth API call to `api.github.com/repos/saifgithub/DeliveryOS/releases/latest` now returns 404; the activation-path updater fails closed (no user-facing notification). This was code-reviewed during DOS:R5 § E and is acceptable until the repo gets a first real release. The flip was carried over from DOS:R5; DOS:R6 left it gated on b003, which had been accepted by fiat — so DOS:R7 had it unblocked from the start.
+
+**CHUNK-05 Day 2 deliverables (file-by-file):**
+
+- `extension/src/webview/discoverPanel.ts` (new, 59 lines) — `DISCOVER_VIEW_TYPE = 'deliveryos.discover'` + `DISCOVER_TITLE` + `openDiscoverPanel(context, host, mode?)` singleton open/focus. Module-level `pendingMode` slot: set by the open path, consumed once by `consumePendingDiscoverMode()` on the next `DiscoverGetInitialState` handler call. When an already-open panel is reopened with a mode arg, `host.broadcastDiscoverMode(mode)` fires a `discover/setMode` notification to the live webview. Mirrors `helloPanel.ts` line-for-line in structure.
+- `extension/src/webview/messenger.ts` (extended, +166 LOC) — `HostMessenger.registerDiscoverHandlers(deps: DiscoverDeps)` binds the full message surface. Inline `DiscoverDeps` interface (`registry: IProjectRegistry; memoryStore: MemoryStore`). Handlers:
+  - `discover/getInitialState` — reads the active intent via `MemoryStore.read`, returns `{ projectTitle, rawIdea, discovery, questions: DISCOVERY_QUESTIONS_MVP, mode }`. Falls back to an empty `{ projectTitle: '', rawIdea: null, discovery: null, ... }` shape if no active project so Day 3's webview can render an empty state.
+  - `discover/saveRawIdea` — `MemoryStore.update<'intent'>(intentId, { payload: { rawIdea: { text: body, capturedAt: now } } as Partial<IntentPayload>, body, title? })`. Timestamps host-stamped (`Date.now()`) per § 9 step 9. Broadcasts `discover/stateChanged` after commit.
+  - `discover/generatePrompt` — calls `buildDiscoveryPrompt({ projectTitle, rawIdea: intent.payload.rawIdea.text, questions: DISCOVERY_QUESTIONS_MVP })`, returns `{ prompt, generatedAt, questionsSnapshotIds }`.
+  - `discover/copyPrompt` — `vscode.env.clipboard.writeText(params.prompt)` then `{ ok: true as const }`.
+  - `discover/parseAnswers` — pure preview, no write; calls Day 1's `parseAnswers(rawPaste, DISCOVERY_QUESTIONS_MVP)`.
+  - `discover/saveAnswers` — `MemoryStore.update<'intent'>(intentId, { payload: { discovery } as Partial<IntentPayload> })`. `promptSnapshot` is regenerated host-side from the current intent at save time (the save params don't carry it; keeps the snapshot canonical and host-stamped). Broadcasts `discover/stateChanged` after commit.
+  - `discover/setMode` (inbound notification handler) — currently a no-op slot for the webview's tab-switch broadcasts. Future restore-after-reload flows may key off it.
+  - `broadcastDiscoverMode(mode)` — sends `discover/setMode` to `BROADCAST` from `vscode-messenger-common` so any attached webview gets the new mode.
+- `extension/src/serializers/discoverPanelSerializer.ts` (new, 32 lines) — `WebviewPanelSerializer` for restore-on-reload. Mirrors `helloPanelSerializer.ts`. Re-attaches host messenger and re-tracks the panel.
+- `extension/src/commands/openDiscover.ts` (new, 14 lines) — registers `deliveryos.openDiscover` with an optional `mode?: DiscoverMode` arg (used later in chunk-05 § 9 step 20 by tree-item clicks).
+- `extension/src/extension.ts` (+11 lines) — imports + registers the new command + serializer alongside the Hello pair. `registerDiscoverHandlers` is only called when `memoryStore` is available (no-workspace fallback leaves the command registered but handlers absent; Day 3 webview surfaces empty state).
+- `extension/package.json` (+5 lines) — adds `deliveryos.openDiscover` (`title: "DeliveryOS: Open Discover"`, `category: "DeliveryOS"`) to `contributes.commands` mirroring the existing `openHello` entry.
+
+**Spec deviations DOS:R7 carries (flagged in commit body for the audit trail):**
+
+- **File-layout**: chunk-05 § 9 calls the host file `extension/src/panels/discover/discoverHost.ts`. Codebase puts panels under `extension/src/webview/` (`helloPanel.ts`), serializers under `extension/src/serializers/`, and commands under `extension/src/commands/`. Followed codebase convention. Public entry-point names: `openDiscoverPanel` + `registerOpenDiscover` to mirror `openHelloPanel` + `registerOpenHello`. Spec said `registerDiscover`; codebase says `registerOpen<X>`. No user-facing surface affected.
+- **`DiscoveryRecord.promptSnapshot` source**: `DiscoverSaveAnswers` message params don't include `promptSnapshot`. Host regenerates it deterministically from the current intent's `rawIdea.text` + the static `DISCOVERY_QUESTIONS_MVP` at save time. Matches the "host-stamped" principle for timestamps. Alternative was to add `promptSnapshot` to `DiscoverSaveAnswersParams` — would have required a contracts change post-Day-1.
+- **`renderPanelHtml({ entry: 'discover' })` throws until Day 3**: the host calls `renderPanelHtml` faithfully per spec, but no vite manifest entry exists for `discover` yet (that's Day 3 step 18). So opening the panel from the command palette currently throws "vite manifest missing entry". Day 2 verification is therefore typecheck + tests + build green + command/serializer registered — not a live UI smoke. Day 3 will close the loop by adding the manifest entry.
+
+**Notable behavioural changes from this session (not commits):**
+
+- Repo visibility is now **PRIVATE** for the first time since DOS:R5 Phase E. Knock-on: the updater's `api.github.com/repos/saifgithub/DeliveryOS/releases/latest` call returns 404 to unauth clients; the activation-path updater fails closed silently. This is the intended behaviour and was code-reviewed during DOS:R5 § E.
+
+**Open carries-over from DOS:R5/R6 that DOS:R7 cleared:**
+
+- ✅ Bug-fix branch merged (`f41a697`); worktree + branch deleted.
+- ✅ Repo flipped private (`gh repo edit ...`).
+- ⏳ Smoke workspaces under `/tmp/` — still on disk; minor housekeeping.
+- ⏳ Antigravity sideload — still GUI-only on 2.x; b001 fix is now on `main` so `install.sh` surfaces the clearer SKIP message but doesn't change the underlying constraint.
+
+**Carry-overs for DOS:R8 (next session) — ordered by what unblocks what:**
+
+- **CHUNK-05 Day 3 — webview build** — primary work. Add `webview/src/panels/discover/{index.html,main.tsx,DiscoverApp.tsx}` mounting a Radix `Tabs.Root` with four tabs; install `@radix-ui/react-{tabs,accordion,toast,scroll-area,collapsible}` + `lucide-react` into `webview/package.json` and run `npm install` at workspace root. Build `RawIdeaInput.tsx` + `DiscoveryPromptPreview.tsx` + `DiscoveryAnswersInput.tsx` + `DiscoverySummary.tsx`. Add the `panels/discover` entry to `webview/vite.config.ts` so the manifest contains it. Day 3 spec: `docs/planning/chunks/chunk-05-discover-capture.md § 9 Day 3` steps 12-18.
+- **CHUNK-05 Day 4 — tree integration + smoke**: extend the TreeDataProvider with DISCOVER children; wire `MemoryStore.onDidChange` → `_onDidChangeTreeData.fire`; tree-item clicks pass a `mode` arg to `deliveryos.openDiscover`. Hand-test the full loop (idea → save → generate prompt → copy → paste into Claude.ai → paste reply back → save → see summary).
+- **CHUNK-05 Day 5 — polish**: empty states, long-input autosize cap, markdown sanitisation in `DiscoverySummary`, README touch-up with a screenshot.
+- **`/tmp/deliveryos-smoke-r5*/` + `/tmp/release-verify-v2/` + `/tmp/v002-verify/`** cleanup — minor housekeeping; no longer needed.
+- **Optional**: live-verify b001 + b004 fixes (now merged on `main`) by re-running the install script against Antigravity 2.x and tagging a no-op release to confirm the workflow has no Node 20 annotation. If both pass, flip the two bug statuses `pending_review → resolved` in `bugs.json`.
+- **Push commits to `origin/main`** — currently 11 commits ahead (will be 12 after this wrap). User's call whether to push during DOS:R7 wrap or leave for DOS:R8 open.
+
+**Two CHUNK-03 / CHUNK-04 tripwires unchanged (chronic since DOS:R3):**
+
+- **Multi-root workspace support.** MVP picks `workspaceFolders[0]` (CHUNK-03 § 13.6). Revisit if dogfooding hits it.
+- **`SqlJsHost.flush()` debounce.** Current strategy: flush-per-mutation. Tripwire: if `MemoryStore.create()` ever exceeds 100 ms in dogfooding, drop in a debounced `scheduleFlush(250 ms)`.
+
+**Track-O open questions** (CHUNK-03 § 13.9 + CHUNK-05's own §11 risks list). Runtime Zod validation on `payload_json` read; whether to default `memory.sqlite` to gitignored; whether the rebuild-from-markdown command earns a chunk slot. None blocking — defer to a Track-O session.
+
+**Not done this session (deferred):**
+
+- CHUNK-05 Day 3-5 (webview build, tree integration, polish). Sequential; Day 3 is the natural next slice.
+- ESLint / Prettier wiring (chronic carry-over).
+- Smoke workspaces cleanup under `/tmp/` (minor; carries from DOS:R5).
+- Push to `origin/main` (carries to DOS:R8 unless the user pushes between sessions).
+
+---
+
 ## DOS:R6  (2026-05-22)
 
 DOS:R6 was a back-to-back same-day session opened immediately after DOS:R5's wrap, when the user asked "what's blocking CHUNK-04 from being completely done?" — saw the two remaining items were user-UI verification walks (b002 Cursor smoke + b003 Phase E live walk), then said "assume that they are fine and it has been tested for VSC and Antigravity. So let's move with chunk 5." That call closed CHUNK-04 by fiat (both bugs stay `open` in `docs/build/bugs.json` for the record but no longer block scheduling) and unlocked CHUNK-05 work.
