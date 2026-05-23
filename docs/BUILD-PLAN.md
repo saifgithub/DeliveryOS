@@ -35,7 +35,7 @@ Goal: go from a raw idea to a PRD, requirements, and a test spec, inside the ext
 Build the raw idea capture form and the discovery interview workspace. Manual mode: DeliveryOS generates the interview questions as a prompt, the user runs it in their AI tool, pastes answers back. Store the discovery record.
 Done when: a raw idea plus pasted discovery answers produce a stored discovery summary.
 
-**Week 4 (2026-06-15)** — PRD generation and editor.
+**Week 4 (2026-06-15)** — PRD generation and editor. **✅ Done — CHUNK-06 Day 1 ✅ DOS:R11 (contracts: `contracts/src/prd.ts` — 5 message types, `DraftPrd`, `PrdSection`, `PrdParseReport`; `extension/src/prd/sectionSchema.ts` — lenient parser + renderer; `extension/src/prd/promptBuilder.ts` — generate + revise prompts; 3 PRD fixtures + 31 unit tests, 85 total) + Days 2–3+4 ✅ DOS:R11 (memory layer: `MemoryStore.loadPrdParent/upsertPrdParent`; host wiring: `registerPrdHandlers` (5 handlers); `prdPanel.ts` + `prdEditorSerializer.ts` + `openPrdEditor.ts` + `package.json` commands + `extension.ts` wiring; webview: `PrdEditorApp`, `PrdGenerationPrompt`, `SectionEditor` 500ms debounce, `ReviseSectionButton` collapsible; `vite.config.ts` prd-editor entry; DEFINE tree node showing Draft PRD N/8 sections). CHUNK-06 complete.**
 Generate a draft PRD from the discovery summary (manual prompt mode). Build the PRD editor as a webview with editable sections.
 Done when: a discovery summary produces an editable draft PRD.
 
