@@ -19,6 +19,7 @@ export default defineConfig({
           'src/panels/requirements-decompose/index.html',
         ),
         requirements: resolve(__dirname, 'src/panels/requirements/index.html'),
+        'test-designer': resolve(__dirname, 'src/panels/test-designer/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
