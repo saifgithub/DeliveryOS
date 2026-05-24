@@ -62,8 +62,40 @@ export const workspace = {
       }
       throw new FileSystemError('FileNotFound', uri.toString());
     },
+    async rename(
+      from: Uri,
+      to: Uri,
+      options?: { overwrite?: boolean },
+    ): Promise<void> {
+      const bytes = fileStore.get(from.toString());
+      if (!bytes) throw new FileSystemError('FileNotFound', from.toString());
+      if (fileStore.has(to.toString()) && !options?.overwrite) {
+        throw new FileSystemError('FileExists', to.toString());
+      }
+      fileStore.set(to.toString(), bytes);
+      fileStore.delete(from.toString());
+    },
+    async copy(
+      from: Uri,
+      to: Uri,
+      options?: { overwrite?: boolean },
+    ): Promise<void> {
+      const bytes = fileStore.get(from.toString());
+      if (!bytes) throw new FileSystemError('FileNotFound', from.toString());
+      if (fileStore.has(to.toString()) && !options?.overwrite) {
+        throw new FileSystemError('FileExists', to.toString());
+      }
+      fileStore.set(to.toString(), new Uint8Array(bytes));
+    },
   },
 };
+
+export class RelativePattern {
+  constructor(
+    readonly base: WorkspaceFolder | Uri | string,
+    readonly pattern: string,
+  ) {}
+}
 
 export interface ExtensionContext {
   readonly extensionUri: Uri;
