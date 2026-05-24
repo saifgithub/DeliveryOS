@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
+  RequirementsOpenBriefComposer,
+  RequirementsOpenBriefFile,
   RequirementsOpenTestDesigner,
   RequirementsOpenTestSpecFile,
   type Requirement,
@@ -83,6 +85,48 @@ export function RequirementDetail({ requirement, prdSections, onSave, onCancel, 
     }
   };
 
+  const handleComposeBrief = async () => {
+    try {
+      await messenger.sendRequest(RequirementsOpenBriefComposer, HOST_EXTENSION, {
+        requirementEntryId: requirement.entryId,
+      });
+    } catch (err) {
+      console.error('RequirementDetail: openBriefComposer failed', err);
+    }
+  };
+
+  const handleOpenBrief = async (briefEntryId: string) => {
+    try {
+      await messenger.sendRequest(RequirementsOpenBriefComposer, HOST_EXTENSION, {
+        requirementEntryId: requirement.entryId,
+        briefEntryId,
+      });
+    } catch (err) {
+      console.error('RequirementDetail: openBriefComposer (readonly) failed', err);
+    }
+  };
+
+  const handleOpenBriefFile = async (briefEntryId: string) => {
+    try {
+      await messenger.sendRequest(RequirementsOpenBriefFile, HOST_EXTENSION, {
+        briefEntryId,
+      });
+    } catch (err) {
+      console.error('RequirementDetail: openBriefFile failed', err);
+    }
+  };
+
+  const handleComposeNewVersion = async (supersedesEntryId: string) => {
+    try {
+      await messenger.sendRequest(RequirementsOpenBriefComposer, HOST_EXTENSION, {
+        requirementEntryId: requirement.entryId,
+        supersedesEntryId,
+      });
+    } catch (err) {
+      console.error('RequirementDetail: openBriefComposer (supersedes) failed', err);
+    }
+  };
+
   const sourceOptions = prdSections.length > 0 ? prdSections : [requirement.sourcePrdSection];
   const sourceUnrecognised =
     requirement.sourcePrdSection.length > 0 &&
@@ -101,6 +145,12 @@ export function RequirementDetail({ requirement, prdSections, onSave, onCancel, 
             className="px-3 py-1.5 rounded-md border border-dos-accent text-dos-accent text-xs font-medium hover:bg-dos-surface transition-colors"
           >
             Run Test Designer
+          </button>
+          <button
+            onClick={handleComposeBrief}
+            className="px-3 py-1.5 rounded-md border border-dos-accent text-dos-accent text-xs font-medium hover:bg-dos-surface transition-colors"
+          >
+            Compose Execution Brief
           </button>
           <button
             onClick={onCancel}
@@ -215,6 +265,59 @@ export function RequirementDetail({ requirement, prdSections, onSave, onCancel, 
         ) : (
           <div className="rounded-md border border-dashed border-vscode-border bg-vscode-bg p-3 text-xs text-dos-muted">
             No test spec linked yet.
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-dos-muted">Execution briefs</label>
+        {requirement.briefs.length > 0 ? (
+          <ul className="rounded-md border border-vscode-border bg-vscode-bg p-3 space-y-2 text-sm">
+            {requirement.briefs.map((brief) => {
+              const isSuperseded = brief.supersededByEntryId !== undefined;
+              return (
+                <li
+                  key={brief.entryId}
+                  className="flex flex-wrap items-center gap-3 justify-between"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-mono text-xs text-vscode-fg truncate">{brief.id}</span>
+                    <span className="text-xs text-dos-muted">v{brief.version}</span>
+                    <span className="text-xs text-dos-muted">·</span>
+                    <time className="text-xs text-dos-muted">{brief.createdAt}</time>
+                    {isSuperseded && (
+                      <span className="text-xs text-amber-400">· superseded</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <button
+                      onClick={() => handleOpenBrief(brief.entryId)}
+                      className="text-dos-accent hover:underline"
+                    >
+                      Open
+                    </button>
+                    <button
+                      onClick={() => handleOpenBriefFile(brief.entryId)}
+                      className="text-dos-accent hover:underline"
+                    >
+                      Open file
+                    </button>
+                    {!isSuperseded && (
+                      <button
+                        onClick={() => handleComposeNewVersion(brief.entryId)}
+                        className="text-dos-accent hover:underline"
+                      >
+                        Compose new version
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="rounded-md border border-dashed border-vscode-border bg-vscode-bg p-3 text-xs text-dos-muted">
+            No briefs yet — click <strong>Compose Execution Brief</strong> above to start one.
           </div>
         )}
       </div>

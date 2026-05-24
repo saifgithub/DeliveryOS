@@ -37,7 +37,6 @@ async function seedRequirement(store: MemoryStore): Promise<{
         id: 'goals',
         title: 'Goals',
         body: 'Make triage less awful.',
-        present: true,
       },
     ],
   );
