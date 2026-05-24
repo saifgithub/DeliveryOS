@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import { registerOpenDecomposePrd } from './commands/openDecomposePrd';
 import { registerOpenDiscover } from './commands/openDiscover';
 import { registerOpenHello } from './commands/openHello';
 import { registerOpenPrdEditor } from './commands/openPrdEditor';
+import { registerOpenRequirements } from './commands/openRequirements';
 import { registerProjectCreate } from './commands/projectCreate';
 import { registerStagesRefresh } from './commands/stagesRefresh';
 import { CONTEXT_KEYS } from './contextKeys';
@@ -11,15 +13,19 @@ import {
   InMemoryProjectRegistry,
   PersistedProjectRegistry,
 } from './projectRegistry';
+import { decomposePromptPanelSerializer } from './serializers/decomposePromptPanelSerializer';
 import { discoverPanelSerializer } from './serializers/discoverPanelSerializer';
 import { helloPanelSerializer } from './serializers/helloPanelSerializer';
 import { prdEditorSerializer } from './serializers/prdEditorSerializer';
+import { requirementsPanelSerializer } from './serializers/requirementsPanelSerializer';
 import { StageTreeProvider } from './tree/stageTreeProvider';
 import { checkForUpdates } from './updater/checkForUpdates';
+import { DECOMPOSE_VIEW_TYPE, openDecomposePromptPanel } from './webview/decomposePromptPanel';
 import { DISCOVER_VIEW_TYPE } from './webview/discoverPanel';
 import { HELLO_VIEW_TYPE } from './webview/helloPanel';
 import { HostMessenger } from './webview/messenger';
 import { PRD_VIEW_TYPE } from './webview/prdPanel';
+import { REQUIREMENTS_VIEW_TYPE } from './webview/requirementsPanel';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('DeliveryOS activated');
@@ -60,6 +66,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   if (memoryStore) {
     host.registerDiscoverHandlers({ registry, memoryStore });
     host.registerPrdHandlers({ registry, memoryStore });
+    host.registerRequirementsHandlers({
+      registry,
+      memoryStore,
+      openDecomposePanel: () => openDecomposePromptPanel(context, host),
+    });
   }
 
   context.subscriptions.push(
@@ -72,6 +83,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerOpenHello(context, host),
     registerOpenDiscover(context, host),
     registerOpenPrdEditor(context, host),
+    registerOpenRequirements(context, host),
+    registerOpenDecomposePrd(context, host),
     vscode.window.registerWebviewPanelSerializer(
       HELLO_VIEW_TYPE,
       helloPanelSerializer(context, host),
@@ -83,6 +96,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerWebviewPanelSerializer(
       PRD_VIEW_TYPE,
       prdEditorSerializer(context, host),
+    ),
+    vscode.window.registerWebviewPanelSerializer(
+      REQUIREMENTS_VIEW_TYPE,
+      requirementsPanelSerializer(context, host),
+    ),
+    vscode.window.registerWebviewPanelSerializer(
+      DECOMPOSE_VIEW_TYPE,
+      decomposePromptPanelSerializer(context, host),
     ),
   );
 

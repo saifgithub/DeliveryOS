@@ -97,6 +97,16 @@
         "command": "deliveryos.prd.open",
         "title": "DeliveryOS: Open PRD Editor",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.requirements.open",
+        "title": "DeliveryOS: Open Requirements Catalogue",
+        "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.requirements.decompose",
+        "title": "DeliveryOS: Decompose PRD into Requirements",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {

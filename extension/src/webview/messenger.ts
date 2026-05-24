@@ -16,6 +16,14 @@ import {
   PrdPasteDraft,
   PrdReviseSectionPrompt,
   PrdSaveSection,
+  RequirementsChanged,
+  RequirementsDelete,
+  RequirementsFilter,
+  RequirementsGenerateDecomposePrompt,
+  RequirementsList,
+  RequirementsOpenDecomposePanel,
+  RequirementsPasteDecomposed,
+  RequirementsUpdate,
   type DiscoverGetInitialStateResult,
   type DiscoverMode,
   type DiscoveryAnswer,
@@ -23,19 +31,32 @@ import {
   type IntentPayload,
   type PrdSection,
   type RawIdea,
+  type Requirement,
+  type RequirementsCatalogue,
+  type RequirementsListResult,
+  type VerificationStatus,
 } from '@deliveryos/contracts';
 import { parseAnswers } from '../discovery/answersParser';
 import { buildDiscoveryPrompt } from '../discovery/promptBuilder';
 import { DISCOVERY_QUESTIONS_MVP } from '../discovery/questionLibrary';
-import type { MemoryStore } from '../memory/MemoryStore';
+import type { MemoryStore, RequirementItemRecord } from '../memory/MemoryStore';
 import { buildGenerateDraftPrompt, buildReviseSectionPrompt } from '../prd/promptBuilder';
-import { parsePrdMarkdown } from '../prd/sectionSchema';
+import { parsePrdMarkdown, renderPrdMarkdown } from '../prd/sectionSchema';
 import type { IProjectRegistry } from '../projectRegistry';
+import { buildDecomposePrompt } from '../requirements/decompositionPrompt';
+import { parseDecomposed } from '../requirements/parser';
 import { consumePendingDiscoverMode } from './discoverPanel';
 
 export interface DiscoverDeps {
   readonly registry: IProjectRegistry;
   readonly memoryStore: MemoryStore;
+}
+
+export interface RequirementsDeps {
+  readonly registry: IProjectRegistry;
+  readonly memoryStore: MemoryStore;
+  /** Callback the host injects so handlers can open the decompose panel from a webview request. */
+  readonly openDecomposePanel: () => Promise<void>;
 }
 
 export class HostMessenger {
@@ -270,6 +291,125 @@ export class HostMessenger {
       return { ok: true as const, bytesCopied };
     });
 
+  }
+
+  registerRequirementsHandlers(deps: RequirementsDeps): void {
+    const { registry, memoryStore, openDecomposePanel } = deps;
+
+    const verificationStatusFor = (record: RequirementItemRecord): VerificationStatus => {
+      const criteria = record.payload.verificationCriteria;
+      return criteria && criteria.length > 0 ? 'draft' : 'empty';
+    };
+
+    const toRequirement = (record: RequirementItemRecord): Requirement => ({
+      id: record.payload.id,
+      title: record.payload.title,
+      description: record.payload.text,
+      category: record.payload.category,
+      priority: record.payload.priority,
+      sourcePrdSection: record.payload.sourcePrdSection,
+      verificationStatus: verificationStatusFor(record),
+    });
+
+    const broadcastChanged = (
+      source: 'create' | 'update' | 'delete',
+      ids: readonly string[],
+    ): void => {
+      this.messenger.sendNotification(RequirementsChanged, BROADCAST, { source, ids });
+    };
+
+    const buildCatalogue = async (projectId: string): Promise<RequirementsListResult> => {
+      const active = registry.getActive();
+      const targetId = projectId || active?.id;
+      if (!targetId) {
+        return { ok: false as const, reason: 'no-project' };
+      }
+      const prd = await memoryStore.loadPrdParent(targetId);
+      if (!prd) {
+        return { ok: false as const, reason: 'no-prd' };
+      }
+      const records = await memoryStore.listRequirementItems(prd.prdId);
+      const catalogue: RequirementsCatalogue = {
+        prdId: prd.prdId,
+        prdTitle: prd.projectTitle,
+        prdSections: prd.sections.map((s) => s.title),
+        requirements: records.map(toRequirement),
+      };
+      return { ok: true as const, catalogue };
+    };
+
+    this.messenger.onRequest(RequirementsList, async (params) => buildCatalogue(params.projectId));
+
+    this.messenger.onRequest(RequirementsFilter, async (params) => {
+      // MVP: host returns the full catalogue; the webview filters in-memory.
+      // The endpoint exists for forward-compatibility with server-side filtering.
+      return buildCatalogue(params.projectId);
+    });
+
+    this.messenger.onRequest(RequirementsGenerateDecomposePrompt, async (params) => {
+      const active = registry.getActive();
+      const targetId = params.projectId || active?.id;
+      if (!targetId) {
+        return { ok: false as const, reason: 'no-project' as const };
+      }
+      const prd = await memoryStore.loadPrdParent(targetId);
+      if (!prd) {
+        return { ok: false as const, reason: 'no-prd' as const };
+      }
+      const body = renderPrdMarkdown({
+        projectTitle: prd.projectTitle,
+        sections: prd.sections,
+      });
+      const prompt = buildDecomposePrompt({ prd, prdMarkdownBody: body });
+      await vscode.env.clipboard.writeText(prompt);
+      const bytesCopied = new TextEncoder().encode(prompt).length;
+      return { ok: true as const, bytesCopied };
+    });
+
+    this.messenger.onRequest(RequirementsPasteDecomposed, async (params) => {
+      const active = registry.getActive();
+      const targetId = params.projectId || active?.id;
+      if (!targetId) {
+        return { ok: false as const, reason: 'No active project.', raw: params.text };
+      }
+      const prd = await memoryStore.loadPrdParent(targetId);
+      if (!prd) {
+        return { ok: false as const, reason: 'No PRD on file for this project.', raw: params.text };
+      }
+      const parsed = parseDecomposed(params.text);
+      if (!parsed.ok) {
+        return { ok: false as const, reason: parsed.reason, raw: parsed.raw };
+      }
+      const createdIds = await memoryStore.createRequirementItems(prd.prdId, parsed.requirements);
+      broadcastChanged('create', createdIds);
+      const warnings: string[] = [];
+      for (const r of parsed.requirements) {
+        if (r.warnings) warnings.push(...r.warnings);
+      }
+      return {
+        ok: true as const,
+        mode: parsed.mode,
+        createdIds,
+        warnings,
+      };
+    });
+
+    this.messenger.onRequest(RequirementsUpdate, async (params) => {
+      const updated = await memoryStore.updateRequirementItem(params.entryId, params.patch);
+      broadcastChanged('update', [params.entryId]);
+      return { ok: true as const, requirement: toRequirement(updated) };
+    });
+
+    this.messenger.onRequest(RequirementsDelete, async (params) => {
+      await memoryStore.deleteRequirementItem(params.entryId);
+      broadcastChanged('delete', [params.entryId]);
+      return { ok: true as const };
+    });
+
+    this.messenger.onRequest(RequirementsOpenDecomposePanel, async () => {
+      await openDecomposePanel();
+      return { ok: true as const };
+    });
   }
 
   broadcastDiscoverMode(mode: DiscoverMode): void {

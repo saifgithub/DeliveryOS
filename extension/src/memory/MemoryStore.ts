@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import {
+  type DecomposedRequirement,
   type DraftPrd,
   type IntentPayload,
   type LinkKind,
@@ -17,7 +18,9 @@ import {
   type MemoryLink,
   type MemoryType,
   type PrdSection,
+  type RequirementCategory,
   type RequirementPayload,
+  type RequirementPriority,
 } from '@deliveryos/contracts';
 import { renderPrdMarkdown } from '../prd/sectionSchema';
 
@@ -61,6 +64,33 @@ export interface UpdatePatch<T extends MemoryType> {
   readonly title?: string;
   readonly payload?: Partial<MemoryPayloadOfType<T>>;
   readonly body?: string;
+}
+
+/**
+ * Stored shape for a requirement-item row's `payload_json`. Cast through
+ * `RequirementPayload` at the SQL boundary (mirrors the PRD pattern). The
+ * `kind` + `id` discriminators live in payload, NOT in a new column —
+ * honouring CHUNK-03's schema contract.
+ */
+export interface StoredRequirementItemPayload {
+  readonly kind: 'requirement-item';
+  /** User-visible ID. Format: REQ-NNN (3-digit zero-padded; widens to 4+ at 1000+). */
+  readonly id: string;
+  readonly title: string;
+  readonly category: RequirementCategory;
+  readonly priority: RequirementPriority;
+  readonly sourcePrdSection: string;
+  /** Long-form body. Mirrors the on-disk markdown file. */
+  readonly text: string;
+  /** Reserved for CHUNK-08. Absent or empty until the Test Designer runs. */
+  readonly verificationCriteria?: readonly string[];
+}
+
+export interface RequirementItemRecord {
+  readonly entryId: string;
+  readonly payload: StoredRequirementItemPayload;
+  readonly createdAt: number;
+  readonly updatedAt: number;
 }
 
 export class MemoryStore {
@@ -425,6 +455,187 @@ export class MemoryStore {
     };
   }
 
+  // --- Requirement-item CRUD (CHUNK-07) ---------------------------------
+
+  /** List all requirement-item entries that derive from the given PRD. */
+  async listRequirementItems(prdId: string): Promise<RequirementItemRecord[]> {
+    const stmt = this.host.db.prepare(
+      `SELECT e.id, e.title, e.payload_json, e.created_at, e.updated_at
+         FROM memory_entries e
+         JOIN memory_links l ON l.from_id = e.id
+        WHERE e.type = 'requirement'
+          AND json_extract(e.payload_json, '$.kind') = 'requirement-item'
+          AND l.to_id = ?
+          AND l.kind = 'derives-from'
+        ORDER BY json_extract(e.payload_json, '$.id') ASC`,
+    );
+    try {
+      stmt.bind([prdId]);
+      const out: RequirementItemRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as {
+          id: string;
+          title: string;
+          payload_json: string;
+          created_at: number;
+          updated_at: number;
+        };
+        const payload = JSON.parse(row.payload_json) as StoredRequirementItemPayload;
+        out.push({
+          entryId: row.id,
+          payload,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      }
+      return out;
+    } finally {
+      stmt.free();
+    }
+  }
+
+  /**
+   * Batch-create requirement-item entries from a parsed decomposition. The
+   * host assigns sequential `REQ-NNN` IDs starting from the next available
+   * across the entire store (NOT per-PRD — IDs are stable across the project).
+   * Each item gets `derives-from` linked to the PRD.
+   *
+   * Returns the created `entryId`s in input order.
+   */
+  async createRequirementItems(
+    prdId: string,
+    items: readonly DecomposedRequirement[],
+  ): Promise<readonly string[]> {
+    if (items.length === 0) return [];
+    let nextNum = await this.nextRequirementIdNumber();
+    const created: string[] = [];
+    for (const item of items) {
+      const reqId = formatReqId(nextNum++);
+      const storedPayload: StoredRequirementItemPayload = {
+        kind: 'requirement-item',
+        id: reqId,
+        title: item.title,
+        category: item.category,
+        priority: item.priority,
+        sourcePrdSection: item.sourcePrdSection,
+        text: item.description,
+      };
+      const entry = await this.create<'requirement'>({
+        type: 'requirement',
+        title: `${reqId} — ${item.title}`,
+        payload: storedPayload as unknown as RequirementPayload,
+        body: item.description,
+      });
+      await this.link(entry.id, prdId, 'derives-from');
+      created.push(entry.id);
+    }
+    return created;
+  }
+
+  /**
+   * Patch a requirement-item entry. `kind` and `id` (REQ-NNN) are preserved
+   * regardless of the patch contents — the host owns ID assignment.
+   */
+  async updateRequirementItem(
+    entryId: string,
+    patch: {
+      readonly title?: string;
+      readonly description?: string;
+      readonly category?: RequirementCategory;
+      readonly priority?: RequirementPriority;
+      readonly sourcePrdSection?: string;
+    },
+  ): Promise<RequirementItemRecord> {
+    const row = this.selectRowById(entryId);
+    if (!row) {
+      throw new MemoryStoreError('not-found', `No requirement-item ${entryId}`);
+    }
+    const stored = JSON.parse(row.payload_json) as StoredRequirementItemPayload;
+    if (stored.kind !== 'requirement-item') {
+      throw new MemoryStoreError(
+        'type-immutable',
+        `Entry ${entryId} is not a requirement-item (kind=${String(stored.kind)})`,
+      );
+    }
+    const nextStored: StoredRequirementItemPayload = {
+      ...stored,
+      ...(patch.title !== undefined ? { title: patch.title } : {}),
+      ...(patch.description !== undefined ? { text: patch.description } : {}),
+      ...(patch.category !== undefined ? { category: patch.category } : {}),
+      ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+      ...(patch.sourcePrdSection !== undefined ? { sourcePrdSection: patch.sourcePrdSection } : {}),
+    };
+    const nextEntryTitle = `${nextStored.id} — ${nextStored.title}`;
+    const updatePatch: UpdatePatch<'requirement'> = {
+      title: nextEntryTitle,
+      payload: nextStored as unknown as Partial<RequirementPayload>,
+      ...(patch.description !== undefined ? { body: patch.description } : {}),
+    };
+    await this.update<'requirement'>(entryId, updatePatch);
+    const fresh = this.selectRowById(entryId);
+    if (!fresh) throw new MemoryStoreError('not-found', `Entry ${entryId} vanished mid-update`);
+    return {
+      entryId: fresh.id,
+      payload: nextStored,
+      createdAt: fresh.created_at,
+      updatedAt: fresh.updated_at,
+    };
+  }
+
+  /** Delete a requirement-item entry. Removes SQL row, links, and body file. */
+  async deleteRequirementItem(entryId: string): Promise<void> {
+    const row = this.selectRowById(entryId);
+    if (!row) return;
+    const stored = JSON.parse(row.payload_json) as StoredRequirementItemPayload;
+    if (stored.kind !== 'requirement-item') {
+      throw new MemoryStoreError(
+        'type-immutable',
+        `Entry ${entryId} is not a requirement-item (kind=${String(stored.kind)})`,
+      );
+    }
+    const uri = bodyPath(this.workspaceUri, row.type, row.id);
+    this.host.db.exec('BEGIN');
+    try {
+      this.host.db.run(`DELETE FROM memory_links WHERE from_id = ? OR to_id = ?`, [
+        entryId,
+        entryId,
+      ]);
+      this.host.db.run(`DELETE FROM memory_entries WHERE id = ?`, [entryId]);
+      this.host.db.exec('COMMIT');
+    } catch (err) {
+      this.host.db.exec('ROLLBACK');
+      throw err;
+    }
+    await deleteBody(uri);
+    await this.flushOrThrow();
+    this._onDidChangeMemory.fire({ kind: 'update', entryId, entryType: row.type });
+  }
+
+  /** Scan the store for the highest REQ-NNN already assigned. Returns next number to use. */
+  private async nextRequirementIdNumber(): Promise<number> {
+    const stmt = this.host.db.prepare(
+      `SELECT json_extract(payload_json, '$.id') AS rid
+         FROM memory_entries
+        WHERE type = 'requirement'
+          AND json_extract(payload_json, '$.kind') = 'requirement-item'`,
+    );
+    try {
+      stmt.bind([]);
+      let max = 0;
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as { rid: string | null };
+        const match = (row.rid ?? '').match(/^REQ-(\d+)$/);
+        if (match) {
+          const n = Number(match[1]);
+          if (Number.isFinite(n) && n > max) max = n;
+        }
+      }
+      return max + 1;
+    } finally {
+      stmt.free();
+    }
+  }
+
   // --- Internals ---------------------------------------------------------
 
   private selectRowById(id: string): MemoryEntryRow | null {
@@ -463,6 +674,11 @@ function rowToEntry(row: MemoryEntryRow, body: string): MemoryEntry {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   } as MemoryEntry;
+}
+
+function formatReqId(n: number): string {
+  if (n >= 1000) return `REQ-${String(n)}`;
+  return `REQ-${String(n).padStart(3, '0')}`;
 }
 
 function stripFrontmatter(content: string): string {
