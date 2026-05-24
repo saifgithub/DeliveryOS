@@ -4,6 +4,47 @@ Older "what just landed" sections from docs/build/BUILD_STATUS.md, newest on top
 
 ---
 
+## DOS:R11  (2026-05-24)
+
+DOS:R11 was the CHUNK-06 session — full PRD generation + editor implementation. The user's "need to speed up to post something soon" directive from DOS:R10 carried into this session; Days 1+2+3+4+5 were all implemented in a single session run (context was compacted mid-session between Days 1 and 2). 4 substantive commits + 1 docs commit, no rework. Tests went from 54 → 85 passing.
+
+**5 commits on `main`:**
+
+- `09e92b0 feat(prd): CHUNK-06 Day 1 — contracts + pure-module foundation (DOS:R11)` — `contracts/src/prd.ts` (5 message types: `PrdLoad`, `PrdGenerateDraftPrompt`, `PrdPasteDraft`, `PrdSaveSection`, `PrdReviseSectionPrompt`; `DraftPrd`, `PrdSection`, `PrdSectionId`, `PrdParseReport`); `extension/src/prd/sectionSchema.ts` (`PRD_SECTION_DEFINITIONS` verbatim from spec, `parsePrdMarkdown` lenient parser with 20-entry alias map + triple-backtick fence tracking, `renderPrdMarkdown`); `extension/src/prd/promptBuilder.ts` (`buildGenerateDraftPrompt`, `buildReviseSectionPrompt` — pure functions); 3 fixtures + 31 new tests in `extension/test/prd.test.ts`. 23 files total. Tests 54→85.
+- `2732f5b feat(prd): CHUNK-06 Day 2 — memory layer + host wiring (DOS:R11)` — `MemoryStore.loadPrdParent(projectId)` (SQL `json_extract` on `payload_json.kind='prd'` + `payload_json.projectId`); `MemoryStore.upsertPrdParent(intentEntry, sections, existingPrdId?)` (create or update path; link `'derives-from'` on first create; uses `type='requirement'` + `payload.kind='prd'`, NO separate memory type); `registerPrdHandlers(deps)` with all 5 handlers (prd/load uses registry active project + extends result with `projectId+projectTitle`; prd/generateDraftPrompt; prd/pasteDraft; prd/saveSection; prd/reviseSectionPrompt); `prdPanel.ts` + `prdEditorSerializer.ts` + `openPrdEditor.ts`; `package.json` commands (`deliveryos.prd.generate` + `deliveryos.prd.open`); `extension.ts` wiring; `ArtefactNode.commandId/commandArgs` for generic tree command wiring. 8 files, +307/−1.
+- `fba74b8 feat(prd): CHUNK-06 Days 3+4 — webview + tree integration (DOS:R11)` — `PrdLoadResult` extended with `projectId + projectTitle` (so webview bootstraps from one call); full `prd-editor` webview bundle: `PrdEditorApp.tsx` (loading→noProject→empty→parsing→editing state machine using `AppState` discriminated union); `PrdGenerationPrompt.tsx` (copy-prompt button + paste textarea + Import button; 2 MB cap + 50 KB warning); `SectionEditor.tsx` (auto-growing textarea, 500ms debounce → `prd/saveSection`, "Saving…"/"Saved" microcopy); `ReviseSectionButton.tsx` (Radix `Collapsible` instruction panel — Dialog not installed; copies revision prompt to clipboard via `prd/reviseSectionPrompt`; toast: "Paste into your AI tool…"); `vite.config.ts` prd-editor entry; DEFINE tree node ("Draft PRD (N/8 sections)" or "(not started)") with `commandId='deliveryos.prd.open'`; `stageTreeProvider.defineChildren()` + refresh on `requirement` create/update events. 10 files, +592.
+- `647408e feat(prd): CHUNK-06 Day 5 — polish + docs (DOS:R11)` — README status line → Phase 1 Week 4 complete. BUILD-PLAN Week 4 row → ✅ Done with day-by-day trail.
+
+**Key design choices to flag for DOS:R12:**
+
+- **PRD memory type**: `type='requirement'` + `payload.kind === 'prd'`. No `'prd'` in `MEMORY_TYPES`. `contracts/src/memory.ts` was NOT touched this session.
+- **Link kind**: `'derives-from'` (written from prdId → intentId on first create via `upsertPrdParent`).
+- **`PrdLoadResult` extended**: `projectId: string` + `projectTitle: string` added so the webview bootstraps from one call without a separate initial-state message. This slightly exceeds the 5-message spec but avoids a 6th message type.
+- **`ReviseSectionButton` uses Radix `Collapsible`** (installed), not Radix `Dialog` (not in `webview/package.json`). The UX is equivalent for MVP.
+- **SectionEditor debounce is 500ms** (vs. 1s in `RawIdeaInput`) — tighter feedback for section edits.
+- **`payload.discovery` fallback**: `prd/generateDraftPrompt` handler passes `{ promptSnapshot: '', answers: [], completedAt: 0 }` when `payload.discovery === null` so `buildGenerateDraftPrompt` (which expects non-null `DiscoveryRecord`) always gets a valid value.
+
+**Carry-overs from DOS:R10 cleared by DOS:R11:**
+
+- ✅ CHUNK-06 PRD generation + editor — fully shipped.
+
+**Carry-overs from DOS:R10 still standing:**
+
+- ⏳ CHUNK-06 manual smoke (§ 12 done-when bullets) — user-driven; non-blocking CHUNK-07. Open PRD editor → copy generate-PRD prompt → paste into AI → paste draft back → verify 8 sections editable → save → reload → state persists; confirm SQLite row + markdown body agree.
+- ⏳ CHUNK-05 Day 4 manual smoke (steps 21-23) — user-driven; non-blocking.
+- ⏳ Smoke workspaces under `/tmp/` — still on disk; minor housekeeping (carries from DOS:R5).
+- ⏳ b001 + b004 still `pending_review` in `bugs.json` — merged but not live-verified.
+- ⏳ `origin/main` push — now ~22 commits ahead after this wrap. User's call.
+
+**Two CHUNK-03 / CHUNK-04 tripwires unchanged (chronic since DOS:R3):**
+
+- **Multi-root workspace support.** MVP picks `workspaceFolders[0]` (CHUNK-03 § 13.6). Revisit if dogfooding hits it.
+- **`SqlJsHost.flush()` debounce.** Current strategy: flush-per-mutation. Tripwire: if `MemoryStore.create()` ever exceeds 100 ms in dogfooding, drop in a debounced `scheduleFlush(250 ms)`.
+
+**Track-O open questions** (CHUNK-03 § 13.9 + ongoing). Runtime Zod validation on `payload_json` read; whether to default `memory.sqlite` to gitignored; whether the rebuild-from-markdown command earns a chunk slot. None blocking — defer to a Track-O session.
+
+---
+
 ## DOS:R10  (2026-05-24)
 
 DOS:R10 was a focused polish session. The user picked CHUNK-05 Day 5 directly ("lets do day 5, we need to speed up to post something soon"), skipping the Day 4 manual smoke as a carry-over. All six Day 5 scope items landed cleanly in one substantive commit with no rework; the session was the fastest single-chunk Day so far.
