@@ -22,8 +22,16 @@ import {
   RequirementsGenerateDecomposePrompt,
   RequirementsList,
   RequirementsOpenDecomposePanel,
+  RequirementsOpenTestDesigner,
+  RequirementsOpenTestSpecFile,
   RequirementsPasteDecomposed,
   RequirementsUpdate,
+  TestDesignerBootstrap,
+  TestDesignerCancel,
+  TestDesignerCommit,
+  TestDesignerCopyPrompt,
+  TestDesignerGeneratePrompt,
+  TestDesignerPasteResult,
   type DiscoverGetInitialStateResult,
   type DiscoverMode,
   type DiscoveryAnswer,
@@ -32,20 +40,25 @@ import {
   type PrdSection,
   type RawIdea,
   type Requirement,
+  type RequirementSummary,
   type RequirementsCatalogue,
   type RequirementsListResult,
+  type TestDesignerBootstrapResult,
   type VerificationStatus,
 } from '@deliveryos/contracts';
 import { parseAnswers } from '../discovery/answersParser';
 import { buildDiscoveryPrompt } from '../discovery/promptBuilder';
 import { DISCOVERY_QUESTIONS_MVP } from '../discovery/questionLibrary';
-import type { MemoryStore, RequirementItemRecord } from '../memory/MemoryStore';
+import type { MemoryStore, RequirementItemRecord, StoredRequirementItemPayload } from '../memory/MemoryStore';
 import { buildGenerateDraftPrompt, buildReviseSectionPrompt } from '../prd/promptBuilder';
 import { parsePrdMarkdown, renderPrdMarkdown } from '../prd/sectionSchema';
 import type { IProjectRegistry } from '../projectRegistry';
 import { buildDecomposePrompt } from '../requirements/decompositionPrompt';
 import { parseDecomposed } from '../requirements/parser';
+import { buildTestDesignerPrompt } from '../specialists/testDesigner/promptBuilder';
+import { parseTestDesignerResult } from '../specialists/testDesigner/resultParser';
 import { consumePendingDiscoverMode } from './discoverPanel';
+import { consumePendingTestDesignerRequirement } from './testDesignerPanel';
 
 export interface DiscoverDeps {
   readonly registry: IProjectRegistry;
@@ -57,6 +70,13 @@ export interface RequirementsDeps {
   readonly memoryStore: MemoryStore;
   /** Callback the host injects so handlers can open the decompose panel from a webview request. */
   readonly openDecomposePanel: () => Promise<void>;
+  /** Callback the host injects so handlers can open the Test Designer panel for a requirement. */
+  readonly openTestDesignerPanel: (requirementEntryId: string) => Promise<void>;
+}
+
+export interface TestDesignerDeps {
+  readonly registry: IProjectRegistry;
+  readonly memoryStore: MemoryStore;
 }
 
 export class HostMessenger {
@@ -294,7 +314,7 @@ export class HostMessenger {
   }
 
   registerRequirementsHandlers(deps: RequirementsDeps): void {
-    const { registry, memoryStore, openDecomposePanel } = deps;
+    const { registry, memoryStore, openDecomposePanel, openTestDesignerPanel } = deps;
 
     const verificationStatusFor = (record: RequirementItemRecord): VerificationStatus => {
       const criteria = record.payload.verificationCriteria;
@@ -313,7 +333,7 @@ export class HostMessenger {
     });
 
     const broadcastChanged = (
-      source: 'create' | 'update' | 'delete',
+      source: 'create' | 'update' | 'delete' | 'verification-update',
       ids: readonly string[],
     ): void => {
       this.messenger.sendNotification(RequirementsChanged, BROADCAST, { source, ids });
@@ -411,6 +431,167 @@ export class HostMessenger {
       await openDecomposePanel();
       return { ok: true as const };
     });
+
+    this.messenger.onRequest(RequirementsOpenTestDesigner, async (params) => {
+      const requirementRow = await loadRequirementByEntryId(memoryStore, params.requirementEntryId);
+      if (!requirementRow) {
+        return { ok: false as const, reason: 'no-requirement' as const };
+      }
+      await openTestDesignerPanel(params.requirementEntryId);
+      return { ok: true as const };
+    });
+
+    this.messenger.onRequest(RequirementsOpenTestSpecFile, async (params) => {
+      const requirementRow = await loadRequirementByEntryId(memoryStore, params.requirementEntryId);
+      if (!requirementRow) {
+        return { ok: false as const, reason: 'no-requirement' as const };
+      }
+      const testSpec = await memoryStore.getTestSpec(params.requirementEntryId);
+      if (!testSpec) {
+        return { ok: false as const, reason: 'no-test-spec' as const };
+      }
+      const uri = memoryStore.testSpecBodyUri(testSpec.entryId);
+      await vscode.commands.executeCommand('vscode.open', uri);
+      return { ok: true as const };
+    });
+  }
+
+  registerTestDesignerHandlers(deps: TestDesignerDeps): void {
+    const { registry, memoryStore } = deps;
+
+    const broadcastVerificationChanged = (ids: readonly string[]): void => {
+      this.messenger.sendNotification(RequirementsChanged, BROADCAST, {
+        source: 'verification-update',
+        ids,
+      });
+    };
+
+    const loadProjectContext = async (
+      requirementEntryId: string,
+    ): Promise<
+      | {
+          readonly ok: true;
+          readonly requirement: RequirementSummary;
+          readonly assumptions: readonly string[];
+          readonly constraints: readonly string[];
+          readonly projectTitle: string;
+          readonly prdSummary: string;
+        }
+      | { readonly ok: false; readonly reason: 'no-requirement' | 'no-prd' | 'no-project' }
+    > => {
+      const reqRow = await loadRequirementByEntryId(memoryStore, requirementEntryId);
+      if (!reqRow) return { ok: false, reason: 'no-requirement' };
+      const active = registry.getActive();
+      if (!active) return { ok: false, reason: 'no-project' };
+      const prd = await memoryStore.loadPrdParent(active.id);
+      if (!prd) return { ok: false, reason: 'no-prd' };
+      const requirement: RequirementSummary = {
+        entryId: reqRow.entryId,
+        id: reqRow.payload.id,
+        title: reqRow.payload.title,
+        description: reqRow.payload.text,
+        category: reqRow.payload.category,
+        priority: reqRow.payload.priority,
+        sourcePrdSection: reqRow.payload.sourcePrdSection,
+      };
+      const prdEntry = await memoryStore.read(prd.prdId);
+      const prdBody = prdEntry?.body ?? '';
+      return {
+        ok: true,
+        requirement,
+        assumptions: [],
+        constraints: [],
+        projectTitle: prd.projectTitle,
+        prdSummary: firstParagraph(prdBody),
+      };
+    };
+
+    this.messenger.onRequest(
+      TestDesignerBootstrap,
+      async (): Promise<TestDesignerBootstrapResult> => {
+        const requirementEntryId = consumePendingTestDesignerRequirement();
+        if (!requirementEntryId) {
+          return { ok: false as const, reason: 'no-requirement' as const };
+        }
+        const ctx = await loadProjectContext(requirementEntryId);
+        if (!ctx.ok) {
+          return { ok: false as const, reason: ctx.reason };
+        }
+        const existingRecord = await memoryStore.getTestSpec(requirementEntryId);
+        return {
+          ok: true as const,
+          requirement: ctx.requirement,
+          projectTitle: ctx.projectTitle,
+          prdSummary: ctx.prdSummary,
+          existing: existingRecord ? memoryStore.toTestSpec(existingRecord) : null,
+        };
+      },
+    );
+
+    this.messenger.onRequest(TestDesignerGeneratePrompt, async (params) => {
+      const ctx = await loadProjectContext(params.requirementEntryId);
+      if (!ctx.ok) {
+        return { ok: false as const, reason: ctx.reason };
+      }
+      const existingRecord = await memoryStore.getTestSpec(params.requirementEntryId);
+      const existingTestSpec = existingRecord ? memoryStore.toTestSpec(existingRecord) : undefined;
+      const prompt = buildTestDesignerPrompt({
+        requirement: ctx.requirement,
+        projectTitle: ctx.projectTitle,
+        prdSummary: ctx.prdSummary,
+        assumptions: ctx.assumptions,
+        constraints: ctx.constraints,
+        ...(existingTestSpec ? { existingTestSpec } : {}),
+      });
+      return { ok: true as const, prompt };
+    });
+
+    this.messenger.onRequest(TestDesignerCopyPrompt, async (params) => {
+      await vscode.env.clipboard.writeText(params.prompt);
+      const bytesCopied = new TextEncoder().encode(params.prompt).length;
+      return { ok: true as const, bytesCopied };
+    });
+
+    this.messenger.onRequest(TestDesignerPasteResult, async (params) => {
+      const reqRow = await loadRequirementByEntryId(memoryStore, params.requirementEntryId);
+      if (!reqRow) {
+        throw new Error(
+          `testDesigner.pasteResult: no requirement-item ${params.requirementEntryId}`,
+        );
+      }
+      const parse = parseTestDesignerResult(params.raw, { requirementId: reqRow.payload.id });
+      return { ok: true as const, parse };
+    });
+
+    this.messenger.onRequest(TestDesignerCommit, async (params) => {
+      const reqRow = await loadRequirementByEntryId(memoryStore, params.requirementEntryId);
+      if (!reqRow) {
+        return { ok: false as const, reason: `No requirement-item ${params.requirementEntryId}` };
+      }
+      // Host re-parses raw — webview's preview is advisory only.
+      const parse = parseTestDesignerResult(params.raw, { requirementId: reqRow.payload.id });
+      const record = await memoryStore.createOrOverwriteTestSpec({
+        requirementEntryId: params.requirementEntryId,
+        verificationCriteria: parse.verificationCriteria,
+        cases: parse.cases,
+        openQuestions: parse.openQuestions,
+        confidence: parse.confidence,
+        raw: params.raw,
+      });
+      broadcastVerificationChanged([params.requirementEntryId]);
+      return {
+        ok: true as const,
+        testSpecId: record.payload.id,
+        verificationCriteriaCount: record.payload.verificationCriteria.length,
+        caseCount: record.payload.cases.length,
+        confidence: record.payload.confidence,
+      };
+    });
+
+    this.messenger.onNotification(TestDesignerCancel, () => {
+      // Panel-local close signal — host state is committed on Save, so no
+      // additional cleanup is needed here.
+    });
   }
 
   broadcastDiscoverMode(mode: DiscoverMode): void {
@@ -420,4 +601,39 @@ export class HostMessenger {
   attachPanel(panel: vscode.WebviewPanel): void {
     this.messenger.registerWebviewPanel(panel);
   }
+}
+
+async function loadRequirementByEntryId(
+  memoryStore: MemoryStore,
+  entryId: string,
+): Promise<RequirementItemRecord | null> {
+  const entry = await memoryStore.read(entryId);
+  if (!entry || entry.type !== 'requirement') return null;
+  const stored = entry.payload as unknown as StoredRequirementItemPayload;
+  if (stored.kind !== 'requirement-item') return null;
+  return {
+    entryId: entry.id,
+    payload: stored,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+function firstParagraph(markdown: string): string {
+  const body = markdown.trim();
+  if (body.length === 0) return '';
+  const lines = body.split(/\r?\n/);
+  const paragraph: string[] = [];
+  for (const line of lines) {
+    if (/^#{1,6}\s+/.test(line)) {
+      if (paragraph.length > 0) break;
+      continue;
+    }
+    if (line.trim().length === 0) {
+      if (paragraph.length > 0) break;
+      continue;
+    }
+    paragraph.push(line.trim());
+  }
+  return paragraph.join(' ');
 }

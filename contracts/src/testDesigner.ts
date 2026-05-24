@@ -97,9 +97,12 @@ export interface TestDesignerParseResult {
 
 // --- Wire messages (webview ↔ host, all request/response unless noted) ----
 
-export interface TestDesignerBootstrapParams {
-  readonly requirementEntryId: string;
-}
+/**
+ * Bootstrap has no params — the host resolves the active requirement from a
+ * module-level pending-holder populated by the panel-open command (mirrors
+ * `consumePendingDiscoverMode` in the Discover flow).
+ */
+export type TestDesignerBootstrapParams = Record<string, never>;
 
 export type TestDesignerBootstrapResult =
   | {

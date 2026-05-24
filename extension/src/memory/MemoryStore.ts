@@ -21,6 +21,12 @@ import {
   type RequirementCategory,
   type RequirementPayload,
   type RequirementPriority,
+  type TestCase,
+  type TestScenario,
+  type TestSpec,
+  type TestSpecConfidence,
+  type TestSpecPayload,
+  type VerificationCriterion,
 } from '@deliveryos/contracts';
 import { renderPrdMarkdown } from '../prd/sectionSchema';
 
@@ -89,6 +95,39 @@ export interface StoredRequirementItemPayload {
 export interface RequirementItemRecord {
   readonly entryId: string;
   readonly payload: StoredRequirementItemPayload;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+/**
+ * Stored shape for a `type='test-spec'` row's `payload_json`. CHUNK-08
+ * extends the minimum stable `TestSpecPayload` shape (`requirementId` +
+ * `scenarios`) with extra Test Designer fields via the cast-through
+ * pattern. `scenarios[]` is populated from `cases[]` so downstream
+ * consumers honour the contracts-level contract.
+ */
+export interface StoredTestSpecPayload {
+  readonly kind: 'test-spec';
+  /** User-visible memory-entry id; e.g. "TS-REQ-002". */
+  readonly id: string;
+  /** User-visible parent requirement id; e.g. "REQ-002". */
+  readonly requirementUserId: string;
+  /** Required by `TestSpecPayload` — SQLite UUID of the parent requirement entry. */
+  readonly requirementId: string;
+  /** Required by `TestSpecPayload`. Derived from `cases[]` at write time. */
+  readonly scenarios: readonly TestScenario[];
+  /** CHUNK-08 canonical representation (read-back side). */
+  readonly cases: readonly TestCase[];
+  readonly verificationCriteria: readonly VerificationCriterion[];
+  readonly openQuestions: readonly string[];
+  readonly confidence: TestSpecConfidence;
+}
+
+export interface TestSpecRecord {
+  readonly entryId: string;
+  readonly title: string;
+  readonly body: string;
+  readonly payload: StoredTestSpecPayload;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
@@ -611,6 +650,173 @@ export class MemoryStore {
     this._onDidChangeMemory.fire({ kind: 'update', entryId, entryType: row.type });
   }
 
+  // --- Test-spec CRUD (CHUNK-08) ----------------------------------------
+
+  /**
+   * Look up the test-spec linked from a Requirement via `has-test-spec`.
+   * Returns null when no edge exists.
+   */
+  async getTestSpec(requirementEntryId: string): Promise<TestSpecRecord | null> {
+    const stmt = this.host.db.prepare(
+      `SELECT e.id, e.title, e.payload_json, e.created_at, e.updated_at
+         FROM memory_entries e
+         JOIN memory_links l ON l.to_id = e.id
+        WHERE e.type = 'test-spec'
+          AND l.from_id = ?
+          AND l.kind = 'has-test-spec'
+        LIMIT 1`,
+    );
+    try {
+      stmt.bind([requirementEntryId]);
+      if (!stmt.step()) return null;
+      const row = stmt.getAsObject() as unknown as {
+        id: string;
+        title: string;
+        payload_json: string;
+        created_at: number;
+        updated_at: number;
+      };
+      const payload = JSON.parse(row.payload_json) as StoredTestSpecPayload;
+      const uri = bodyPath(this.workspaceUri, 'test-spec', row.id);
+      const stored = await readBody(uri);
+      const body = stripFrontmatter(stored ?? '');
+      return {
+        entryId: row.id,
+        title: row.title,
+        body,
+        payload,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      };
+    } finally {
+      stmt.free();
+    }
+  }
+
+  /**
+   * Create or overwrite the test-spec for a given Requirement entry. On
+   * overwrite, the previous entry + links + markdown body are removed in a
+   * single tx, then the new row + body + link are written.
+   *
+   * Also patches the parent Requirement's `verificationCriteria` field
+   * (plain-string list — `RequirementPayload.verificationCriteria` is
+   * `readonly string[]`) via the underlying `update<'requirement'>` path.
+   *
+   * Returns the freshly-stored test-spec record.
+   */
+  async createOrOverwriteTestSpec(args: {
+    readonly requirementEntryId: string;
+    /** Parsed criteria — the host re-parses raw on every commit. */
+    readonly verificationCriteria: readonly VerificationCriterion[];
+    readonly cases: readonly TestCase[];
+    readonly openQuestions: readonly string[];
+    readonly confidence: TestSpecConfidence;
+    /** AI's verbatim markdown response — stored as the entry body. */
+    readonly raw: string;
+  }): Promise<TestSpecRecord> {
+    const requirementRow = this.selectRowById(args.requirementEntryId);
+    if (!requirementRow) {
+      throw new MemoryStoreError(
+        'not-found',
+        `No requirement entry ${args.requirementEntryId}`,
+      );
+    }
+    const reqStored = JSON.parse(requirementRow.payload_json) as StoredRequirementItemPayload;
+    if (reqStored.kind !== 'requirement-item') {
+      throw new MemoryStoreError(
+        'type-immutable',
+        `Entry ${args.requirementEntryId} is not a requirement-item`,
+      );
+    }
+
+    // Overwrite path: drop any prior test-spec for this requirement.
+    const existing = await this.getTestSpec(args.requirementEntryId);
+    if (existing) {
+      const existingUri = bodyPath(this.workspaceUri, 'test-spec', existing.entryId);
+      this.host.db.exec('BEGIN');
+      try {
+        this.host.db.run(`DELETE FROM memory_links WHERE from_id = ? OR to_id = ?`, [
+          existing.entryId,
+          existing.entryId,
+        ]);
+        this.host.db.run(`DELETE FROM memory_entries WHERE id = ?`, [existing.entryId]);
+        this.host.db.exec('COMMIT');
+      } catch (err) {
+        this.host.db.exec('ROLLBACK');
+        throw err;
+      }
+      await deleteBody(existingUri);
+    }
+
+    // Create the new test-spec entry. Use the generic memory id generator
+    // (UUID with `test-spec-` prefix); store the human-visible TS-<reqId>
+    // separately in `payload.id`. Tree + URI use the SQLite row id.
+    const scenarios: TestScenario[] = args.cases.map((c) => ({
+      id: c.id,
+      description: c.title,
+      steps: [...c.bullets],
+      expected: [],
+    }));
+    const testSpecUserId = formatTestSpecId(reqStored.id);
+    const storedPayload: StoredTestSpecPayload = {
+      kind: 'test-spec',
+      id: testSpecUserId,
+      requirementUserId: reqStored.id,
+      requirementId: args.requirementEntryId,
+      scenarios,
+      cases: [...args.cases],
+      verificationCriteria: [...args.verificationCriteria],
+      openQuestions: [...args.openQuestions],
+      confidence: args.confidence,
+    };
+    const entryTitle = `${testSpecUserId} — ${reqStored.title}`;
+    const created = await this.create<'test-spec'>({
+      type: 'test-spec',
+      title: entryTitle,
+      payload: storedPayload as unknown as TestSpecPayload,
+      body: args.raw,
+    });
+    await this.link(args.requirementEntryId, created.id, 'has-test-spec');
+
+    // Patch the parent requirement: write the plain-string verification
+    // criteria (canonical `RequirementPayload.verificationCriteria` shape).
+    const nextReqPayload: StoredRequirementItemPayload = {
+      ...reqStored,
+      verificationCriteria: args.verificationCriteria.map((vc) => vc.text),
+    };
+    await this.update<'requirement'>(args.requirementEntryId, {
+      payload: nextReqPayload as unknown as Partial<RequirementPayload>,
+    });
+
+    // Round-trip the test-spec record to read the freshly-persisted timestamps.
+    const fresh = await this.getTestSpec(args.requirementEntryId);
+    if (!fresh) {
+      throw new MemoryStoreError('not-found', `Test-spec for ${args.requirementEntryId} vanished mid-create`);
+    }
+    return fresh;
+  }
+
+  /** Project a stored test-spec record to the contracts-level `TestSpec` shape. */
+  toTestSpec(record: TestSpecRecord): TestSpec {
+    return {
+      id: record.payload.id,
+      requirementEntryId: record.payload.requirementId,
+      requirementId: record.payload.requirementUserId,
+      title: record.title,
+      cases: record.payload.cases,
+      openQuestions: record.payload.openQuestions,
+      raw: record.body,
+      confidence: record.payload.confidence,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+    };
+  }
+
+  /** Find the on-disk URI for the test-spec markdown body, by SQLite row id. */
+  testSpecBodyUri(testSpecEntryId: string): vscode.Uri {
+    return bodyPath(this.workspaceUri, 'test-spec', testSpecEntryId);
+  }
+
   /** Scan the store for the highest REQ-NNN already assigned. Returns next number to use. */
   private async nextRequirementIdNumber(): Promise<number> {
     const stmt = this.host.db.prepare(
@@ -679,6 +885,10 @@ function rowToEntry(row: MemoryEntryRow, body: string): MemoryEntry {
 function formatReqId(n: number): string {
   if (n >= 1000) return `REQ-${String(n)}`;
   return `REQ-${String(n).padStart(3, '0')}`;
+}
+
+function formatTestSpecId(requirementUserId: string): string {
+  return `TS-${requirementUserId}`;
 }
 
 function stripFrontmatter(content: string): string {

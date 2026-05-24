@@ -107,6 +107,11 @@
         "command": "deliveryos.requirements.decompose",
         "title": "DeliveryOS: Decompose PRD into Requirements",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.requirements.runTestDesigner",
+        "title": "DeliveryOS: Run Test Designer",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {
