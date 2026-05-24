@@ -342,11 +342,19 @@ export class HostMessenger {
           ? [...record.payload.verificationCriteria]
           : [],
         testSpec: testSpecSummary,
+        // Populated by CHUNK-09 Day 4 once briefs are stored. Until then,
+        // every requirement reports zero linked Execution Briefs.
+        briefs: [],
       };
     };
 
     const broadcastChanged = (
-      source: 'create' | 'update' | 'delete' | 'verification-update',
+      source:
+        | 'create'
+        | 'update'
+        | 'delete'
+        | 'verification-update'
+        | 'execution-update',
       ids: readonly string[],
     ): void => {
       this.messenger.sendNotification(RequirementsChanged, BROADCAST, { source, ids });

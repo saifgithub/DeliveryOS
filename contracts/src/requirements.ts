@@ -32,6 +32,24 @@ export interface RequirementTestSpecSummary {
   readonly caseTitles: readonly string[];
 }
 
+/**
+ * Lightweight summary of an Execution Brief (CHUNK-09) attached to a
+ * requirement via `derives-from`. Populated by the host on `requirements/list`;
+ * the detail panel renders one entry per saved brief, ordered by `version`.
+ */
+export interface RequirementBriefDigest {
+  /** SQLite row id of the brief entry. Used for opening the markdown file. */
+  readonly entryId: string;
+  /** User-visible brief id; e.g. 'brief_01HXYZ...'. */
+  readonly id: string;
+  /** v1, v2, ... — assigned in `created_at` ascending order. */
+  readonly version: number;
+  /** ISO 8601 of `locked_at`. */
+  readonly createdAt: string;
+  /** Entry id of a newer brief that supersedes this one, if any. */
+  readonly supersededByEntryId?: string;
+}
+
 export interface Requirement {
   /** Internal SQLite row id (UUID). Used for `requirements/update` + `requirements/delete`. */
   readonly entryId: string;
@@ -55,6 +73,11 @@ export interface Requirement {
    * `null` when no `has-test-spec` link exists.
    */
   readonly testSpec: RequirementTestSpecSummary | null;
+  /**
+   * Execution Briefs derived from this requirement (CHUNK-09). Ordered by
+   * version ascending (v1 first). Empty array when no briefs exist yet.
+   */
+  readonly briefs: readonly RequirementBriefDigest[];
 }
 
 /**
@@ -161,6 +184,33 @@ export type RequirementsOpenTestSpecFileResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: 'no-test-spec' | 'no-requirement' };
 
+export interface RequirementsOpenBriefComposerParams {
+  readonly requirementEntryId: string;
+  /**
+   * When set, open the composer in read-only mode for an existing brief.
+   * Omitted ⇒ fresh draft for a brand-new brief on the requirement.
+   */
+  readonly briefEntryId?: string;
+  /**
+   * When set, open the composer in draft mode pre-seeded as a revision of
+   * the given brief id (sets `supersedes` in the new brief's frontmatter).
+   * Mutually exclusive with `briefEntryId`.
+   */
+  readonly supersedesEntryId?: string;
+}
+
+export type RequirementsOpenBriefComposerResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'no-requirement' | 'no-brief' };
+
+export interface RequirementsOpenBriefFileParams {
+  readonly briefEntryId: string;
+}
+
+export type RequirementsOpenBriefFileResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'no-brief' };
+
 export interface RequirementsGenerateDecomposePromptParams {
   readonly projectId: string;
 }
@@ -187,9 +237,16 @@ export type RequirementsPasteDecomposedResult =
  * Push event fired by the host whenever a requirement-item entry mutates.
  * `'verification-update'` is fired by CHUNK-08 when a Test Designer commit
  * lands verification criteria + a linked test-spec onto the requirement.
+ * `'execution-update'` is fired by CHUNK-09 when a brief is saved against
+ * a requirement (catalogue refresh repopulates the Briefs column).
  */
 export interface RequirementsChangedParams {
-  readonly source: 'create' | 'update' | 'delete' | 'verification-update';
+  readonly source:
+    | 'create'
+    | 'update'
+    | 'delete'
+    | 'verification-update'
+    | 'execution-update';
   readonly ids: readonly string[];
 }
 
@@ -223,6 +280,16 @@ export const RequirementsOpenTestSpecFile: RequestType<
   RequirementsOpenTestSpecFileParams,
   RequirementsOpenTestSpecFileResult
 > = { method: 'requirements/openTestSpecFile' };
+
+export const RequirementsOpenBriefComposer: RequestType<
+  RequirementsOpenBriefComposerParams,
+  RequirementsOpenBriefComposerResult
+> = { method: 'requirements/openBriefComposer' };
+
+export const RequirementsOpenBriefFile: RequestType<
+  RequirementsOpenBriefFileParams,
+  RequirementsOpenBriefFileResult
+> = { method: 'requirements/openBriefFile' };
 
 export const RequirementsGenerateDecomposePrompt: RequestType<
   RequirementsGenerateDecomposePromptParams,
