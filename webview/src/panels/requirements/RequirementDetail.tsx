@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react';
-import type {
-  Requirement,
-  RequirementCategory,
-  RequirementPriority,
+import { HOST_EXTENSION } from 'vscode-messenger-common';
+import {
+  RequirementsOpenTestDesigner,
+  RequirementsOpenTestSpecFile,
+  type Requirement,
+  type RequirementCategory,
+  type RequirementPriority,
 } from '@deliveryos/contracts';
+import { messenger } from '../../shared/messenger';
 
 interface Props {
   requirement: Requirement;
@@ -59,6 +63,26 @@ export function RequirementDetail({ requirement, prdSections, onSave, onCancel, 
     }
   };
 
+  const handleRunTestDesigner = async () => {
+    try {
+      await messenger.sendRequest(RequirementsOpenTestDesigner, HOST_EXTENSION, {
+        requirementEntryId: requirement.entryId,
+      });
+    } catch (err) {
+      console.error('RequirementDetail: openTestDesigner failed', err);
+    }
+  };
+
+  const handleOpenTestSpecFile = async () => {
+    try {
+      await messenger.sendRequest(RequirementsOpenTestSpecFile, HOST_EXTENSION, {
+        requirementEntryId: requirement.entryId,
+      });
+    } catch (err) {
+      console.error('RequirementDetail: openTestSpecFile failed', err);
+    }
+  };
+
   const sourceOptions = prdSections.length > 0 ? prdSections : [requirement.sourcePrdSection];
   const sourceUnrecognised =
     requirement.sourcePrdSection.length > 0 &&
@@ -71,12 +95,20 @@ export function RequirementDetail({ requirement, prdSections, onSave, onCancel, 
           <p className="text-xs font-mono text-dos-muted">{requirement.id}</p>
           <h2 className="text-base font-semibold text-vscode-fg">Edit requirement</h2>
         </div>
-        <button
-          onClick={onCancel}
-          className="text-xs text-dos-muted hover:text-vscode-fg transition-colors"
-        >
-          Close
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRunTestDesigner}
+            className="px-3 py-1.5 rounded-md border border-dos-accent text-dos-accent text-xs font-medium hover:bg-dos-surface transition-colors"
+          >
+            Run Test Designer
+          </button>
+          <button
+            onClick={onCancel}
+            className="text-xs text-dos-muted hover:text-vscode-fg transition-colors"
+          >
+            Close
+          </button>
+        </div>
       </header>
 
       <div className="space-y-2">
@@ -146,9 +178,45 @@ export function RequirementDetail({ requirement, prdSections, onSave, onCancel, 
 
       <div className="space-y-2">
         <label className="block text-xs font-medium text-dos-muted">Verification criteria</label>
-        <div className="rounded-md border border-dashed border-vscode-border bg-vscode-bg p-3 text-xs text-dos-muted">
-          Awaiting Test Designer (CHUNK-08).
-        </div>
+        {requirement.verificationCriteria.length > 0 ? (
+          <ul className="rounded-md border border-vscode-border bg-vscode-bg p-3 text-sm list-disc pl-6 space-y-1">
+            {requirement.verificationCriteria.map((vc, i) => (
+              <li key={i}>{vc}</li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-md border border-dashed border-vscode-border bg-vscode-bg p-3 text-xs text-dos-muted">
+            No criteria yet — click <strong>Run Test Designer</strong> above to generate them.
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-dos-muted">Test specification</label>
+        {requirement.testSpec ? (
+          <div className="rounded-md border border-vscode-border bg-vscode-bg p-3 space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-mono text-vscode-fg">{requirement.testSpec.id}</p>
+              <button
+                onClick={handleOpenTestSpecFile}
+                className="text-xs text-dos-accent hover:underline"
+              >
+                Open file
+              </button>
+            </div>
+            {requirement.testSpec.caseTitles.length > 0 && (
+              <ul className="text-xs text-dos-muted list-disc pl-4 space-y-0.5">
+                {requirement.testSpec.caseTitles.map((title, i) => (
+                  <li key={i}>{title}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed border-vscode-border bg-vscode-bg p-3 text-xs text-dos-muted">
+            No test spec linked yet.
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 pt-2">

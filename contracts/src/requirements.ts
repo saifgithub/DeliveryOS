@@ -21,6 +21,17 @@ export type RequirementPriority = 'must' | 'should' | 'could';
  */
 export type VerificationStatus = 'empty' | 'draft' | 'approved';
 
+/**
+ * Lightweight summary of a linked Test Specification (CHUNK-08).
+ * Populated by the host when a `has-test-spec` link exists; `null` otherwise.
+ */
+export interface RequirementTestSpecSummary {
+  /** User-visible test-spec id; e.g. 'TS-REQ-002'. */
+  readonly id: string;
+  /** Test case headings — just enough for the detail panel to list. */
+  readonly caseTitles: readonly string[];
+}
+
 export interface Requirement {
   /** Internal SQLite row id (UUID). Used for `requirements/update` + `requirements/delete`. */
   readonly entryId: string;
@@ -34,6 +45,16 @@ export interface Requirement {
   /** Heading text of the PRD section this was derived from, e.g. 'Goals'. */
   readonly sourcePrdSection: string;
   readonly verificationStatus: VerificationStatus;
+  /**
+   * Verification criteria — plain-string list populated by CHUNK-08's Test
+   * Designer. Empty array when no criteria have been written yet.
+   */
+  readonly verificationCriteria: readonly string[];
+  /**
+   * Linked Test Specification, if CHUNK-08 has run for this requirement.
+   * `null` when no `has-test-spec` link exists.
+   */
+  readonly testSpec: RequirementTestSpecSummary | null;
 }
 
 /**

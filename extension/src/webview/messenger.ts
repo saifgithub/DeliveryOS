@@ -321,16 +321,29 @@ export class HostMessenger {
       return criteria && criteria.length > 0 ? 'draft' : 'empty';
     };
 
-    const toRequirement = (record: RequirementItemRecord): Requirement => ({
-      entryId: record.entryId,
-      id: record.payload.id,
-      title: record.payload.title,
-      description: record.payload.text,
-      category: record.payload.category,
-      priority: record.payload.priority,
-      sourcePrdSection: record.payload.sourcePrdSection,
-      verificationStatus: verificationStatusFor(record),
-    });
+    const toRequirement = async (record: RequirementItemRecord): Promise<Requirement> => {
+      const testSpec = await memoryStore.getTestSpec(record.entryId);
+      const testSpecSummary = testSpec
+        ? {
+            id: testSpec.payload.id,
+            caseTitles: testSpec.payload.cases.map((c) => `${c.id} — ${c.title}`),
+          }
+        : null;
+      return {
+        entryId: record.entryId,
+        id: record.payload.id,
+        title: record.payload.title,
+        description: record.payload.text,
+        category: record.payload.category,
+        priority: record.payload.priority,
+        sourcePrdSection: record.payload.sourcePrdSection,
+        verificationStatus: verificationStatusFor(record),
+        verificationCriteria: record.payload.verificationCriteria
+          ? [...record.payload.verificationCriteria]
+          : [],
+        testSpec: testSpecSummary,
+      };
+    };
 
     const broadcastChanged = (
       source: 'create' | 'update' | 'delete' | 'verification-update',
@@ -350,11 +363,12 @@ export class HostMessenger {
         return { ok: false as const, reason: 'no-prd' };
       }
       const records = await memoryStore.listRequirementItems(prd.prdId);
+      const requirements: Requirement[] = await Promise.all(records.map(toRequirement));
       const catalogue: RequirementsCatalogue = {
         prdId: prd.prdId,
         prdTitle: prd.projectTitle,
         prdSections: prd.sections.map((s) => s.title),
-        requirements: records.map(toRequirement),
+        requirements,
       };
       return { ok: true as const, catalogue };
     };
@@ -418,7 +432,7 @@ export class HostMessenger {
     this.messenger.onRequest(RequirementsUpdate, async (params) => {
       const updated = await memoryStore.updateRequirementItem(params.entryId, params.patch);
       broadcastChanged('update', [params.entryId]);
-      return { ok: true as const, requirement: toRequirement(updated) };
+      return { ok: true as const, requirement: await toRequirement(updated) };
     });
 
     this.messenger.onRequest(RequirementsDelete, async (params) => {
