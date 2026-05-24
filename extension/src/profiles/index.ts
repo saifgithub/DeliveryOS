@@ -16,3 +16,7 @@ export {
   writeFileAtomic,
 } from './managedBlock';
 export type { ManagedBlockAction, ManagedBlockPlan, VscodeFsNamespace, VscodeUri } from './managedBlock';
+export { renderBrief } from './render';
+export { computeSuggestedUpdates } from './suggestedUpdates';
+export type { WorkspaceFileReader } from './suggestedUpdates';
+export { CLAUDE_MD_BODY, AGENTS_MD_BODY, CLAUDE_SETTINGS_STUB } from './bodies';
