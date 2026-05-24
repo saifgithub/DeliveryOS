@@ -19,7 +19,7 @@ tracks:
   O:
     label: "Documentation"
     handover_path: docs/planning/PLANNING_STATUS.md
-    history_path: docs/planning/PLANNING_HISTORY.md
+    history_dir: docs/planning/history/
     # project_plan_path omitted — PLANNING_STATUS.md absorbs backlog
     # sanity_checks: none
     # bug_list: disabled
@@ -27,7 +27,7 @@ tracks:
   R:
     label: "Development"
     handover_path: docs/build/BUILD_STATUS.md
-    history_path: docs/build/BUILD_HISTORY.md
+    history_dir: docs/build/history/
     project_plan_path: docs/BUILD-PLAN.md   # static 14-week roadmap, separate from rolling BUILD_STATUS.md
     sanity_checks:
       - name: "clean working tree"
@@ -46,7 +46,7 @@ tracks:
   P:
     label: "Project Management"
     handover_path: docs/pm/PM_STATUS.md
-    history_path: docs/pm/PM_HISTORY.md
+    history_dir: docs/pm/history/
     # project_plan_path omitted — PM_STATUS.md absorbs backlog
     # sanity_checks: none
     # bug_list: disabled
