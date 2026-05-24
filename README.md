@@ -2,7 +2,7 @@
 
 A meta-harness for AI-assisted software delivery. A harness around your harness.
 
-**Status:** Build in progress — Phase 1 Week 4 complete. CHUNK-06 (PRD generation + editor) shipped. `npm run package` produces a `deliveryos-0.0.2.vsix` that installs into VS Code, Cursor, Windsurf, VSCodium, and Antigravity. The extension persists project memory in a local SQLite database, renders a four-stage tree with DISCOVER and DEFINE children, opens the Discover panel for the raw-idea → discovery loop, and opens the PRD Editor for the manual-mode PRD flow: copy generate-PRD prompt → paste AI draft → parse into 8 editable sections → save per-section with debounced autosave → revise individual sections with AI. Requirements catalogue lands next (CHUNK-07).
+**Status:** Build in progress — Phase 1 Week 5 complete. CHUNK-07 (requirements catalogue) shipped. `npm run package` produces a `deliveryos-0.0.2.vsix` that installs into VS Code, Cursor, Windsurf, VSCodium, and Antigravity. The extension persists project memory in a local SQLite database, renders a four-stage tree with DISCOVER and DEFINE children (Draft PRD + Requirements group), opens the Discover panel for the raw-idea → discovery loop, opens the PRD Editor for the manual-mode PRD flow, and opens the Requirements Catalogue + Decompose-PRD panel for the PRD → requirements decomposition flow: copy decompose prompt → paste AI response (JSON or markdown-table) → parse + create REQ-NNN rows → filter/sort/edit/delete in the catalogue. Test Designer (CHUNK-08) lands next.
 
 ## What this is
 

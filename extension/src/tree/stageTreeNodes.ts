@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { DiscoverMode } from '@deliveryos/contracts';
+import type { DiscoverMode, RequirementPriority } from '@deliveryos/contracts';
 import { STAGE_DEFS } from './stageDefinitions';
 
 export type StageId = 'discover' | 'define' | 'execute' | 'verify';
@@ -26,7 +26,30 @@ export interface ArtefactNode {
   readonly commandArgs?: unknown[];
 }
 
-export type StageTreeNode = StageNode | ArtefactNode;
+export interface RequirementsGroupNode {
+  readonly kind: 'requirements-group';
+  readonly stageId: 'define';
+  readonly prdId: string;
+  readonly displayName: string;
+  readonly description: string;
+  readonly iconId: string;
+}
+
+export interface RequirementItemNode {
+  readonly kind: 'requirement-item';
+  readonly stageId: 'define';
+  readonly entryId: string;
+  readonly reqId: string;
+  readonly title: string;
+  readonly priority: RequirementPriority;
+  readonly iconId: string;
+}
+
+export type StageTreeNode =
+  | StageNode
+  | ArtefactNode
+  | RequirementsGroupNode
+  | RequirementItemNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -81,5 +104,37 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
       }
       return item;
     }
+    case 'requirements-group': {
+      const item = new vscode.TreeItem(
+        node.displayName,
+        vscode.TreeItemCollapsibleState.Collapsed,
+      );
+      item.contextValue = 'deliveryos.requirements.group';
+      item.description = node.description;
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `${node.displayName} — ${node.description}`;
+      return item;
+    }
+    case 'requirement-item': {
+      const item = new vscode.TreeItem(
+        truncate(`${node.reqId} — ${node.title}`, 60),
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.requirement.item';
+      item.description = node.priority;
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `${node.reqId} (${node.priority}) — ${node.title}`;
+      item.command = {
+        command: 'deliveryos.requirements.open',
+        title: 'Open Requirements',
+        arguments: [{ selectedId: node.reqId }],
+      };
+      return item;
+    }
   }
+}
+
+function truncate(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return text.slice(0, max - 1) + '…';
 }

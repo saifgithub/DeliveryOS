@@ -4,6 +4,8 @@ import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
   RequirementsGenerateDecomposePrompt,
   RequirementsPasteDecomposed,
+  type RequirementCategory,
+  type RequirementPriority,
 } from '@deliveryos/contracts';
 import { messenger } from '../../shared/messenger';
 
@@ -158,7 +160,15 @@ export function DecomposePromptApp() {
           </section>
 
           {phase.phase === 'parseError' && (
-            <ManualAddFallback reason={phase.reason} raw={phase.raw} />
+            <ManualAddFallback
+              reason={phase.reason}
+              raw={phase.raw}
+              onAdded={(count) => {
+                showToast(`Created ${count} requirement${count === 1 ? '' : 's'}.`);
+                setPhase({ phase: 'idle' });
+                setResult({ mode: 'json', createdCount: count, warnings: [] });
+              }}
+            />
           )}
 
           {result && (
@@ -198,20 +208,155 @@ export function DecomposePromptApp() {
   );
 }
 
-function ManualAddFallback({ reason, raw }: { reason: string; raw: string }) {
-  // Placeholder UX — Day 5 polishes the manual-add editor.
+interface ManualRow {
+  title: string;
+  description: string;
+  category: RequirementCategory;
+  priority: RequirementPriority;
+  sourcePrdSection: string;
+}
+
+function blankRow(): ManualRow {
+  return {
+    title: '',
+    description: '',
+    category: 'functional',
+    priority: 'should',
+    sourcePrdSection: '',
+  };
+}
+
+function ManualAddFallback({
+  reason,
+  raw,
+  onAdded,
+}: {
+  reason: string;
+  raw: string;
+  onAdded: (count: number) => void;
+}) {
+  const [rows, setRows] = useState<ManualRow[]>([blankRow()]);
+  const [submitting, setSubmitting] = useState(false);
+
+  const updateRow = (idx: number, patch: Partial<ManualRow>) => {
+    setRows((prev) => prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  };
+
+  const handleSubmit = async () => {
+    const usable = rows.filter((r) => r.title.trim().length > 0);
+    if (usable.length === 0) return;
+    setSubmitting(true);
+    try {
+      // Wrap into JSON so the host's parseDecomposed accepts it on the first
+      // pass without round-tripping through user paste again.
+      const payload = JSON.stringify(usable);
+      const res = await messenger.sendRequest(RequirementsPasteDecomposed, HOST_EXTENSION, {
+        projectId: '',
+        text: payload,
+      });
+      if (res.ok) {
+        onAdded(res.createdIds.length);
+      } else {
+        // Shouldn't happen — manual rows are pre-shaped.
+        console.error('ManualAddFallback: paste failed', res.reason);
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
-    <section className="space-y-2 border border-vscode-border rounded-md p-4 bg-dos-surface">
-      <h2 className="text-base font-semibold text-vscode-fg">Manual add</h2>
-      <p className="text-sm text-dos-muted">{reason}</p>
+    <section className="space-y-3 border border-vscode-border rounded-md p-4 bg-dos-surface">
+      <header className="space-y-1">
+        <h2 className="text-base font-semibold text-vscode-fg">Add manually</h2>
+        <p className="text-xs text-dos-muted">{reason}</p>
+      </header>
       <details className="text-xs text-dos-muted">
         <summary>Show raw paste ({raw.length} chars)</summary>
         <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap font-mono">{raw}</pre>
       </details>
-      <p className="text-xs text-dos-muted">
-        Tip: clean up the response (often the AI adds prose around the code block) and use{' '}
-        <em>Parse and create</em> again.
-      </p>
+      <div className="space-y-3">
+        {rows.map((row, idx) => (
+          <div
+            key={idx}
+            className="border border-vscode-border rounded-md p-3 space-y-2 bg-vscode-bg"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono text-dos-muted">Row {idx + 1}</span>
+              {rows.length > 1 && (
+                <button
+                  onClick={() => setRows((prev) => prev.filter((_, i) => i !== idx))}
+                  className="text-xs text-dos-muted hover:text-red-400"
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            <input
+              type="text"
+              placeholder="Title"
+              value={row.title}
+              onChange={(e) => updateRow(idx, { title: e.target.value })}
+              className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-2 py-1.5 text-sm outline-none focus:border-vscode-focusBorder"
+            />
+            <textarea
+              placeholder="Description"
+              rows={2}
+              value={row.description}
+              onChange={(e) => updateRow(idx, { description: e.target.value })}
+              className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-2 py-1.5 text-sm outline-none focus:border-vscode-focusBorder resize-y font-mono"
+            />
+            <div className="grid grid-cols-3 gap-2">
+              <select
+                value={row.category}
+                onChange={(e) =>
+                  updateRow(idx, { category: e.target.value as RequirementCategory })
+                }
+                className="rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-2 py-1 text-xs"
+              >
+                <option value="functional">Functional</option>
+                <option value="non-functional">Non-functional</option>
+              </select>
+              <select
+                value={row.priority}
+                onChange={(e) =>
+                  updateRow(idx, { priority: e.target.value as RequirementPriority })
+                }
+                className="rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-2 py-1 text-xs"
+              >
+                <option value="must">Must</option>
+                <option value="should">Should</option>
+                <option value="could">Could</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Source PRD section"
+                value={row.sourcePrdSection}
+                onChange={(e) => updateRow(idx, { sourcePrdSection: e.target.value })}
+                className="rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-2 py-1 text-xs outline-none focus:border-vscode-focusBorder"
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setRows((prev) => [...prev, blankRow()])}
+          className="px-3 py-1.5 rounded-md border border-vscode-border text-xs text-vscode-fg hover:bg-vscode-bg transition-colors"
+        >
+          Add row
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={submitting || rows.every((r) => r.title.trim().length === 0)}
+          className="px-4 py-1.5 rounded-md bg-dos-accent text-white text-xs font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+        >
+          {submitting ? 'Creating…' : 'Create rows'}
+        </button>
+        <span className="text-xs text-dos-muted">
+          Tip: you can also clean up the original paste and try parsing again above.
+        </span>
+      </div>
     </section>
   );
 }

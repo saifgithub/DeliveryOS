@@ -6,6 +6,8 @@ import { IProjectRegistry } from '../projectRegistry';
 import { STAGE_DEFS } from './stageDefinitions';
 import {
   ArtefactNode,
+  RequirementItemNode,
+  RequirementsGroupNode,
   StageTreeNode,
   stageDefToNode,
   toTreeItem,
@@ -82,6 +84,9 @@ export class StageTreeProvider
     if (element.kind === 'stage' && element.stageId === 'define') {
       return this.defineChildren(active.id);
     }
+    if (element.kind === 'requirements-group') {
+      return this.requirementsGroupChildren(element.prdId);
+    }
     return [];
   }
 
@@ -92,13 +97,15 @@ export class StageTreeProvider
     this._onDidChangeTreeData.dispose();
   }
 
-  private async defineChildren(projectId: string): Promise<ArtefactNode[]> {
+  private async defineChildren(
+    projectId: string,
+  ): Promise<(ArtefactNode | RequirementsGroupNode)[]> {
     const prd = await this.memoryStore?.loadPrdParent(projectId);
     const sectionCount = prd
       ? prd.sections.filter((s) => s.body.trim().length > 0).length
       : 0;
     const started = prd !== null && prd !== undefined;
-    return [
+    const nodes: (ArtefactNode | RequirementsGroupNode)[] = [
       {
         kind: 'artefact',
         stageId: 'define',
@@ -114,6 +121,39 @@ export class StageTreeProvider
         commandArgs: [],
       },
     ];
+    if (prd && this.memoryStore) {
+      const items = await this.memoryStore.listRequirementItems(prd.prdId);
+      nodes.push({
+        kind: 'requirements-group',
+        stageId: 'define',
+        prdId: prd.prdId,
+        displayName: 'Requirements',
+        description: items.length === 0 ? '(not started)' : `${items.length} items`,
+        iconId: items.length === 0 ? 'circle-outline' : 'checklist',
+      });
+    }
+    return nodes;
+  }
+
+  private async requirementsGroupChildren(
+    prdId: string,
+  ): Promise<RequirementItemNode[]> {
+    if (!this.memoryStore) return [];
+    const items = await this.memoryStore.listRequirementItems(prdId);
+    return items.map((record) => ({
+      kind: 'requirement-item' as const,
+      stageId: 'define' as const,
+      entryId: record.entryId,
+      reqId: record.payload.id,
+      title: record.payload.title,
+      priority: record.payload.priority,
+      iconId:
+        record.payload.priority === 'must'
+          ? 'circle-filled'
+          : record.payload.priority === 'should'
+            ? 'circle-large-outline'
+            : 'circle-outline',
+    }));
   }
 
   private async discoverChildren(intentId: string): Promise<ArtefactNode[]> {
