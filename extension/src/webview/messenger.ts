@@ -13,6 +13,15 @@ import {
   ProfileComputeUpdates,
   ProfilePreview,
   ProfileSelect,
+  HandoffApplyGitignoreTemplate,
+  HandoffError,
+  HandoffResultObserved,
+  HandoffRunWithClaudeCode,
+  HandoffRunWithCodex,
+  HandoffTerminalClosed,
+  HandoffWritten,
+  type HandoffApplyGitignoreResult,
+  type HandoffRunResult,
   DiscoverCopyPrompt,
   DiscoverGeneratePrompt,
   DiscoverGetInitialState,
@@ -104,10 +113,25 @@ import {
 } from '../profiles';
 import type {
   HarnessProfile,
+  ProfileName as HarnessProfileName,
   SuggestedUpdate,
   VscodeFsNamespace,
   WorkspaceFileReader,
 } from '../profiles';
+import {
+  renderContextPackage,
+  renderMemorySummary,
+  renderTestSpecification,
+  renderVerificationChecklist,
+} from '../brief/handoffSiblings';
+import { HandoffWriter } from '../handoff/writer';
+import { TerminalLauncher } from '../handoff/terminalLauncher';
+import { ResultWatcher } from '../handoff/resultWatcher';
+import {
+  applyGitignoreBlock,
+  gitignoreState,
+} from '../handoff/gitignoreTemplate';
+import type { TestSpecMemory, RequirementMemory } from '@deliveryos/contracts';
 import { buildTestDesignerPrompt } from '../specialists/testDesigner/promptBuilder';
 import { parseTestDesignerResult } from '../specialists/testDesigner/resultParser';
 import { consumePendingBriefRequest } from './briefComposerPanel';
@@ -151,7 +175,16 @@ export interface ProfileDeps {
   readonly workspaceState: vscode.Memento;
 }
 
+export interface HandoffDeps {
+  readonly registry: IProjectRegistry;
+  readonly memoryStore: MemoryStore;
+  readonly workspace: vscode.WorkspaceFolder;
+  /** Per-project flag store for the `.gitignore` first-write prompt. */
+  readonly globalState: vscode.Memento;
+}
+
 const LAST_USED_PROFILE_KEY = 'deliveryos.profiles.lastUsed';
+const GITIGNORE_PROMPTED_KEY_PREFIX = 'deliveryos.handoff.gitignorePromptedFor.';
 
 export class HostMessenger {
   readonly messenger = new Messenger({ ignoreHiddenViews: false });
@@ -1068,6 +1101,133 @@ export class HostMessenger {
     );
   }
 
+  registerHandoffHandlers(deps: HandoffDeps): vscode.Disposable {
+    const { registry, memoryStore, workspace, globalState } = deps;
+
+    const writer = new HandoffWriter(workspace);
+    const launcher = new TerminalLauncher();
+    const watcher = new ResultWatcher(workspace);
+
+    // Forward result-watcher events as webview notifications. CHUNK-12 will
+    // also subscribe to `watcher.onResult` directly to parse + persist
+    // Result Memory; CHUNK-11's job is to fire the event.
+    const watcherSub = watcher.onResult((event) => {
+      this.messenger.sendNotification(HandoffResultObserved, BROADCAST, {
+        briefId: event.briefId,
+        handoffTimestamp: event.handoffTimestamp,
+        resultUri: event.resultUri.toString(),
+        contentSha256: event.contentSha256,
+        observedAt: event.observedAt,
+        kind: event.kind,
+      });
+    });
+
+    const launcherSub = launcher.onClose((event) => {
+      this.messenger.sendNotification(HandoffTerminalClosed, BROADCAST, {
+        briefId: event.briefId,
+        handoffTimestamp: event.handoffTimestamp,
+        exitCode: event.exitCode,
+        reason: event.reason,
+      });
+    });
+
+    const runHandler = async (
+      profileName: HarnessProfileName,
+      briefId: string,
+    ): Promise<HandoffRunResult> => {
+      try {
+        const brief = await memoryStore.getBrief(briefId);
+        if (!brief) {
+          this.messenger.sendNotification(HandoffError, BROADCAST, {
+            briefId,
+            message: 'Brief not found in memory.',
+          });
+          return { ok: false as const, reason: 'no-brief' as const };
+        }
+        const snapshot = await buildHandoffSnapshot(memoryStore, registry, brief);
+        const writeResult = await writer.write(snapshot);
+        const profile = getProfile(profileName);
+
+        // Fire .gitignore opt-in once per project on first write.
+        void promptGitignoreIfNeeded({
+          workspace,
+          globalState,
+          projectId: snapshot.projectId,
+        });
+
+        watcher.registerExpectedHandoff(
+          writeResult.timestamp,
+          writeResult.briefHistoryUri,
+          briefId,
+        );
+        launcher.launch({
+          profile,
+          workspace,
+          handoffTimestamp: writeResult.timestamp,
+          briefId,
+        });
+
+        this.messenger.sendNotification(HandoffWritten, BROADCAST, {
+          briefId,
+          handoffTimestamp: writeResult.timestamp,
+          briefHistoryUri: writeResult.briefHistoryUri.toString(),
+          profileName,
+        });
+
+        return {
+          ok: true as const,
+          handoffTimestamp: writeResult.timestamp,
+          briefHistoryUri: writeResult.briefHistoryUri.toString(),
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        void vscode.window.showErrorMessage(`DeliveryOS handoff failed: ${message}`);
+        this.messenger.sendNotification(HandoffError, BROADCAST, { briefId, message });
+        return { ok: false as const, reason: 'write-failed' as const, error: message };
+      }
+    };
+
+    this.messenger.onRequest(HandoffRunWithClaudeCode, (params) =>
+      runHandler('claude-code', params.briefId),
+    );
+    this.messenger.onRequest(HandoffRunWithCodex, (params) =>
+      runHandler('codex', params.briefId),
+    );
+
+    this.messenger.onRequest(
+      HandoffApplyGitignoreTemplate,
+      async (_params): Promise<HandoffApplyGitignoreResult> => {
+        try {
+          const stateBefore = await gitignoreState(workspace);
+          if (stateBefore.kind === 'present-differs') {
+            const pick = await vscode.window.showWarningMessage(
+              'Overwrite the existing DeliveryOS-managed block in .gitignore?',
+              { modal: true, detail: 'The current block was hand-edited or out of date.' },
+              'Apply',
+              'Cancel',
+            );
+            if (pick !== 'Apply') return { ok: false as const, reason: 'cancelled' as const };
+          }
+          const plan = await applyGitignoreBlock(workspace);
+          return { ok: true as const, action: plan.action };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { ok: false as const, reason: 'write-failed' as const, error: message };
+        }
+      },
+    );
+
+    const owned: vscode.Disposable = {
+      dispose: () => {
+        watcherSub.dispose();
+        launcherSub.dispose();
+        watcher.dispose();
+        launcher.dispose();
+      },
+    };
+    return owned;
+  }
+
   broadcastDiscoverMode(mode: DiscoverMode): void {
     this.messenger.sendNotification(DiscoverSetMode, BROADCAST, { mode });
   }
@@ -1296,3 +1456,133 @@ function makeWorkspaceFileReader(workspaceRoot: vscode.Uri): WorkspaceFileReader
 
 /** Re-export for adjacent host code that needs the brief record shape. */
 export type { BriefRecord };
+
+// --- CHUNK-11 handoff-handler helpers ------------------------------------
+
+async function buildHandoffSnapshot(
+  memoryStore: MemoryStore,
+  registry: IProjectRegistry,
+  brief: BriefRecord,
+): Promise<import('@deliveryos/contracts').HandoffSnapshot> {
+  const parsed = parseBriefMarkdown(brief.body);
+  const parsedBrief: ExecutionBrief = parsed.brief;
+
+  const requirementEntryId = brief.payload.requirementEntryId;
+  const requirementUserId = brief.payload.requirementUserId;
+  const requirementRecord = requirementEntryId
+    ? await loadRequirementByEntryId(memoryStore, requirementEntryId)
+    : null;
+  const requirementTitle =
+    requirementRecord?.payload.title ?? `Requirement ${requirementUserId}`;
+
+  // Synthesize a RequirementMemory-shaped envelope for the renderers — they
+  // only access `id` and `title` (codebase is null in MVP).
+  const requirement: RequirementMemory = {
+    id: requirementUserId,
+    type: 'requirement',
+    title: requirementTitle,
+    body: '',
+    payload: {
+      category: requirementRecord?.payload.category ?? 'functional',
+      priority: requirementRecord?.payload.priority ?? 'should',
+      text: requirementRecord?.payload.text ?? requirementTitle,
+    },
+    createdAt: requirementRecord?.createdAt ?? Date.now(),
+    updatedAt: requirementRecord?.updatedAt ?? Date.now(),
+  };
+
+  const contextPackageMd = renderContextPackage(requirement, null, parsedBrief);
+  const verificationChecklistMd = renderVerificationChecklist(parsedBrief);
+
+  const linkedEntries: Array<{ id: string; type: string; title: string }> = [];
+  linkedEntries.push({
+    id: requirementUserId,
+    type: 'requirement',
+    title: requirementTitle,
+  });
+
+  // Best-effort: pull the linked test-spec body for renderTestSpecification.
+  let testSpecMd = '';
+  let testSpec: TestSpecMemory | null = null;
+  if (requirementEntryId) {
+    const tsRecord = await memoryStore.getTestSpec(requirementEntryId);
+    if (tsRecord) {
+      testSpec = {
+        id: tsRecord.payload.id,
+        type: 'test-spec',
+        title: tsRecord.title,
+        body: tsRecord.body,
+        payload: {
+          requirementId: requirementUserId,
+          scenarios: tsRecord.payload.scenarios.map((s) => ({
+            id: s.id,
+            description: s.description,
+            steps: s.steps,
+            expected: s.expected,
+          })),
+        },
+        createdAt: tsRecord.createdAt,
+        updatedAt: tsRecord.updatedAt,
+      };
+      linkedEntries.push({ id: testSpec.id, type: 'test-spec', title: testSpec.title });
+    }
+  }
+  testSpecMd = testSpec
+    ? renderTestSpecification(testSpec)
+    : '# Test Specification\n\n_(No test specification linked to this requirement.)_\n';
+
+  const memorySummaryMd = renderMemorySummary({
+    brief: parsedBrief,
+    requirement,
+    linkedEntries,
+  });
+
+  // Resolve project id from the brief payload or fall back to active project.
+  const projectId = brief.payload.projectId || registry.getActive()?.id || '';
+
+  return {
+    executionBriefMd: brief.body,
+    contextPackageMd,
+    testSpecificationMd: testSpecMd,
+    verificationChecklistMd,
+    memorySummaryMd,
+    briefId: brief.entryId,
+    projectId,
+  };
+}
+
+async function promptGitignoreIfNeeded(args: {
+  workspace: vscode.WorkspaceFolder;
+  globalState: vscode.Memento;
+  projectId: string;
+}): Promise<void> {
+  const { workspace, globalState, projectId } = args;
+  const flagKey = `${GITIGNORE_PROMPTED_KEY_PREFIX}${projectId}`;
+  if (globalState.get<boolean>(flagKey)) return;
+
+  const snapshot = await gitignoreState(workspace);
+  if (snapshot.kind === 'present-matching') {
+    // Block already exists and matches — silently mark as prompted.
+    await globalState.update(flagKey, true);
+    return;
+  }
+
+  const pick = await vscode.window.showInformationMessage(
+    'DeliveryOS can add 8 lines to your .gitignore so the regenerated handoff pointers do not show up in every commit. The history/ audit trail will still be committed.',
+    'Apply',
+    'Skip',
+    "Don't ask again",
+  );
+  if (pick === 'Apply') {
+    try {
+      await applyGitignoreBlock(workspace);
+      await globalState.update(flagKey, true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      void vscode.window.showErrorMessage(`DeliveryOS: failed to update .gitignore — ${message}`);
+    }
+  } else if (pick === "Don't ask again") {
+    await globalState.update(flagKey, true);
+  }
+  // 'Skip' (or dismiss) leaves the flag unset so we ask again next handoff.
+}

@@ -9,6 +9,10 @@ import {
   BriefEditList,
   BriefEditSection,
   BriefSave,
+  HandoffError,
+  HandoffResultObserved,
+  HandoffTerminalClosed,
+  HandoffWritten,
   ProfileApplyUpdate,
   ProfileBootstrap,
   ProfileComputeUpdates,
@@ -17,6 +21,7 @@ import {
   type BriefSectionId,
   type BriefValidation,
   type ExecutionBriefDraft,
+  type HandoffRunResult,
   type HarnessProfileWire,
   type ProfileName,
   type RenderedBriefWire,
@@ -30,6 +35,7 @@ import { SaveAndLockButton } from './SaveAndLockButton';
 import { ProfilePicker } from './ProfilePicker';
 import { RenderPreview } from './RenderPreview';
 import { SuggestedUpdatesTab } from './SuggestedUpdatesTab';
+import { RunHarnessButtons } from './RunHarnessButtons';
 
 type ComposerState =
   | { readonly status: 'loading' }
@@ -77,6 +83,11 @@ export function BriefComposerApp() {
   const [updates, setUpdates] = useState<readonly SuggestedUpdateWire[]>([]);
   const [updatesLoading, setUpdatesLoading] = useState(false);
   const [applyingFile, setApplyingFile] = useState<string | null>(null);
+
+  // CHUNK-11 handoff state.
+  const [handoffInFlight, setHandoffInFlight] = useState<'none' | 'claude-code' | 'codex'>('none');
+  const [handoffStatus, setHandoffStatus] = useState<string | null>(null);
+  const [handoffError, setHandoffError] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -130,6 +141,33 @@ export function BriefComposerApp() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Subscribe to handoff notifications (host → webview). Following the
+  // existing webview pattern (DiscoverApp / RequirementsApp), subscriptions
+  // live for the panel's lifetime — no explicit unsubscribe.
+  useEffect(() => {
+    messenger.onNotification(HandoffWritten, (params) => {
+      setHandoffStatus(
+        `Handoff written (${params.handoffTimestamp}). Press Enter in the terminal to run ${params.profileName}.`,
+      );
+      setHandoffError(null);
+    });
+    messenger.onNotification(HandoffResultObserved, (params) => {
+      setHandoffStatus(
+        `result.md observed (${params.kind}, sha256 ${params.contentSha256.slice(0, 8)}…).`,
+      );
+    });
+    messenger.onNotification(HandoffTerminalClosed, (params) => {
+      setHandoffStatus(
+        `Terminal closed — ${params.reason}${
+          typeof params.exitCode === 'number' ? ` (exit ${params.exitCode})` : ''
+        }.`,
+      );
+    });
+    messenger.onNotification(HandoffError, (params) => {
+      setHandoffError(params.message);
+    });
   }, []);
 
   // Fetch profile-aware preview + suggested updates whenever the brief draft or profile changes.
@@ -336,12 +374,26 @@ export function BriefComposerApp() {
       updates={updates}
       updatesLoading={updatesLoading}
       applyingFile={applyingFile}
+      handoffInFlight={handoffInFlight}
+      handoffStatus={handoffStatus}
+      handoffError={handoffError}
       onProfileChange={handleProfileChange}
       onApplyUpdate={handleApplyUpdate}
       onSectionChange={handleSectionChange}
       onListChange={handleListChange}
       onSave={handleSave}
       onCopyPreview={handleCopyPreview}
+      onHandoffStart={(profile) => {
+        setHandoffInFlight(profile);
+        setHandoffStatus(null);
+        setHandoffError(null);
+      }}
+      onHandoffFinish={(_profile, res) => {
+        setHandoffInFlight('none');
+        if (!res.ok) {
+          setHandoffError(res.error ?? res.reason);
+        }
+      }}
       showToast={showToast}
       toastOpen={toastOpen}
       setToastOpen={setToastOpen}
@@ -361,12 +413,20 @@ interface ReadyViewProps {
   readonly updates: readonly SuggestedUpdateWire[];
   readonly updatesLoading: boolean;
   readonly applyingFile: string | null;
+  readonly handoffInFlight: 'none' | 'claude-code' | 'codex';
+  readonly handoffStatus: string | null;
+  readonly handoffError: string | null;
   readonly onProfileChange: (name: ProfileName) => void;
   readonly onApplyUpdate: (file: string) => void;
   readonly onSectionChange: (id: BriefSectionId, body: string) => Promise<void>;
   readonly onListChange: (list: 'allowed' | 'forbidden', globs: readonly string[]) => Promise<void>;
   readonly onSave: () => Promise<void>;
   readonly onCopyPreview: () => Promise<void>;
+  readonly onHandoffStart: (profile: 'claude-code' | 'codex') => void;
+  readonly onHandoffFinish: (
+    profile: 'claude-code' | 'codex',
+    result: HandoffRunResult,
+  ) => void;
   readonly showToast: (msg: string) => void;
   readonly toastOpen: boolean;
   readonly setToastOpen: (open: boolean) => void;
@@ -384,12 +444,17 @@ function ReadyView({
   updates,
   updatesLoading,
   applyingFile,
+  handoffInFlight,
+  handoffStatus,
+  handoffError,
   onProfileChange,
   onApplyUpdate,
   onSectionChange,
   onListChange,
   onSave,
   onCopyPreview,
+  onHandoffStart,
+  onHandoffFinish,
   toastOpen,
   setToastOpen,
   toastMsg,
@@ -535,6 +600,17 @@ function ReadyView({
                 />
               </Tabs.Content>
             </Tabs.Root>
+
+            {isReadOnly && (
+              <RunHarnessButtons
+                briefId={draft.frontmatter.brief_id}
+                inFlight={handoffInFlight}
+                onStart={onHandoffStart}
+                onFinish={onHandoffFinish}
+                lastResult={handoffStatus}
+                lastError={handoffError}
+              />
+            )}
           </section>
         </div>
 

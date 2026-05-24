@@ -92,6 +92,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         workspaceRoot: workspaceFolder.uri,
         workspaceState: context.workspaceState,
       });
+      const handoffDisposable = host.registerHandoffHandlers({
+        registry,
+        memoryStore,
+        workspace: workspaceFolder,
+        globalState: context.globalState,
+      });
+      context.subscriptions.push(handoffDisposable);
     }
   }
 
