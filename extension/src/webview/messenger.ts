@@ -302,6 +302,7 @@ export class HostMessenger {
     };
 
     const toRequirement = (record: RequirementItemRecord): Requirement => ({
+      entryId: record.entryId,
       id: record.payload.id,
       title: record.payload.title,
       description: record.payload.text,

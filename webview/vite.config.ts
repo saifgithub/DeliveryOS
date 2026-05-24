@@ -18,6 +18,7 @@ export default defineConfig({
           __dirname,
           'src/panels/requirements-decompose/index.html',
         ),
+        requirements: resolve(__dirname, 'src/panels/requirements/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

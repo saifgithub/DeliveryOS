@@ -1,0 +1,181 @@
+import { useEffect, useState } from 'react';
+import type {
+  Requirement,
+  RequirementCategory,
+  RequirementPriority,
+} from '@deliveryos/contracts';
+
+interface Props {
+  requirement: Requirement;
+  prdSections: readonly string[];
+  onSave: (patch: {
+    title?: string;
+    description?: string;
+    category?: RequirementCategory;
+    priority?: RequirementPriority;
+    sourcePrdSection?: string;
+  }) => Promise<void>;
+  onCancel: () => void;
+  onDelete: () => Promise<void>;
+}
+
+export function RequirementDetail({ requirement, prdSections, onSave, onCancel, onDelete }: Props) {
+  const [title, setTitle] = useState(requirement.title);
+  const [description, setDescription] = useState(requirement.description);
+  const [category, setCategory] = useState<RequirementCategory>(requirement.category);
+  const [priority, setPriority] = useState<RequirementPriority>(requirement.priority);
+  const [sourcePrdSection, setSourcePrdSection] = useState(requirement.sourcePrdSection);
+  const [saving, setSaving] = useState(false);
+
+  // Reset form whenever the selected requirement changes.
+  useEffect(() => {
+    setTitle(requirement.title);
+    setDescription(requirement.description);
+    setCategory(requirement.category);
+    setPriority(requirement.priority);
+    setSourcePrdSection(requirement.sourcePrdSection);
+  }, [requirement.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const dirty =
+    title !== requirement.title ||
+    description !== requirement.description ||
+    category !== requirement.category ||
+    priority !== requirement.priority ||
+    sourcePrdSection !== requirement.sourcePrdSection;
+
+  const handleSave = async () => {
+    if (!dirty) return;
+    setSaving(true);
+    try {
+      await onSave({
+        ...(title !== requirement.title ? { title } : {}),
+        ...(description !== requirement.description ? { description } : {}),
+        ...(category !== requirement.category ? { category } : {}),
+        ...(priority !== requirement.priority ? { priority } : {}),
+        ...(sourcePrdSection !== requirement.sourcePrdSection ? { sourcePrdSection } : {}),
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const sourceOptions = prdSections.length > 0 ? prdSections : [requirement.sourcePrdSection];
+  const sourceUnrecognised =
+    requirement.sourcePrdSection.length > 0 &&
+    !prdSections.includes(requirement.sourcePrdSection);
+
+  return (
+    <section className="border border-vscode-border rounded-md bg-dos-surface p-4 space-y-3">
+      <header className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-mono text-dos-muted">{requirement.id}</p>
+          <h2 className="text-base font-semibold text-vscode-fg">Edit requirement</h2>
+        </div>
+        <button
+          onClick={onCancel}
+          className="text-xs text-dos-muted hover:text-vscode-fg transition-colors"
+        >
+          Close
+        </button>
+      </header>
+
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-dos-muted">Title</label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-dos-muted">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={6}
+          className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-y font-mono"
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-dos-muted">Category</label>
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as RequirementCategory)}
+            className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm"
+          >
+            <option value="functional">Functional</option>
+            <option value="non-functional">Non-functional</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-dos-muted">Priority</label>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value as RequirementPriority)}
+            className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm"
+          >
+            <option value="must">Must</option>
+            <option value="should">Should</option>
+            <option value="could">Could</option>
+          </select>
+        </div>
+        <div className="space-y-2">
+          <label className="block text-xs font-medium text-dos-muted">Source PRD section</label>
+          <select
+            value={sourcePrdSection}
+            onChange={(e) => setSourcePrdSection(e.target.value)}
+            className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm"
+          >
+            {sourceUnrecognised && (
+              <option value={requirement.sourcePrdSection}>
+                {requirement.sourcePrdSection} (unrecognised)
+              </option>
+            )}
+            {sourceOptions.map((s) => (
+              <option key={s} value={s}>
+                {s || '—'}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <label className="block text-xs font-medium text-dos-muted">Verification criteria</label>
+        <div className="rounded-md border border-dashed border-vscode-border bg-vscode-bg p-3 text-xs text-dos-muted">
+          Awaiting Test Designer (CHUNK-08).
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 pt-2">
+        <button
+          onClick={handleSave}
+          disabled={!dirty || saving}
+          className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+        >
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          onClick={onCancel}
+          className="px-4 py-2 rounded-md border border-vscode-border text-sm text-vscode-fg hover:bg-dos-surface transition-colors"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => {
+            if (confirm(`Delete ${requirement.id} — "${requirement.title}"?`)) {
+              void onDelete();
+            }
+          }}
+          className="ml-auto px-3 py-2 rounded-md text-sm text-dos-muted hover:text-red-400 transition-colors"
+        >
+          Delete
+        </button>
+      </div>
+    </section>
+  );
+}

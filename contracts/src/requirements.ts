@@ -22,6 +22,8 @@ export type RequirementPriority = 'must' | 'should' | 'could';
 export type VerificationStatus = 'empty' | 'draft' | 'approved';
 
 export interface Requirement {
+  /** Internal SQLite row id (UUID). Used for `requirements/update` + `requirements/delete`. */
+  readonly entryId: string;
   /** User-visible ID. Format: 'REQ-NNN' (3-digit zero-padded). */
   readonly id: string;
   readonly title: string;
