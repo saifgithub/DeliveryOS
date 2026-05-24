@@ -9,6 +9,8 @@ import {
   RequirementItemNode,
   RequirementsGroupNode,
   StageTreeNode,
+  TestSpecNode,
+  VerificationCriteriaNode,
   stageDefToNode,
   toTreeItem,
 } from './stageTreeNodes';
@@ -51,9 +53,19 @@ export class StageTreeProvider
             this.refresh();
             return;
           }
+          if (event.kind === 'create' && event.entryType === 'test-spec') {
+            this.refresh();
+            return;
+          }
+          if (event.kind === 'update' && event.entryType === 'test-spec') {
+            this.refresh();
+            return;
+          }
           if (
             (event.kind === 'link' || event.kind === 'unlink') &&
-            (event.fromId === active.id || event.toId === active.id)
+            (event.linkKind === 'has-test-spec' ||
+              event.fromId === active.id ||
+              event.toId === active.id)
           ) {
             this.refresh();
           }
@@ -86,6 +98,9 @@ export class StageTreeProvider
     }
     if (element.kind === 'requirements-group') {
       return this.requirementsGroupChildren(element.prdId);
+    }
+    if (element.kind === 'requirement-item') {
+      return this.requirementItemChildren(element);
     }
     return [];
   }
@@ -140,20 +155,60 @@ export class StageTreeProvider
   ): Promise<RequirementItemNode[]> {
     if (!this.memoryStore) return [];
     const items = await this.memoryStore.listRequirementItems(prdId);
-    return items.map((record) => ({
-      kind: 'requirement-item' as const,
-      stageId: 'define' as const,
-      entryId: record.entryId,
-      reqId: record.payload.id,
-      title: record.payload.title,
-      priority: record.payload.priority,
-      iconId:
-        record.payload.priority === 'must'
-          ? 'circle-filled'
-          : record.payload.priority === 'should'
-            ? 'circle-large-outline'
-            : 'circle-outline',
-    }));
+    const out: RequirementItemNode[] = [];
+    for (const record of items) {
+      const hasCriteria = (record.payload.verificationCriteria?.length ?? 0) > 0;
+      const testSpec = await this.memoryStore.getTestSpec(record.entryId);
+      out.push({
+        kind: 'requirement-item',
+        stageId: 'define',
+        entryId: record.entryId,
+        reqId: record.payload.id,
+        title: record.payload.title,
+        priority: record.payload.priority,
+        iconId:
+          record.payload.priority === 'must'
+            ? 'circle-filled'
+            : record.payload.priority === 'should'
+              ? 'circle-large-outline'
+              : 'circle-outline',
+        hasVerification: hasCriteria || testSpec !== null,
+      });
+    }
+    return out;
+  }
+
+  private async requirementItemChildren(
+    node: RequirementItemNode,
+  ): Promise<(VerificationCriteriaNode | TestSpecNode)[]> {
+    if (!this.memoryStore) return [];
+    const entry = await this.memoryStore.read(node.entryId);
+    if (!entry || entry.type !== 'requirement') return [];
+    const criteriaCount = (
+      (entry.payload as { verificationCriteria?: readonly string[] }).verificationCriteria ?? []
+    ).length;
+    const testSpec = await this.memoryStore.getTestSpec(node.entryId);
+    const children: (VerificationCriteriaNode | TestSpecNode)[] = [];
+    if (criteriaCount > 0) {
+      children.push({
+        kind: 'verification-criteria',
+        stageId: 'define',
+        requirementEntryId: node.entryId,
+        reqId: node.reqId,
+        count: criteriaCount,
+        iconId: 'checklist',
+      });
+    }
+    if (testSpec) {
+      children.push({
+        kind: 'test-spec',
+        stageId: 'define',
+        testSpecEntryId: testSpec.entryId,
+        testSpecId: testSpec.payload.id,
+        iconId: 'beaker',
+      });
+    }
+    return children;
   }
 
   private async discoverChildren(intentId: string): Promise<ArtefactNode[]> {

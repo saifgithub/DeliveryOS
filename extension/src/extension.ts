@@ -5,6 +5,7 @@ import { registerOpenHello } from './commands/openHello';
 import { registerOpenPrdEditor } from './commands/openPrdEditor';
 import { registerOpenRequirements } from './commands/openRequirements';
 import { registerOpenTestDesigner } from './commands/openTestDesigner';
+import { registerOpenTestSpecFile } from './commands/openTestSpecFile';
 import { registerProjectCreate } from './commands/projectCreate';
 import { registerStagesRefresh } from './commands/stagesRefresh';
 import { CONTEXT_KEYS } from './contextKeys';
@@ -92,6 +93,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerOpenRequirements(context, host),
     registerOpenDecomposePrd(context, host),
     registerOpenTestDesigner(context, host),
+    registerOpenTestSpecFile(memoryStore),
     vscode.window.registerWebviewPanelSerializer(
       HELLO_VIEW_TYPE,
       helloPanelSerializer(context, host),

@@ -43,13 +43,34 @@ export interface RequirementItemNode {
   readonly title: string;
   readonly priority: RequirementPriority;
   readonly iconId: string;
+  /** Truthy when CHUNK-08 has run for this requirement — drives collapse state. */
+  readonly hasVerification: boolean;
+}
+
+export interface VerificationCriteriaNode {
+  readonly kind: 'verification-criteria';
+  readonly stageId: 'define';
+  readonly requirementEntryId: string;
+  readonly reqId: string;
+  readonly count: number;
+  readonly iconId: string;
+}
+
+export interface TestSpecNode {
+  readonly kind: 'test-spec';
+  readonly stageId: 'define';
+  readonly testSpecEntryId: string;
+  readonly testSpecId: string;
+  readonly iconId: string;
 }
 
 export type StageTreeNode =
   | StageNode
   | ArtefactNode
   | RequirementsGroupNode
-  | RequirementItemNode;
+  | RequirementItemNode
+  | VerificationCriteriaNode
+  | TestSpecNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -118,7 +139,9 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
     case 'requirement-item': {
       const item = new vscode.TreeItem(
         truncate(`${node.reqId} — ${node.title}`, 60),
-        vscode.TreeItemCollapsibleState.None,
+        node.hasVerification
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
       );
       item.contextValue = 'deliveryos.requirement.item';
       item.description = node.priority;
@@ -128,6 +151,36 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
         command: 'deliveryos.requirements.open',
         title: 'Open Requirements',
         arguments: [{ selectedId: node.reqId }],
+      };
+      return item;
+    }
+    case 'verification-criteria': {
+      const item = new vscode.TreeItem(
+        `Verification criteria — ${node.count}`,
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.requirement.verification';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `${node.count} criteria written for ${node.reqId}`;
+      item.command = {
+        command: 'deliveryos.requirements.open',
+        title: 'Open Requirements',
+        arguments: [{ selectedId: node.reqId, focus: 'verification' }],
+      };
+      return item;
+    }
+    case 'test-spec': {
+      const item = new vscode.TreeItem(
+        `Test spec — ${node.testSpecId}`,
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.requirement.testSpec';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `Open the test-spec markdown body (${node.testSpecId})`;
+      item.command = {
+        command: 'deliveryos.requirements.openTestSpecFile',
+        title: 'Open test-spec file',
+        arguments: [{ testSpecEntryId: node.testSpecEntryId }],
       };
       return item;
     }
