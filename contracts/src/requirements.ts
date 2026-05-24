@@ -124,6 +124,22 @@ export interface RequirementsOpenDecomposePanelResult {
   readonly ok: true;
 }
 
+export interface RequirementsOpenTestDesignerParams {
+  readonly requirementEntryId: string;
+}
+
+export type RequirementsOpenTestDesignerResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'no-requirement' };
+
+export interface RequirementsOpenTestSpecFileParams {
+  readonly requirementEntryId: string;
+}
+
+export type RequirementsOpenTestSpecFileResult =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'no-test-spec' | 'no-requirement' };
+
 export interface RequirementsGenerateDecomposePromptParams {
   readonly projectId: string;
 }
@@ -146,9 +162,13 @@ export type RequirementsPasteDecomposedResult =
     }
   | { readonly ok: false; readonly reason: string; readonly raw: string };
 
-/** Push event fired by the host whenever a requirement-item entry mutates. */
+/**
+ * Push event fired by the host whenever a requirement-item entry mutates.
+ * `'verification-update'` is fired by CHUNK-08 when a Test Designer commit
+ * lands verification criteria + a linked test-spec onto the requirement.
+ */
 export interface RequirementsChangedParams {
-  readonly source: 'create' | 'update' | 'delete';
+  readonly source: 'create' | 'update' | 'delete' | 'verification-update';
   readonly ids: readonly string[];
 }
 
@@ -172,6 +192,16 @@ export const RequirementsOpenDecomposePanel: RequestType<
   RequirementsOpenDecomposePanelParams,
   RequirementsOpenDecomposePanelResult
 > = { method: 'requirements/openDecomposePanel' };
+
+export const RequirementsOpenTestDesigner: RequestType<
+  RequirementsOpenTestDesignerParams,
+  RequirementsOpenTestDesignerResult
+> = { method: 'requirements/openTestDesigner' };
+
+export const RequirementsOpenTestSpecFile: RequestType<
+  RequirementsOpenTestSpecFileParams,
+  RequirementsOpenTestSpecFileResult
+> = { method: 'requirements/openTestSpecFile' };
 
 export const RequirementsGenerateDecomposePrompt: RequestType<
   RequirementsGenerateDecomposePromptParams,
