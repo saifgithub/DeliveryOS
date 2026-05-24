@@ -20,6 +20,7 @@ export default defineConfig({
         ),
         requirements: resolve(__dirname, 'src/panels/requirements/index.html'),
         'test-designer': resolve(__dirname, 'src/panels/test-designer/index.html'),
+        'brief-composer': resolve(__dirname, 'src/panels/brief-composer/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
