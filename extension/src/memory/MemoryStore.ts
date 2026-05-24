@@ -10,6 +10,8 @@ import * as vscode from 'vscode';
 import {
   type DecomposedRequirement,
   type DraftPrd,
+  type ExecutionPayload,
+  type HarnessName,
   type IntentPayload,
   type LinkKind,
   type MemoryEntry,
@@ -128,6 +130,56 @@ export interface TestSpecRecord {
   readonly title: string;
   readonly body: string;
   readonly payload: StoredTestSpecPayload;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+/**
+ * Stored shape for a `type='execution'` row's `payload_json`. CHUNK-09's
+ * Execution Brief layer. The minimum stable `ExecutionPayload` shape
+ * (`briefMarkdown` + `targetHarness` + `briefVersion`) is honoured via the
+ * cast-through pattern. `payload.kind='execution-brief'` discriminates from
+ * any future hypothetical sibling using `type='execution'`.
+ *
+ * The brief markdown itself (the canonical artefact) lives in the
+ * `MemoryEntry.body` field — `payload.briefMarkdown` is denormalised cache
+ * (same content; useful for cheap queries that don't want to round-trip the
+ * file). On any read mismatch the body file wins, per CHUNK-09 § 7.1.
+ */
+export interface StoredExecutionPayload {
+  readonly kind: 'execution-brief';
+  /** User-visible brief id; e.g. 'brief_<uuid-v4>'. Mirrors `frontmatter.brief_id`. */
+  readonly id: string;
+  /** Required by ExecutionPayload — the cached canonical brief markdown. */
+  readonly briefMarkdown: string;
+  /** Required by ExecutionPayload. CHUNK-10 sets the real harness; CHUNK-09 emits 'generic'. */
+  readonly targetHarness: HarnessName;
+  /** Required by ExecutionPayload. v1 for now; bumps when supersedes chains lengthen. */
+  readonly briefVersion: number;
+  /** Project id from the requirement's chain. */
+  readonly projectId: string;
+  /** Requirement entry id this brief was composed from. */
+  readonly requirementEntryId: string;
+  /** User-visible requirement id (REQ-NNN). */
+  readonly requirementUserId: string;
+  /** Test-spec entry id linked via the requirement, captured at compose time. */
+  readonly testSpecEntryId?: string;
+  /** Brief entry id this one supersedes, if a revision. */
+  readonly supersedesEntryId?: string;
+  /** Schema version of the brief markdown (mirrors `BRIEF_SCHEMA_VERSION`). */
+  readonly schemaVersion: number;
+  /** Frontmatter `profile`. CHUNK-09 always writes '(unspecified)'. */
+  readonly profile: string;
+  /** ISO 8601 lock timestamp — set immediately before write. */
+  readonly lockedAt: string;
+}
+
+export interface BriefRecord {
+  readonly entryId: string;
+  readonly title: string;
+  /** Canonical brief markdown — the body file with system frontmatter stripped. */
+  readonly body: string;
+  readonly payload: StoredExecutionPayload;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
@@ -815,6 +867,164 @@ export class MemoryStore {
   /** Find the on-disk URI for the test-spec markdown body, by SQLite row id. */
   testSpecBodyUri(testSpecEntryId: string): vscode.Uri {
     return bodyPath(this.workspaceUri, 'test-spec', testSpecEntryId);
+  }
+
+  // --- Execution Brief CRUD (CHUNK-09) ----------------------------------
+
+  /**
+   * Fetch a single brief by its SQLite row id. Returns null when the row
+   * is missing or is not an execution-brief. The brief markdown body file
+   * is read from disk; system frontmatter (id/type/title/created_at) is
+   * stripped, leaving the canonical brief markdown (which starts with its
+   * own frontmatter — brief_id, schema_version, ...).
+   */
+  async getBrief(briefEntryId: string): Promise<BriefRecord | null> {
+    const row = this.selectRowById(briefEntryId);
+    if (!row || row.type !== 'execution') return null;
+    const payload = JSON.parse(row.payload_json) as StoredExecutionPayload;
+    if (payload.kind !== 'execution-brief') return null;
+    const uri = bodyPath(this.workspaceUri, 'execution', row.id);
+    const stored = await readBody(uri);
+    const body = stripFrontmatter(stored ?? '');
+    return {
+      entryId: row.id,
+      title: row.title,
+      body,
+      payload,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /**
+   * List every Execution Brief derived from the given Requirement entry,
+   * ordered by `created_at` ascending (v1 first). The version number is
+   * the 1-based position in this list.
+   *
+   * Joins via the `derives-from` link kind owned by CHUNK-03.
+   */
+  async listBriefsForRequirement(requirementEntryId: string): Promise<BriefRecord[]> {
+    const stmt = this.host.db.prepare(
+      `SELECT e.id, e.title, e.payload_json, e.created_at, e.updated_at
+         FROM memory_entries e
+         JOIN memory_links l ON l.from_id = e.id
+        WHERE e.type = 'execution'
+          AND l.to_id = ?
+          AND l.kind = 'derives-from'
+        ORDER BY e.created_at ASC`,
+    );
+    const briefs: BriefRecord[] = [];
+    try {
+      stmt.bind([requirementEntryId]);
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as {
+          id: string;
+          title: string;
+          payload_json: string;
+          created_at: number;
+          updated_at: number;
+        };
+        const payload = JSON.parse(row.payload_json) as StoredExecutionPayload;
+        if (payload.kind !== 'execution-brief') continue;
+        const uri = bodyPath(this.workspaceUri, 'execution', row.id);
+        const stored = await readBody(uri);
+        const body = stripFrontmatter(stored ?? '');
+        briefs.push({
+          entryId: row.id,
+          title: row.title,
+          body,
+          payload,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      }
+    } finally {
+      stmt.free();
+    }
+    return briefs;
+  }
+
+  /**
+   * Create a new immutable Execution Brief entry, link it to its requirement
+   * via `derives-from`, and optionally link to a prior brief via `supersedes`.
+   * Uses the cast-through pattern (`as unknown as ExecutionPayload`) to
+   * extend the minimum stable `ExecutionPayload` shape with CHUNK-09's
+   * richer fields — `contracts/src/memory.ts` is NOT touched.
+   *
+   * `args.briefMarkdown` is the canonical brief markdown (starts with its
+   * own frontmatter block; serialised by `briefMarkdown.serialise`). This
+   * function does not re-serialise — the host validator + serialiser are
+   * the authoritative chain; this is just persistence.
+   *
+   * Briefs are immutable post-write. There is no `updateBrief`; revisions
+   * create a fresh brief with `supersedes` set.
+   */
+  async createBrief(args: {
+    readonly requirementEntryId: string;
+    readonly projectId: string;
+    readonly briefUserId: string;
+    readonly briefMarkdown: string;
+    readonly profile: string;
+    readonly lockedAt: string;
+    readonly briefVersion: number;
+    readonly schemaVersion: number;
+    readonly testSpecEntryId?: string;
+    readonly supersedesEntryId?: string;
+  }): Promise<BriefRecord> {
+    const reqRow = this.selectRowById(args.requirementEntryId);
+    if (!reqRow) {
+      throw new MemoryStoreError(
+        'not-found',
+        `No requirement entry ${args.requirementEntryId}`,
+      );
+    }
+    const reqStored = JSON.parse(reqRow.payload_json) as StoredRequirementItemPayload;
+    if (reqStored.kind !== 'requirement-item') {
+      throw new MemoryStoreError(
+        'type-immutable',
+        `Entry ${args.requirementEntryId} is not a requirement-item`,
+      );
+    }
+
+    const storedPayload: StoredExecutionPayload = {
+      kind: 'execution-brief',
+      id: args.briefUserId,
+      briefMarkdown: args.briefMarkdown,
+      targetHarness: 'generic',
+      briefVersion: args.briefVersion,
+      projectId: args.projectId,
+      requirementEntryId: args.requirementEntryId,
+      requirementUserId: reqStored.id,
+      ...(args.testSpecEntryId ? { testSpecEntryId: args.testSpecEntryId } : {}),
+      ...(args.supersedesEntryId ? { supersedesEntryId: args.supersedesEntryId } : {}),
+      schemaVersion: args.schemaVersion,
+      profile: args.profile,
+      lockedAt: args.lockedAt,
+    };
+    const entryTitle = `${args.briefUserId} — ${reqStored.id} ${reqStored.title}`;
+    const created = await this.create<'execution'>({
+      type: 'execution',
+      title: entryTitle,
+      payload: storedPayload as unknown as ExecutionPayload,
+      body: args.briefMarkdown,
+    });
+    await this.link(created.id, args.requirementEntryId, 'derives-from');
+    if (args.supersedesEntryId) {
+      await this.link(created.id, args.supersedesEntryId, 'supersedes');
+    }
+    const fresh = await this.getBrief(created.id);
+    if (!fresh) {
+      throw new MemoryStoreError(
+        'not-found',
+        `Brief ${created.id} vanished mid-create`,
+      );
+    }
+    return fresh;
+  }
+
+  /** Find the on-disk URI for the brief markdown body, by SQLite row id. */
+  briefBodyUri(briefEntryId: string): vscode.Uri {
+    return bodyPath(this.workspaceUri, 'execution', briefEntryId);
   }
 
   /** Scan the store for the highest REQ-NNN already assigned. Returns next number to use. */

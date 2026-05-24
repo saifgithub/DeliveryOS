@@ -112,6 +112,16 @@
         "command": "deliveryos.requirements.runTestDesigner",
         "title": "DeliveryOS: Run Test Designer",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.brief.compose",
+        "title": "DeliveryOS: Compose Execution Brief",
+        "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.brief.openFile",
+        "title": "DeliveryOS: Open Execution Brief Markdown",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {

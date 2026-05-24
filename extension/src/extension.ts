@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { registerOpenBriefComposer } from './commands/openBriefComposer';
+import { registerOpenBriefFile } from './commands/openBriefFile';
 import { registerOpenDecomposePrd } from './commands/openDecomposePrd';
 import { registerOpenDiscover } from './commands/openDiscover';
 import { registerOpenHello } from './commands/openHello';
@@ -15,6 +17,7 @@ import {
   InMemoryProjectRegistry,
   PersistedProjectRegistry,
 } from './projectRegistry';
+import { briefComposerSerializer } from './serializers/briefComposerSerializer';
 import { decomposePromptPanelSerializer } from './serializers/decomposePromptPanelSerializer';
 import { discoverPanelSerializer } from './serializers/discoverPanelSerializer';
 import { helloPanelSerializer } from './serializers/helloPanelSerializer';
@@ -23,6 +26,10 @@ import { requirementsPanelSerializer } from './serializers/requirementsPanelSeri
 import { testDesignerPanelSerializer } from './serializers/testDesignerPanelSerializer';
 import { StageTreeProvider } from './tree/stageTreeProvider';
 import { checkForUpdates } from './updater/checkForUpdates';
+import {
+  BRIEF_COMPOSER_VIEW_TYPE,
+  openBriefComposerPanel,
+} from './webview/briefComposerPanel';
 import { DECOMPOSE_VIEW_TYPE, openDecomposePromptPanel } from './webview/decomposePromptPanel';
 import { DISCOVER_VIEW_TYPE } from './webview/discoverPanel';
 import { HELLO_VIEW_TYPE } from './webview/helloPanel';
@@ -76,8 +83,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openDecomposePanel: () => openDecomposePromptPanel(context, host),
       openTestDesignerPanel: (requirementEntryId) =>
         openTestDesignerPanel(context, host, { requirementEntryId }),
+      openBriefComposerPanel: (args) => openBriefComposerPanel(context, host, args),
     });
     host.registerTestDesignerHandlers({ registry, memoryStore });
+    host.registerBriefHandlers({ registry, memoryStore });
   }
 
   context.subscriptions.push(
@@ -94,6 +103,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerOpenDecomposePrd(context, host),
     registerOpenTestDesigner(context, host),
     registerOpenTestSpecFile(memoryStore),
+    registerOpenBriefComposer(context, host),
+    registerOpenBriefFile(memoryStore),
     vscode.window.registerWebviewPanelSerializer(
       HELLO_VIEW_TYPE,
       helloPanelSerializer(context, host),
@@ -117,6 +128,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerWebviewPanelSerializer(
       TEST_DESIGNER_VIEW_TYPE,
       testDesignerPanelSerializer(context, host),
+    ),
+    vscode.window.registerWebviewPanelSerializer(
+      BRIEF_COMPOSER_VIEW_TYPE,
+      briefComposerSerializer(context, host),
     ),
   );
 
