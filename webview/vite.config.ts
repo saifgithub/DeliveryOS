@@ -14,6 +14,10 @@ export default defineConfig({
         hello: resolve(__dirname, 'src/panels/hello/index.html'),
         discover: resolve(__dirname, 'src/panels/discover/index.html'),
         'prd-editor': resolve(__dirname, 'src/panels/prd-editor/index.html'),
+        'requirements-decompose': resolve(
+          __dirname,
+          'src/panels/requirements-decompose/index.html',
+        ),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
