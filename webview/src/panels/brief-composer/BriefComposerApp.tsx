@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import * as Tabs from '@radix-ui/react-tabs';
 import * as Toast from '@radix-ui/react-toast';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
@@ -8,15 +9,27 @@ import {
   BriefEditList,
   BriefEditSection,
   BriefSave,
+  ProfileApplyUpdate,
+  ProfileBootstrap,
+  ProfileComputeUpdates,
+  ProfilePreview,
+  ProfileSelect,
   type BriefSectionId,
   type BriefValidation,
   type ExecutionBriefDraft,
+  type HarnessProfileWire,
+  type ProfileName,
+  type RenderedBriefWire,
+  type SuggestedUpdateWire,
 } from '@deliveryos/contracts';
 import { messenger } from '../../shared/messenger';
 import { SectionEditor } from './SectionEditor';
 import { AllowedForbiddenEditor } from './AllowedForbiddenEditor';
 import { CodebaseContextPaste } from './CodebaseContextPaste';
 import { SaveAndLockButton } from './SaveAndLockButton';
+import { ProfilePicker } from './ProfilePicker';
+import { RenderPreview } from './RenderPreview';
+import { SuggestedUpdatesTab } from './SuggestedUpdatesTab';
 
 type ComposerState =
   | { readonly status: 'loading' }
@@ -47,17 +60,30 @@ const SECTION_ORDER: readonly BriefSectionId[] = [
   'completion-criteria',
 ];
 
+const DEFAULT_PROFILE: ProfileName = 'claude-code';
+
 export function BriefComposerApp() {
   const [state, setState] = useState<ComposerState>({ status: 'loading' });
   const [saving, setSaving] = useState(false);
   const [toastOpen, setToastOpen] = useState(false);
   const [toastMsg, setToastMsg] = useState('');
 
+  // CHUNK-10 profile state.
+  const [profiles, setProfiles] = useState<readonly HarnessProfileWire[]>([]);
+  const [profileName, setProfileName] = useState<ProfileName>(DEFAULT_PROFILE);
+  const [rendered, setRendered] = useState<RenderedBriefWire | null>(null);
+  const [renderLoading, setRenderLoading] = useState(false);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [updates, setUpdates] = useState<readonly SuggestedUpdateWire[]>([]);
+  const [updatesLoading, setUpdatesLoading] = useState(false);
+  const [applyingFile, setApplyingFile] = useState<string | null>(null);
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setToastOpen(true);
   };
 
+  // Bootstrap brief composer.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -87,6 +113,109 @@ export function BriefComposerApp() {
       void messenger.sendNotification(BriefCancel, HOST_EXTENSION, {});
     };
   }, []);
+
+  // Bootstrap profile list + last-used selection.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await messenger.sendRequest(ProfileBootstrap, HOST_EXTENSION, {});
+        if (cancelled) return;
+        setProfiles(res.profiles);
+        setProfileName(res.lastUsedProfileName);
+      } catch (err) {
+        console.error('BriefComposerApp: profile bootstrap failed', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Fetch profile-aware preview + suggested updates whenever the brief draft or profile changes.
+  const refreshProfileData = useCallback(
+    async (profile: ProfileName) => {
+      if (state.status !== 'ready') return;
+      const briefId = state.draft.frontmatter.brief_id;
+      setRenderLoading(true);
+      setRenderError(null);
+      try {
+        const previewRes = await messenger.sendRequest(ProfilePreview, HOST_EXTENSION, {
+          briefId,
+          profileName: profile,
+        });
+        if (previewRes.ok) {
+          setRendered(previewRes.rendered);
+        } else {
+          setRendered(null);
+          setRenderError(previewRes.error ?? previewRes.reason);
+        }
+      } catch (err) {
+        console.error('BriefComposerApp: profile preview failed', err);
+        setRenderError((err as Error).message);
+      } finally {
+        setRenderLoading(false);
+      }
+
+      setUpdatesLoading(true);
+      try {
+        const updatesRes = await messenger.sendRequest(ProfileComputeUpdates, HOST_EXTENSION, {
+          briefId,
+          profileName: profile,
+        });
+        if (updatesRes.ok) {
+          setUpdates(updatesRes.updates);
+        } else {
+          setUpdates([]);
+          showToast(`Suggested updates unavailable: ${updatesRes.error ?? updatesRes.reason}`);
+        }
+      } catch (err) {
+        console.error('BriefComposerApp: computeSuggestedUpdates failed', err);
+        showToast('Failed to compute suggested updates.');
+      } finally {
+        setUpdatesLoading(false);
+      }
+    },
+    [state],
+  );
+
+  // Re-render profile preview when draft body changes (preview is the
+  // serialised draft markdown; we trigger refresh after a successful edit).
+  useEffect(() => {
+    if (state.status !== 'ready' || profiles.length === 0) return;
+    void refreshProfileData(profileName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, profileName, state.status === 'ready' ? state.preview : '', profiles.length]);
+
+  const handleProfileChange = (name: ProfileName) => {
+    setProfileName(name);
+    void messenger.sendNotification(ProfileSelect, HOST_EXTENSION, { profileName: name });
+  };
+
+  const handleApplyUpdate = async (file: string) => {
+    if (state.status !== 'ready') return;
+    setApplyingFile(file);
+    try {
+      const res = await messenger.sendRequest(ProfileApplyUpdate, HOST_EXTENSION, {
+        briefId: state.draft.frontmatter.brief_id,
+        profileName,
+        file,
+      });
+      if (res.ok) {
+        showToast(`Applied to ${res.file} (${res.action}).`);
+        void refreshProfileData(profileName);
+      } else if (res.reason === 'cancelled') {
+        // User declined the modal; no toast.
+      } else {
+        showToast(`Apply failed: ${res.error ?? res.reason}`);
+      }
+    } catch (err) {
+      console.error('BriefComposerApp: applyUpdate failed', err);
+      showToast('Apply failed.');
+    } finally {
+      setApplyingFile(null);
+    }
+  };
 
   const handleSectionChange = async (sectionId: BriefSectionId, body: string) => {
     if (state.status !== 'ready' || state.mode === 'readonly') return;
@@ -128,9 +257,6 @@ export function BriefComposerApp() {
       const res = await messenger.sendRequest(BriefSave, HOST_EXTENSION, { draft: state.draft });
       if (res.ok) {
         showToast(`Brief saved and locked — ${res.briefId}.`);
-        // Re-bootstrap to flip into read-only mode for the just-saved brief.
-        // The host's activeBriefEntryId is already set; the panel needs the
-        // readonly draft to surface "Compose new version".
         const next = await messenger.sendRequest(BriefBootstrap, HOST_EXTENSION, {});
         if (next.ok) {
           setState({
@@ -198,21 +324,45 @@ export function BriefComposerApp() {
     );
   }
 
-  return <ReadyView state={state} saving={saving}
-    onSectionChange={handleSectionChange}
-    onListChange={handleListChange}
-    onSave={handleSave}
-    onCopyPreview={handleCopyPreview}
-    showToast={showToast}
-    toastOpen={toastOpen}
-    setToastOpen={setToastOpen}
-    toastMsg={toastMsg}
-  />;
+  return (
+    <ReadyView
+      state={state}
+      saving={saving}
+      profiles={profiles}
+      profileName={profileName}
+      rendered={rendered}
+      renderLoading={renderLoading}
+      renderError={renderError}
+      updates={updates}
+      updatesLoading={updatesLoading}
+      applyingFile={applyingFile}
+      onProfileChange={handleProfileChange}
+      onApplyUpdate={handleApplyUpdate}
+      onSectionChange={handleSectionChange}
+      onListChange={handleListChange}
+      onSave={handleSave}
+      onCopyPreview={handleCopyPreview}
+      showToast={showToast}
+      toastOpen={toastOpen}
+      setToastOpen={setToastOpen}
+      toastMsg={toastMsg}
+    />
+  );
 }
 
 interface ReadyViewProps {
   readonly state: Extract<ComposerState, { status: 'ready' }>;
   readonly saving: boolean;
+  readonly profiles: readonly HarnessProfileWire[];
+  readonly profileName: ProfileName;
+  readonly rendered: RenderedBriefWire | null;
+  readonly renderLoading: boolean;
+  readonly renderError: string | null;
+  readonly updates: readonly SuggestedUpdateWire[];
+  readonly updatesLoading: boolean;
+  readonly applyingFile: string | null;
+  readonly onProfileChange: (name: ProfileName) => void;
+  readonly onApplyUpdate: (file: string) => void;
   readonly onSectionChange: (id: BriefSectionId, body: string) => Promise<void>;
   readonly onListChange: (list: 'allowed' | 'forbidden', globs: readonly string[]) => Promise<void>;
   readonly onSave: () => Promise<void>;
@@ -226,6 +376,16 @@ interface ReadyViewProps {
 function ReadyView({
   state,
   saving,
+  profiles,
+  profileName,
+  rendered,
+  renderLoading,
+  renderError,
+  updates,
+  updatesLoading,
+  applyingFile,
+  onProfileChange,
+  onApplyUpdate,
   onSectionChange,
   onListChange,
   onSave,
@@ -270,7 +430,6 @@ function ReadyView({
             {SECTION_ORDER.map((id) => {
               const section = draft.sections[id];
               if (id === 'allowed-changes' || id === 'forbidden-changes') {
-                // Both lists rendered together in a single side-by-side widget.
                 if (id === 'allowed-changes') {
                   return (
                     <AllowedForbiddenEditor
@@ -282,7 +441,7 @@ function ReadyView({
                     />
                   );
                 }
-                return null; // forbidden is folded into the allowed widget above.
+                return null;
               }
               if (id === 'existing-codebase-context') {
                 return (
@@ -329,20 +488,53 @@ function ReadyView({
             </div>
           </section>
 
-          <section className="overflow-y-auto p-6 space-y-3 bg-dos-surface">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-dos-accent">Markdown preview</h2>
-              <button
-                type="button"
-                onClick={onCopyPreview}
-                className="text-xs px-2 py-1 rounded border border-vscode-border hover:bg-vscode-bg"
-              >
-                Copy markdown
-              </button>
-            </div>
-            <pre className="text-xs font-mono whitespace-pre-wrap break-words p-3 rounded bg-vscode-bg border border-vscode-border text-dos-ink">
-              {preview}
-            </pre>
+          <section className="overflow-y-auto p-6 space-y-4 bg-dos-surface">
+            <ProfilePicker
+              profiles={profiles}
+              selected={profileName}
+              onChange={onProfileChange}
+            />
+
+            <Tabs.Root defaultValue="draft" className="space-y-3">
+              <Tabs.List className="flex gap-1 border-b border-vscode-border">
+                <ComposerTab value="draft" label="Draft markdown" />
+                <ComposerTab value="profile" label="Profile preview" />
+                <ComposerTab value="updates" label="Suggested updates" badge={updates.filter((u) => u.action !== 'noop').length} />
+              </Tabs.List>
+
+              <Tabs.Content value="draft" className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-dos-accent">Markdown preview</h2>
+                  <button
+                    type="button"
+                    onClick={onCopyPreview}
+                    className="text-xs px-2 py-1 rounded border border-vscode-border hover:bg-vscode-bg"
+                  >
+                    Copy markdown
+                  </button>
+                </div>
+                <pre className="text-xs font-mono whitespace-pre-wrap break-words p-3 rounded bg-vscode-bg border border-vscode-border text-dos-ink">
+                  {preview}
+                </pre>
+              </Tabs.Content>
+
+              <Tabs.Content value="profile">
+                <RenderPreview
+                  rendered={rendered}
+                  loading={renderLoading}
+                  error={renderError}
+                />
+              </Tabs.Content>
+
+              <Tabs.Content value="updates">
+                <SuggestedUpdatesTab
+                  updates={updates}
+                  loading={updatesLoading}
+                  inFlightFile={applyingFile}
+                  onApply={onApplyUpdate}
+                />
+              </Tabs.Content>
+            </Tabs.Root>
           </section>
         </div>
 
@@ -357,5 +549,26 @@ function ReadyView({
         <Toast.Viewport className="fixed top-4 right-4 z-50 flex flex-col gap-2 w-96" />
       </main>
     </Toast.Provider>
+  );
+}
+
+function ComposerTab({ value, label, badge }: { value: string; label: string; badge?: number }) {
+  return (
+    <Tabs.Trigger
+      value={value}
+      className={[
+        'px-3 py-1.5 text-xs border-b-2 -mb-px',
+        'data-[state=active]:border-dos-accent data-[state=active]:text-vscode-fg',
+        'data-[state=inactive]:border-transparent data-[state=inactive]:text-dos-muted',
+        'hover:text-vscode-fg',
+      ].join(' ')}
+    >
+      {label}
+      {badge !== undefined && badge > 0 && (
+        <span className="ml-2 inline-flex items-center justify-center text-[10px] px-1.5 rounded-full bg-dos-accent/20 text-dos-accent">
+          {badge}
+        </span>
+      )}
+    </Tabs.Trigger>
   );
 }

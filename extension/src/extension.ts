@@ -87,6 +87,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     });
     host.registerTestDesignerHandlers({ registry, memoryStore });
     host.registerBriefHandlers({ registry, memoryStore });
+    if (workspaceFolder) {
+      host.registerProfileHandlers({
+        workspaceRoot: workspaceFolder.uri,
+        workspaceState: context.workspaceState,
+      });
+    }
   }
 
   context.subscriptions.push(

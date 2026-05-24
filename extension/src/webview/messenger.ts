@@ -8,6 +8,11 @@ import {
   BriefEditList,
   BriefEditSection,
   BriefSave,
+  ProfileApplyUpdate,
+  ProfileBootstrap,
+  ProfileComputeUpdates,
+  ProfilePreview,
+  ProfileSelect,
   DiscoverCopyPrompt,
   DiscoverGeneratePrompt,
   DiscoverGetInitialState,
@@ -49,6 +54,13 @@ import {
   type DiscoveryAnswer,
   type DiscoveryRecord,
   type ExecutionBriefDraft,
+  type HarnessProfileWire,
+  type ProfileApplyUpdateResult,
+  type ProfileBootstrapResult,
+  type ProfileComputeUpdatesResult,
+  type ProfileName,
+  type ProfilePreviewResult,
+  type SuggestedUpdateWire,
   type IntentPayload,
   type PrdSection,
   type RawIdea,
@@ -83,6 +95,19 @@ import { parsePrdMarkdown, renderPrdMarkdown } from '../prd/sectionSchema';
 import type { IProjectRegistry } from '../projectRegistry';
 import { buildDecomposePrompt } from '../requirements/decompositionPrompt';
 import { parseDecomposed } from '../requirements/parser';
+import {
+  PROFILE_LIST,
+  getProfile,
+  renderBrief,
+  computeSuggestedUpdates,
+  writeFileAtomic,
+} from '../profiles';
+import type {
+  HarnessProfile,
+  SuggestedUpdate,
+  VscodeFsNamespace,
+  WorkspaceFileReader,
+} from '../profiles';
 import { buildTestDesignerPrompt } from '../specialists/testDesigner/promptBuilder';
 import { parseTestDesignerResult } from '../specialists/testDesigner/resultParser';
 import { consumePendingBriefRequest } from './briefComposerPanel';
@@ -119,8 +144,28 @@ export interface BriefDeps {
   readonly memoryStore: MemoryStore;
 }
 
+export interface ProfileDeps {
+  /** Workspace root used to resolve `instruction_file` + `.claude/settings.json` paths. */
+  readonly workspaceRoot: vscode.Uri;
+  /** Persistence for `lastUsedProfileName` per spec § 12 Q1. */
+  readonly workspaceState: vscode.Memento;
+}
+
+const LAST_USED_PROFILE_KEY = 'deliveryos.profiles.lastUsed';
+
 export class HostMessenger {
   readonly messenger = new Messenger({ ignoreHiddenViews: false });
+
+  /**
+   * In-flight brief composer draft, shared between `registerBriefHandlers`
+   * (the editor) and `registerProfileHandlers` (the profile-aware preview
+   * pane). `null` when no composer is open or after Save. Read-only mode
+   * also populates this (bootstrap loads the saved brief into it).
+   */
+  private activeDraft: ExecutionBrief | null = null;
+
+  /** SQLite row id of the active brief when in read-only mode. */
+  private activeBriefEntryId: string | undefined;
 
   registerHelloHandlers(): void {
     this.messenger.onRequest(Hello.GetHelloText, async (params) => {
@@ -709,22 +754,22 @@ export class HostMessenger {
     // bootstrap and save. The host caches the in-flight draft per webview so
     // editSection / editList can mutate by section id without round-tripping
     // the whole draft on every keystroke. On panel close, the draft is dropped.
-    // `null` ⇒ no active draft (read-only mode, or pre-bootstrap).
-    let activeDraft: ExecutionBrief | null = null;
-    let activeBriefEntryId: string | undefined;
+    // State lives on `this.activeDraft` + `this.activeBriefEntryId` so
+    // `registerProfileHandlers` (CHUNK-10) can read the current brief for
+    // its profile-aware preview pane without re-querying memory.
 
     this.messenger.onRequest(BriefBootstrap, async (): Promise<BriefBootstrapResult> => {
       const pending = consumePendingBriefRequest();
       if (!pending) {
-        activeDraft = null;
-        activeBriefEntryId = undefined;
+        this.activeDraft = null;
+        this.activeBriefEntryId = undefined;
         return { ok: false as const, reason: 'no-requirement' as const };
       }
 
       const reqRow = await loadRequirementByEntryId(memoryStore, pending.requirementEntryId);
       if (!reqRow) {
-        activeDraft = null;
-        activeBriefEntryId = undefined;
+        this.activeDraft = null;
+        this.activeBriefEntryId = undefined;
         return { ok: false as const, reason: 'no-requirement' as const };
       }
       const active = registry.getActive();
@@ -742,8 +787,8 @@ export class HostMessenger {
           return { ok: false as const, reason: 'no-brief' as const };
         }
         const parsed = parseBriefMarkdown(existing.body);
-        activeDraft = parsed.brief;
-        activeBriefEntryId = existing.entryId;
+        this.activeDraft = parsed.brief;
+        this.activeBriefEntryId = existing.entryId;
         return {
           ok: true as const,
           mode: 'readonly',
@@ -769,8 +814,8 @@ export class HostMessenger {
       if (!outcome.ok) {
         return { ok: false as const, reason: 'no-requirement' as const };
       }
-      activeDraft = outcome.brief;
-      activeBriefEntryId = undefined;
+      this.activeDraft = outcome.brief;
+      this.activeBriefEntryId = undefined;
       const validation = validateBrief(outcome.brief);
       return {
         ok: true as const,
@@ -786,24 +831,24 @@ export class HostMessenger {
     this.messenger.onRequest(
       BriefEditSection,
       async (params): Promise<BriefEditSectionResult> => {
-        if (activeBriefEntryId) {
+        if (this.activeBriefEntryId) {
           // Read-only mode — host is the authoritative immutability gate
           // (spec § 11.5a). Webview-disabled controls are UX courtesy.
           return { ok: false as const, reason: 'locked' as const };
         }
-        if (!activeDraft) {
+        if (!this.activeDraft) {
           return { ok: false as const, reason: 'unknown-section' as const };
         }
         if (params.sectionId === 'expected-output') {
           // Section 9 is the fixed RESULT_MD_SECTION_NAMES template (spec § 4.5).
           return { ok: false as const, reason: 'read-only-section' as const };
         }
-        if (!(params.sectionId in activeDraft.sections)) {
+        if (!(params.sectionId in this.activeDraft.sections)) {
           return { ok: false as const, reason: 'unknown-section' as const };
         }
         const id = params.sectionId as BriefSectionId;
-        const next = applySectionEdit(activeDraft, id, params.body);
-        activeDraft = next;
+        const next = applySectionEdit(this.activeDraft, id, params.body);
+        this.activeDraft = next;
         const validation = validateBrief(next);
         return {
           ok: true as const,
@@ -815,14 +860,14 @@ export class HostMessenger {
     );
 
     this.messenger.onRequest(BriefEditList, async (params): Promise<BriefEditListResult> => {
-      if (activeBriefEntryId) {
+      if (this.activeBriefEntryId) {
         return { ok: false as const, reason: 'locked' as const };
       }
-      if (!activeDraft) {
+      if (!this.activeDraft) {
         return { ok: false as const, reason: 'locked' as const };
       }
-      const next = applyListEdit(activeDraft, params.list, params.globs);
-      activeDraft = next;
+      const next = applyListEdit(this.activeDraft, params.list, params.globs);
+      this.activeDraft = next;
       const validation = validateBrief(next);
       return {
         ok: true as const,
@@ -833,7 +878,7 @@ export class HostMessenger {
     });
 
     this.messenger.onRequest(BriefSave, async (params): Promise<BriefSaveResult> => {
-      if (activeBriefEntryId) {
+      if (this.activeBriefEntryId) {
         // Stale-id attack guard: a saved brief can never be re-saved.
         return {
           ok: false as const,
@@ -888,8 +933,8 @@ export class HostMessenger {
           : {}),
       });
 
-      activeBriefEntryId = created.entryId;
-      activeDraft = null;
+      this.activeBriefEntryId = created.entryId;
+      this.activeDraft = null;
 
       this.messenger.sendNotification(RequirementsChanged, BROADCAST, {
         source: 'execution-update',
@@ -917,9 +962,110 @@ export class HostMessenger {
     });
 
     this.messenger.onNotification(BriefCancel, () => {
-      activeDraft = null;
-      activeBriefEntryId = undefined;
+      this.activeDraft = null;
+      this.activeBriefEntryId = undefined;
     });
+  }
+
+  registerProfileHandlers(deps: ProfileDeps): void {
+    const { workspaceRoot, workspaceState } = deps;
+
+    this.messenger.onRequest(ProfileBootstrap, async (): Promise<ProfileBootstrapResult> => {
+      const stored = workspaceState.get<string>(LAST_USED_PROFILE_KEY);
+      const lastUsedProfileName: ProfileName =
+        stored === 'codex' || stored === 'claude-code' ? stored : 'claude-code';
+      return {
+        profiles: PROFILE_LIST.map(toProfileWire),
+        lastUsedProfileName,
+      };
+    });
+
+    this.messenger.onNotification(ProfileSelect, (params) => {
+      void workspaceState.update(LAST_USED_PROFILE_KEY, params.profileName);
+    });
+
+    this.messenger.onRequest(ProfilePreview, async (params): Promise<ProfilePreviewResult> => {
+      if (!this.activeDraft) {
+        return { ok: false as const, reason: 'no-draft' as const };
+      }
+      const profile = getProfile(params.profileName);
+      const rendered = renderBrief(this.activeDraft, profile);
+      return {
+        ok: true as const,
+        rendered: {
+          profileName: rendered.profileName,
+          briefId: rendered.briefId,
+          markdown: rendered.markdown,
+          renderedAt: rendered.renderedAt,
+        },
+      };
+    });
+
+    this.messenger.onRequest(
+      ProfileComputeUpdates,
+      async (params): Promise<ProfileComputeUpdatesResult> => {
+        const profile = getProfile(params.profileName);
+        const reader = makeWorkspaceFileReader(workspaceRoot);
+        const updates = await computeSuggestedUpdates(profile, reader);
+        return {
+          ok: true as const,
+          updates: updates.map(toUpdateWire),
+        };
+      },
+    );
+
+    this.messenger.onRequest(
+      ProfileApplyUpdate,
+      async (params): Promise<ProfileApplyUpdateResult> => {
+        const profile = getProfile(params.profileName);
+        const reader = makeWorkspaceFileReader(workspaceRoot);
+        const updates = await computeSuggestedUpdates(profile, reader);
+        const target = updates.find((u) => u.file === params.file);
+        if (!target) {
+          return {
+            ok: false as const,
+            reason: 'unknown-file' as const,
+            error: `No suggested update for ${params.file}.`,
+          };
+        }
+        if (target.action === 'noop' && target.error) {
+          return {
+            ok: false as const,
+            reason: 'noop-with-error' as const,
+            error: target.error,
+          };
+        }
+        if (target.action === 'replace-block') {
+          const pick = await vscode.window.showWarningMessage(
+            `Overwrite the existing DeliveryOS-managed block in ${target.file}?`,
+            { modal: true, detail: target.warning ?? '' },
+            'Apply',
+            'Cancel',
+          );
+          if (pick !== 'Apply') {
+            return { ok: false as const, reason: 'cancelled' as const };
+          }
+        }
+        try {
+          const fileUri = vscode.Uri.joinPath(workspaceRoot, ...target.file.split('/'));
+          if (target.file.includes('/')) {
+            const parent = vscode.Uri.joinPath(
+              workspaceRoot,
+              ...target.file.split('/').slice(0, -1),
+            );
+            await vscode.workspace.fs.createDirectory(parent);
+          }
+          await writeFileAtomic(vscode as VscodeFsNamespace, fileUri, target.nextContent);
+          return { ok: true as const, file: target.file, action: target.action };
+        } catch (e) {
+          return {
+            ok: false as const,
+            reason: 'write-failed' as const,
+            error: (e as Error).message,
+          };
+        }
+      },
+    );
   }
 
   broadcastDiscoverMode(mode: DiscoverMode): void {
@@ -1089,6 +1235,63 @@ async function resolveRequirementEntryIdFromUserId(
   const records = await memoryStore.listRequirementItems(prd.prdId);
   const match = records.find((r) => r.payload.id === userId);
   return match ? match.entryId : null;
+}
+
+// --- CHUNK-10 profile-handler helpers ------------------------------------
+
+function toProfileWire(profile: HarnessProfile): HarnessProfileWire {
+  return {
+    name: profile.name,
+    display_name: profile.display_name,
+    instruction_file: profile.instruction_file,
+    handoff_dir: profile.handoff_dir,
+    brief_style: profile.brief_style,
+    include_test_commands: profile.include_test_commands,
+    include_lint_commands: profile.include_lint_commands,
+    include_forbidden_changes: profile.include_forbidden_changes,
+    output_format: profile.output_format,
+    mcp_capable: profile.mcp_capable,
+    ...(profile.command_template !== undefined
+      ? { command_template: profile.command_template }
+      : {}),
+    ...(profile.harness_version_pin !== undefined
+      ? { harness_version_pin: profile.harness_version_pin }
+      : {}),
+  };
+}
+
+function toUpdateWire(update: SuggestedUpdate): SuggestedUpdateWire {
+  return {
+    file: update.file,
+    existingContent: update.existingContent,
+    nextContent: update.nextContent,
+    managedBlock: { ...update.managedBlock },
+    action: update.action,
+    ...(update.warning !== undefined ? { warning: update.warning } : {}),
+    ...(update.error !== undefined ? { error: update.error } : {}),
+  };
+}
+
+function makeWorkspaceFileReader(workspaceRoot: vscode.Uri): WorkspaceFileReader {
+  return {
+    async readFile(relativePath: string): Promise<string | null> {
+      const fileUri = vscode.Uri.joinPath(workspaceRoot, ...relativePath.split('/'));
+      try {
+        const bytes = await vscode.workspace.fs.readFile(fileUri);
+        return new TextDecoder('utf-8').decode(bytes);
+      } catch (e) {
+        const err = e as { code?: string; name?: string };
+        if (
+          err.code === 'FileNotFound' ||
+          err.name === 'EntryNotFound (FileSystemError)' ||
+          /not\s+found/i.test(String((e as Error).message ?? ''))
+        ) {
+          return null;
+        }
+        throw e;
+      }
+    },
+  };
 }
 
 /** Re-export for adjacent host code that needs the brief record shape. */
