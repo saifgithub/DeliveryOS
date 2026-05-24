@@ -87,8 +87,58 @@ export const workspace = {
       }
       fileStore.set(to.toString(), new Uint8Array(bytes));
     },
+    async readDirectory(uri: Uri): Promise<Array<[string, number]>> {
+      const prefix = uri.toString().replace(/\/+$/, '') + '/';
+      const seen = new Set<string>();
+      const out: Array<[string, number]> = [];
+      for (const key of fileStore.keys()) {
+        if (!key.startsWith(prefix)) continue;
+        const rest = key.slice(prefix.length);
+        const top = rest.split('/')[0];
+        if (!top || seen.has(top)) continue;
+        seen.add(top);
+        const isFile = rest === top;
+        out.push([top, isFile ? 1 : 2]);
+      }
+      return out;
+    },
+  },
+  createFileSystemWatcher(
+    _pattern: unknown,
+    _ignoreCreate?: boolean,
+    _ignoreChange?: boolean,
+    _ignoreDelete?: boolean,
+  ): FileSystemWatcher {
+    return new FileSystemWatcher();
   },
 };
+
+export class FileSystemWatcher implements Disposable {
+  private readonly createEmitter = new EventEmitter<Uri>();
+  private readonly changeEmitter = new EventEmitter<Uri>();
+  private readonly deleteEmitter = new EventEmitter<Uri>();
+
+  readonly onDidCreate = this.createEmitter.event;
+  readonly onDidChange = this.changeEmitter.event;
+  readonly onDidDelete = this.deleteEmitter.event;
+
+  /** Test-only: drive the underlying emitters from a fixture. */
+  __fireCreate(uri: Uri): void {
+    this.createEmitter.fire(uri);
+  }
+  __fireChange(uri: Uri): void {
+    this.changeEmitter.fire(uri);
+  }
+  __fireDelete(uri: Uri): void {
+    this.deleteEmitter.fire(uri);
+  }
+
+  dispose(): void {
+    this.createEmitter.dispose();
+    this.changeEmitter.dispose();
+    this.deleteEmitter.dispose();
+  }
+}
 
 export class RelativePattern {
   constructor(
@@ -96,6 +146,59 @@ export class RelativePattern {
     readonly pattern: string,
   ) {}
 }
+
+// --- Terminal surface ----------------------------------------------------
+
+export class ThemeIcon {
+  constructor(readonly id: string) {}
+}
+
+export const TerminalExitReason = {
+  Unknown: 0,
+  Shutdown: 1,
+  Process: 2,
+  User: 3,
+  Extension: 4,
+} as const;
+export type TerminalExitReason = (typeof TerminalExitReason)[keyof typeof TerminalExitReason];
+
+export interface TerminalExitStatus {
+  readonly code: number | undefined;
+  readonly reason: TerminalExitReason;
+}
+
+export interface Terminal {
+  readonly name: string;
+  readonly exitStatus: TerminalExitStatus | undefined;
+  sendText(text: string, shouldExecute?: boolean): void;
+  show(preserveFocus?: boolean): void;
+  dispose(): void;
+}
+
+export interface TerminalOptions {
+  readonly name?: string;
+  readonly cwd?: Uri | string;
+  readonly iconPath?: ThemeIcon | Uri;
+  readonly isTransient?: boolean;
+}
+
+export const window = {
+  createTerminal(_options?: TerminalOptions): Terminal {
+    throw new Error('vscode-stub.window.createTerminal: not supported in headless tests');
+  },
+  onDidCloseTerminal(_listener: (terminal: Terminal) => unknown): Disposable {
+    return { dispose() {} };
+  },
+  showErrorMessage(_message: string, ..._items: string[]): Promise<string | undefined> {
+    return Promise.resolve(undefined);
+  },
+  showInformationMessage(_message: string, ..._items: string[]): Promise<string | undefined> {
+    return Promise.resolve(undefined);
+  },
+  showWarningMessage(_message: string, ..._items: string[]): Promise<string | undefined> {
+    return Promise.resolve(undefined);
+  },
+};
 
 export interface ExtensionContext {
   readonly extensionUri: Uri;
