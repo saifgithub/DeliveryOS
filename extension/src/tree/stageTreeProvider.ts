@@ -6,6 +6,9 @@ import { IProjectRegistry } from '../projectRegistry';
 import { STAGE_DEFS } from './stageDefinitions';
 import {
   ArtefactNode,
+  BriefNode,
+  ComposeBriefNode,
+  ExecuteRequirementNode,
   RequirementItemNode,
   RequirementsGroupNode,
   StageTreeNode,
@@ -61,9 +64,19 @@ export class StageTreeProvider
             this.refresh();
             return;
           }
+          if (event.kind === 'create' && event.entryType === 'execution') {
+            this.refresh();
+            return;
+          }
+          if (event.kind === 'update' && event.entryType === 'execution') {
+            this.refresh();
+            return;
+          }
           if (
             (event.kind === 'link' || event.kind === 'unlink') &&
             (event.linkKind === 'has-test-spec' ||
+              event.linkKind === 'derives-from' ||
+              event.linkKind === 'supersedes' ||
               event.fromId === active.id ||
               event.toId === active.id)
           ) {
@@ -101,6 +114,12 @@ export class StageTreeProvider
     }
     if (element.kind === 'requirement-item') {
       return this.requirementItemChildren(element);
+    }
+    if (element.kind === 'stage' && element.stageId === 'execute') {
+      return this.executeChildren(active.id);
+    }
+    if (element.kind === 'execute-requirement') {
+      return this.executeRequirementChildren(element);
     }
     return [];
   }
@@ -209,6 +228,64 @@ export class StageTreeProvider
       });
     }
     return children;
+  }
+
+  private async executeChildren(projectId: string): Promise<ExecuteRequirementNode[]> {
+    if (!this.memoryStore) return [];
+    const prd = await this.memoryStore.loadPrdParent(projectId);
+    if (!prd) return [];
+    const items = await this.memoryStore.listRequirementItems(prd.prdId);
+    const out: ExecuteRequirementNode[] = [];
+    for (const record of items) {
+      // Show every requirement under EXECUTE; the child node tells the user
+      // whether they have briefs or just a "Compose Execution Brief…" stub.
+      const briefs = await this.memoryStore.listBriefsForRequirement(record.entryId);
+      out.push({
+        kind: 'execute-requirement',
+        stageId: 'execute',
+        entryId: record.entryId,
+        reqId: record.payload.id,
+        title: record.payload.title,
+        briefCount: briefs.length,
+        iconId: briefs.length === 0 ? 'circle-outline' : 'rocket',
+      });
+    }
+    return out;
+  }
+
+  private async executeRequirementChildren(
+    node: ExecuteRequirementNode,
+  ): Promise<(BriefNode | ComposeBriefNode)[]> {
+    if (!this.memoryStore) return [];
+    const briefs = await this.memoryStore.listBriefsForRequirement(node.entryId);
+    if (briefs.length === 0) {
+      return [
+        {
+          kind: 'compose-brief',
+          stageId: 'execute',
+          requirementEntryId: node.entryId,
+          reqId: node.reqId,
+          iconId: 'plus',
+        },
+      ];
+    }
+    // Determine which briefs have been superseded (any brief whose entryId
+    // appears as another brief's `supersedesEntryId`).
+    const supersededIds = new Set(
+      briefs
+        .map((b) => b.payload.supersedesEntryId)
+        .filter((s): s is string => typeof s === 'string'),
+    );
+    return briefs.map((brief, index) => ({
+      kind: 'brief',
+      stageId: 'execute',
+      briefEntryId: brief.entryId,
+      briefId: brief.payload.id,
+      version: index + 1,
+      lockedAt: brief.payload.lockedAt,
+      superseded: supersededIds.has(brief.entryId),
+      iconId: supersededIds.has(brief.entryId) ? 'archive' : 'rocket',
+    }));
   }
 
   private async discoverChildren(intentId: string): Promise<ArtefactNode[]> {

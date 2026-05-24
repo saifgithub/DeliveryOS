@@ -64,13 +64,45 @@ export interface TestSpecNode {
   readonly iconId: string;
 }
 
+export interface ExecuteRequirementNode {
+  readonly kind: 'execute-requirement';
+  readonly stageId: 'execute';
+  readonly entryId: string;
+  readonly reqId: string;
+  readonly title: string;
+  readonly briefCount: number;
+  readonly iconId: string;
+}
+
+export interface BriefNode {
+  readonly kind: 'brief';
+  readonly stageId: 'execute';
+  readonly briefEntryId: string;
+  readonly briefId: string;
+  readonly version: number;
+  readonly lockedAt: string;
+  readonly superseded: boolean;
+  readonly iconId: string;
+}
+
+export interface ComposeBriefNode {
+  readonly kind: 'compose-brief';
+  readonly stageId: 'execute';
+  readonly requirementEntryId: string;
+  readonly reqId: string;
+  readonly iconId: string;
+}
+
 export type StageTreeNode =
   | StageNode
   | ArtefactNode
   | RequirementsGroupNode
   | RequirementItemNode
   | VerificationCriteriaNode
-  | TestSpecNode;
+  | TestSpecNode
+  | ExecuteRequirementNode
+  | BriefNode
+  | ComposeBriefNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -181,6 +213,55 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
         command: 'deliveryos.requirements.openTestSpecFile',
         title: 'Open test-spec file',
         arguments: [{ testSpecEntryId: node.testSpecEntryId }],
+      };
+      return item;
+    }
+    case 'execute-requirement': {
+      const item = new vscode.TreeItem(
+        truncate(`${node.reqId} — ${node.title}`, 60),
+        vscode.TreeItemCollapsibleState.Collapsed,
+      );
+      item.contextValue = 'deliveryos.execute.requirement';
+      item.description =
+        node.briefCount === 0
+          ? '(no briefs)'
+          : node.briefCount === 1
+            ? '1 brief'
+            : `${node.briefCount} briefs`;
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `${node.reqId} — ${node.title}`;
+      return item;
+    }
+    case 'brief': {
+      const item = new vscode.TreeItem(
+        `Brief — ${node.briefId} — v${node.version}`,
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.execute.brief';
+      item.description = node.lockedAt;
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = node.superseded
+        ? `Superseded by a later brief. Locked at ${node.lockedAt}.`
+        : `Locked at ${node.lockedAt}. Click to open the markdown body.`;
+      item.command = {
+        command: 'deliveryos.brief.openFile',
+        title: 'Open brief markdown',
+        arguments: [{ briefEntryId: node.briefEntryId }],
+      };
+      return item;
+    }
+    case 'compose-brief': {
+      const item = new vscode.TreeItem(
+        'Compose Execution Brief…',
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.execute.compose';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `Open the Execution Brief composer for ${node.reqId}.`;
+      item.command = {
+        command: 'deliveryos.brief.compose',
+        title: 'Compose Execution Brief',
+        arguments: [{ requirementEntryId: node.requirementEntryId }],
       };
       return item;
     }
