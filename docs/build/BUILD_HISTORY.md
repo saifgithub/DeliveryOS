@@ -4,6 +4,30 @@ Older "what just landed" sections from docs/build/BUILD_STATUS.md, newest on top
 
 ---
 
+## DOS:R10  (2026-05-24)
+
+DOS:R10 was a focused polish session. The user picked CHUNK-05 Day 5 directly ("lets do day 5, we need to speed up to post something soon"), skipping the Day 4 manual smoke as a carry-over. All six Day 5 scope items landed cleanly in one substantive commit with no rework; the session was the fastest single-chunk Day so far.
+
+**1 substantive commit on `main` + this wrap:**
+
+- `f4b7975 feat(discover): CHUNK-05 Day 5 — polish (DOS:R10)` — 7 files modified, +163/−28. Closes chunk-05 § 9 Day 5 steps 24-27 + § 11 risks 2-4.
+
+**CHUNK-05 Day 5 deliverables (file-by-file):**
+
+- `webview/package.json` (+3) — added `"markdown-it": "^14"` to `dependencies` + `"@types/markdown-it": "^14"` to `devDependencies`. `npm install` resolved 3 new packages.
+- `webview/src/panels/discover/DiscoverApp.tsx` (+8/−2) — added `noProject: boolean` state (default `false`). In the `DiscoverGetInitialState` `.catch()` handler: `setNoProject(true)` instead of silently logging.
+- `webview/src/panels/discover/RawIdeaInput.tsx` (+58/−16) — full rewrite with `MAX_BYTES = 2_000_000`, `LARGE_THRESHOLD = 50_000`, 80-row autosize cap, 1s debounce, blur-save fallback for large inputs.
+- `webview/src/panels/discover/DiscoveryAnswersInput.tsx` (+24/−8) — same large-input banner + 2 MB cap for paste textarea; individual answer textareas unchanged.
+- `webview/src/panels/discover/DiscoverySummary.tsx` (+6/−3) — `markdown-it` rendering with `html: false` for XSS safety.
+- `README.md` — status line + new `## Quick Start — manual-mode loop` section.
+- `package-lock.json` — re-resolved after `markdown-it` added.
+
+**Build confirmed:** `dist/extension.js` 151.1 KB; `discover-*.js` 142.50 KB / 61.13 KB gzip (markdown-it added 94 KB raw / 46 KB gzip; within 200 KB gzip spec target). 54 tests passing (unchanged).
+
+**Open carries into DOS:R11:** CHUNK-05 Day 4 manual smoke (user-driven, non-blocking); smoke workspaces; b001 + b004 `pending_review`; origin/main push (~18 ahead); CHUNK-06 primary next.
+
+---
+
 ## DOS:R9  (2026-05-23)
 
 DOS:R9 was a tight, single-focus session opened the same day as DOS:R7 + DOS:R8 (three sessions back-to-back). The user picked the recommended option from a 4-option `/start-fresh` prompt: **"CHUNK-05 Day 4"** — the natural next slice after DOS:R8's webview build, closing the "panel exists but isn't discoverable in the UI" gap. The two real gaps were (a) `MemoryStore` had no change event, and (b) the tree's `getChildren()` returned an empty array for stage children.
