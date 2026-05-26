@@ -208,6 +208,8 @@ A `session` memory row captures:
 
 ## § B-005 — AI-driven elicitation: business analysis integrated across the SDLC
 
+> **Reference to resolve before spec:** The elicitation prompt pattern here is similar to the **"grill me with docs"** function by Matt Peacock. Definition not yet available — to be added when the O-track spec session opens. Until then, treat this entry as directionally correct but potentially under-specified on the prompt mechanics.
+
 **What:** The AI interrogates the human at every stage of the DOS workflow — not just the initial discovery interview — to extract requirements, resolve ambiguity, and fill gaps before they become delivery failures. This is structured business analysis (BA) embedded in the tool: the AI plays the analyst role, the human plays the domain expert, and the outputs populate DOS artifacts directly.
 
 **Why:** The discovery interview (12 questions) is a good start but covers only one moment: the raw idea capture. In practice, ambiguity surfaces at every stage — a PRD section is vague, a requirement has an untested assumption, an acceptance criterion is missing a boundary condition, a brief's Forbidden list omits an obvious risk. Currently the user has to notice these gaps themselves and either fix them manually or accept the ambiguity. A BA-style interrogation loop would catch these proactively, ask the right questions at the right moment, and write the answers back into the relevant artifact.
