@@ -2,6 +2,7 @@
 
 **Status:** Vision / pre-spec
 **Created:** 2026-05-26
+**Updated:** 2026-05-26 — platform-first strategy adopted (GitHub as coordination substrate)
 **Track:** P (product direction) — O-track spec sessions to follow per phase
 
 ---
@@ -15,6 +16,20 @@ Real delivery involves role separation. The person who writes the raw idea is no
 Without a team model, DOS adoption has a ceiling: individual developers who are disciplined enough to follow the process solo. With a team model, DOS becomes the coordination substrate for an entire engineering organisation — the structured layer that replaces informal Slack threads, unreviewed PR descriptions, and sprint reviews that nobody writes.
 
 That is the Workgroup initiative.
+
+---
+
+## The strategic principle: plug in, don't compete
+
+GitHub started as version control for individual developers. It now coordinates millions of open source teams worldwide — without building its own editor, its own CI, or its own IDE. It became the substrate that everything else runs on top of. Jira started as a bug tracker. Kanban started on a Toyota factory floor in 1950. All of them scaled by meeting developers where they already worked, not by asking developers to move.
+
+DOS should follow the same principle. **The coordination infrastructure already exists. Millions of open source teams are already on GitHub. The task is not to build a new coordination layer — it is to become the delivery intelligence that sits behind platforms teams already use.**
+
+Concretely: DOS artifacts map almost perfectly onto existing GitHub primitives. A requirement IS a GitHub Issue. An Execution Brief IS a Pull Request description. The brief review gate IS PR review. Verification IS a CI check run. Release Evidence IS a GitHub Release. The team's notification infrastructure IS GitHub's notification system. DOS doesn't need to replicate any of this — it needs to be a good GitHub citizen.
+
+For enterprise teams using Jira: a ticket IS a requirement. A sprint IS a delivery phase. A Jira automation IS a state transition trigger.
+
+The implication for Workgroup phasing: Phase W2 is not "build a DOS server." Phase W2 is "become a GitHub App."
 
 ---
 
@@ -133,65 +148,93 @@ This replaces the daily standup question "what are you working on?" with a surfa
 
 ---
 
+## Platform integration: DOS concepts mapped to GitHub primitives
+
+The DOS delivery lifecycle maps onto GitHub's existing model with near-perfect fidelity. No new coordination infrastructure is needed — DOS surfaces its intelligence through GitHub's primitives that teams already use every day.
+
+| DOS concept | GitHub primitive | Notes |
+| --- | --- | --- |
+| Requirement | Issue (labelled `deliveryos`, templated fields) | PO/BA creates and manages issues; developers consume them |
+| Requirement state machine | Issue labels + project board columns | `draft → spec-ready → in-review → running → verified → released` as label set |
+| Execution Brief | Pull Request description (structured YAML/Markdown block) | Brief IS the PR description; Allowed/Forbidden as a fenced block |
+| Brief review gate | PR review (approve / request changes) | Tech Lead approves the PR before the agent runs |
+| Pre-flight completeness check | PR check run (GitHub Actions, status: pending/pass/fail) | Automated gate fires on PR open; blocks merge until passing |
+| Agent run | PR branch + Actions workflow | Agent commits to the PR branch; DOS watches for result |
+| Verification | PR check run (pass/fail with annotation) | Forbidden writes fail the check; verification criteria as check annotations |
+| Release Evidence | GitHub Release (assets + release notes auto-generated) | DOS generates the release body from the memory graph |
+| Notifications | GitHub notifications (native) | PR assignment, review request, check failure — no new channel needed |
+| Non-developer access | GitHub.com web UI | PO/BA/Stakeholder use GitHub Issues and Projects; no VS Code required |
+| Delivery dashboard | GitHub Projects board / Insights | Requirement status is the issue board; velocity is the burndown |
+| Team identity | GitHub user / team membership | git config email + GitHub username; zero new auth infrastructure |
+
+**What this means in practice:**
+
+A product owner opens a GitHub Issue with the `deliveryos` template. The issue is a structured form: raw idea, discovery answers, acceptance criteria. DOS reads it and populates the memory store. A developer opens the requirement in VS Code (from the DOS panel), composes the brief, and opens a PR. The PR description IS the brief — structured, machine-readable, linked to the issue. A GitHub Actions check runs the pre-flight completeness check. The Tech Lead reviews the PR. On approval, DOS runs the agent. Results post as PR comments and check annotations. Verification passes or fails as a check run. The PR merges. DOS exports Release Evidence as a GitHub Release draft. The product owner closes the issue.
+
+That is the full DOS delivery cycle. Every step happened in GitHub, with no custom server, no additional login, no new tool for the product owner to learn.
+
+### Jira mapping (enterprise teams)
+
+| DOS concept | Jira primitive |
+| --- | --- |
+| Requirement | Issue / Story (with custom fields for DOS metadata) |
+| Requirement state machine | Jira workflow statuses |
+| Execution Brief | Issue description (structured block) + linked PR |
+| Brief review gate | Jira approval step / PR review in linked GitHub repo |
+| Delivery dashboard | Jira board / sprint burndown |
+| Release Evidence | Jira release + fix-version report |
+
+### Other kanban platforms
+
+Linear, Trello, Notion, and any kanban tool with a webhook API can surface the DOS state machine as board columns. The requirement state transitions fire webhooks; the platform moves the card. DOS is the brain; the kanban board is the display.
+
+---
+
 ## The shared memory store
 
-**Phase 1 — repo-native (no new infrastructure):**
-The `.deliveryos/` SQLite store lives in the repo, shared via git. Each developer pulls before opening DOS. Concurrent writes are prevented by the state machine: only one person has write access to a given artifact at a given time (enforced by role + state, not by file locking). Acceptable for small co-located teams committing frequently.
+**Phase W1 — repo-native (no new infrastructure):**
+The `.deliveryos/` SQLite store lives in the repo. For solo use and small co-located teams, shared via git is sufficient. The state machine prevents concurrent writes to the same artifact by enforcing that only one person can hold write access to a given artifact at a given time (by role + state).
 
-**Phase 2 — server-backed (team upgrade path):**
-A hosted DOS store that VS Code connects to via a lightweight sync layer. Enables:
+**Phase W2 — GitHub-native:**
+DOS becomes a GitHub App. The memory store syncs bidirectionally with GitHub Issues and PRs — DOS reads issues as requirements, writes brief metadata to PRs, posts results as check annotations. The `.deliveryos/` store remains the local cache; GitHub is the source of truth for team state. This gives non-developers (PO, BA, Stakeholder) access through GitHub.com with zero additional infrastructure.
 
-- Real-time state updates without requiring a git pull
-- Non-developer access (BA, Stakeholder) via a web UI without VS Code
-- Async notifications (email, Slack, webhook) on state transitions
-- Cross-project visibility for tech leads managing multiple projects
-
-The repo-native mode remains the default. Server-backed is an opt-in team upgrade, likely a paid tier.
+**Phase W3 — Multi-platform:**
+Jira integration for enterprise. Linear, Notion, and other kanban platform webhooks. The DOS core is platform-agnostic; adapters translate DOS state transitions to each platform's primitives. A team can use GitHub for code and Jira for project tracking — DOS bridges them without requiring a migration.
 
 ---
 
 ## Non-developer access
 
-The BA and Stakeholder roles cannot be expected to use VS Code. They need a web surface.
+**Phase W2 (GitHub-native):** Product owners and BAs use GitHub Issues — a tool they may already use — to write requirements using the DOS issue template. Stakeholders see the GitHub Projects board, the PR list, and release notes. No VS Code, no DOS extension, no new login. The web surface is GitHub.com.
 
-**BA web UI (Phase 2):** Discovery, PRD editing, requirements catalogue, elicitation sessions (B-005). Functionally equivalent to the VS Code panels for the spec layer. Read access to the delivery dashboard.
-
-**Stakeholder web UI (Phase 2):** Read-only delivery dashboard. Requirements by status, velocity chart, release evidence exports. No write access, no spec visibility. The board-level view of delivery health.
+**Phase W3 (Jira):** Enterprise stakeholders use their existing Jira board. The DOS state machine drives Jira status transitions via the Jira API. The sprint review is the Jira release report populated by DOS's Release Evidence export.
 
 ---
 
 ## Notifications
 
-Every state transition that requires action from another person fires a notification.
+**Phase W1 (solo, VS Code-native):** VS Code `showInformationMessage` notifications for role transitions (switching hat from Developer to Tech Lead, etc.).
 
-| Trigger | Recipient | Channel |
-| --- | --- | --- |
-| Brief submitted for review | Tech Lead | VS Code notification + email/Slack (Phase 2) |
-| Brief approved to run | Developer | VS Code notification |
-| Brief returned with comments | Developer | VS Code notification + email/Slack (Phase 2) |
-| Run completed | Developer + Tech Lead | VS Code notification |
-| Verification passed | Product Owner | Email/Slack (Phase 2) |
-| Requirement state blocked | BA | VS Code notification |
-| Release Evidence exported | Stakeholder | Email/Slack (Phase 2) |
+**Phase W2 (GitHub-native):** GitHub's native notification system handles everything. PR review requests, check run failures, issue assignments — developers already have GitHub notifications configured. DOS fires GitHub events; teams get notified through their existing GitHub notification preferences. Zero new notification infrastructure.
 
-Phase 1 notifications are VS Code-native (existing `showInformationMessage` pattern). Phase 2 adds webhooks to external channels.
+**Phase W3 (multi-platform):** Jira notifications, Linear notifications, Slack via existing GitHub/Jira Slack integrations. DOS doesn't build a notification system — it fires the platform events that trigger existing notification flows.
 
 ---
 
-## What Workgroup replaces
+## What Workgroup amplifies
 
-If the team model is right, DOS becomes the coordination substrate for delivery. That displaces:
+DOS is not competing with GitHub, Jira, or Kanban. It is the delivery intelligence layer that makes those tools more valuable for AI-assisted development. Teams keep using the tools they know. DOS adds structured discipline, verified delivery evidence, and memory — on top of the coordination infrastructure that already has millions of users.
 
-| Tool | What DOS replaces |
+| Platform | What DOS adds |
 | --- | --- |
-| Jira / Linear | Requirements as DOS artifacts, not tickets. The state machine IS the board. |
-| PR description | The Execution Brief IS the PR description — structured, linked to requirements, pre-reviewed. |
-| Slack delivery threads | State transitions are the record. No "what's the status of X?" messages. |
-| Sprint review meeting | Release Evidence export IS the sprint review. It writes itself. |
-| Confluence / Notion docs | The DOS memory graph IS the project knowledge base. Queryable, linked, versioned. |
-| Post-mortem documents | The delivery history IS the post-mortem — which briefs needed rollback, which had forbidden writes, which required advisor escalation. |
+| GitHub Issues | Structured requirement templates, state machine discipline, elicitation prompts, change propagation alerts |
+| GitHub PRs | Execution Brief structure, pre-flight completeness check, allowed/forbidden policy, blast radius analysis |
+| GitHub Actions | Forbidden write detection, verification check runs, automated release evidence generation |
+| GitHub Releases | Full delivery audit trail — which requirements, which briefs, which agents, which verifications |
+| Jira | AI-assisted brief composition, agent delivery tracking, verification evidence attached to tickets |
+| Any kanban board | Requirement state machine as board columns, delivery velocity from real data not estimation |
 
-This is not a claim that DOS replaces everything these tools do. It is a claim that the delivery coordination function — tracking what is being built, by whom, in what state, with what evidence — belongs in DOS, not spread across six tools.
+The team that adopts DOS doesn't change how they use GitHub. They get structured AI-assisted delivery discipline layered on top of it.
 
 ---
 
@@ -199,24 +242,27 @@ This is not a claim that DOS replaces everything these tools do. It is a claim t
 
 ### Phase W1 — Role-aware solo (no infrastructure change)
 
-DOS gains explicit role configuration and role-aware UI. A single developer can declare their active hat (`product-owner`, `developer`, `tech-lead`) and see the appropriate panel surface. The brief review gate works in solo mode: the developer switches to tech-lead hat to approve their own brief, with the approval recorded. This is a discipline aid, not a team enforcement mechanism.
+DOS gains explicit role configuration and role-aware UI. A single developer declares their active hat (`product-owner`, `developer`, `tech-lead`) and sees the appropriate panel surface. The brief review gate works in solo mode: the developer switches to tech-lead hat to approve their own brief, with the approval recorded. This is discipline enforcement, not bureaucracy — the approval is instant but it is on the record.
 
-**Delivers:** role model, three-state brief lifecycle, standup view, solo review gate.
+**Delivers:** role model, three-state brief lifecycle, standup view, solo review gate, `.deliveryos/team.yml` config.
 **Infrastructure:** none beyond current `.deliveryos/` repo-native store.
+**Who it serves:** solo developers who want role discipline; pairs and very small teams sharing a repo.
 
-### Phase W2 — Team repo-native
+### Phase W2 — GitHub-native (GitHub App)
 
-Multiple developers share the `.deliveryos/` store via git. The state machine enforces role separation: a developer cannot approve their own brief even if they also hold the tech-lead role for that project. Conflict prevention (file scope locking) is enforced. VS Code notifications fire on state transitions.
+DOS becomes a GitHub App. Requirements sync bidirectionally with GitHub Issues. Briefs appear as structured PR descriptions. Pre-flight completeness runs as a GitHub Actions check. The Tech Lead review gate is GitHub PR review. Verification posts as check annotations. Release Evidence generates a GitHub Release draft. All team coordination, notifications, and non-developer access go through GitHub — no new server, no new login, no new web UI to build.
 
-**Delivers:** multi-user state machine, conflict prevention, in-VS Code notifications, Tech Lead review queue.
-**Infrastructure:** lightweight file-locking layer on top of SQLite. No server required.
+**Delivers:** GitHub Issues as requirements, PRs as briefs, Actions as verification, GitHub Release as release evidence, team access via GitHub.com.
+**Infrastructure:** GitHub App (OAuth + webhooks). The `.deliveryos/` store remains the local cache; GitHub is the team source of truth.
+**Who it serves:** open source teams and small-to-mid product teams already on GitHub — the largest addressable population of engineering teams in the world.
 
-### Phase W3 — Server-backed + non-developer access
+### Phase W3 — Multi-platform (Jira, Linear, others)
 
-Hosted DOS store with real-time sync. Web UI for BA and Stakeholder roles. External notifications (email, Slack, webhook). Cross-project visibility for tech leads.
+Adapters for enterprise and alternative platforms. Jira tickets become DOS requirements; sprint boards become delivery phases. Linear, Notion, and other kanban tools with webhook APIs surface the state machine as board columns. DOS is platform-agnostic at its core; each adapter translates DOS events to platform primitives. A team using GitHub for code and Jira for project tracking gets both connected through DOS without migrating either.
 
-**Delivers:** web UI, real-time sync, external notifications, stakeholder dashboard, cross-project view.
-**Infrastructure:** DOS sync server + web app. This is the commercial tier.
+**Delivers:** Jira integration, Linear/kanban webhook adapters, cross-platform state machine, enterprise SSO.
+**Infrastructure:** adapter layer (stateless webhooks + platform APIs). Still no DOS server — the adapters translate events, they do not store state.
+**Who it serves:** enterprise teams on Jira; teams with split GitHub/Jira workflows; organisations standardising on a non-GitHub platform.
 
 ---
 
@@ -239,7 +285,7 @@ Workgroup does not replace these items. It gives them a team context that makes 
 
 ## Open questions (to resolve in O-track spec sessions)
 
-1. **Identity.** How does DOS know who is who? Options: git config email (Phase W1/W2), DOS account (Phase W3). Git config is zero-infrastructure and sufficient for Phase W1.
+1. **Identity.** Phase W1: git config email (zero infrastructure). Phase W2: GitHub user identity via the GitHub App OAuth flow — the same login the developer already uses. Phase W3: Jira account / enterprise SSO. No DOS account ever needed.
 
 2. **Role assignment.** Who decides which team member holds which role? Options: a project settings panel (admin-only), a config file in the repo (`.deliveryos/team.yml`), or self-declaration per session. Config file is most version-control-friendly.
 
@@ -253,4 +299,6 @@ Workgroup does not replace these items. It gives them a team context that makes 
 
 ## Next step
 
-When ready to begin: open a DOS:O track session targeting Workgroup Phase W1 spec. The deliverable is a set of chunk specs (likely 3–5 chunks) covering role model, three-state brief lifecycle, brief review gate, and standup view — all within the existing repo-native architecture.
+**Phase W1:** Open a DOS:O track session targeting Workgroup Phase W1. Deliverable: 3–5 chunk specs covering role model, three-state brief lifecycle, brief review gate, and standup view — all within the existing repo-native `.deliveryos/` architecture.
+
+**Phase W2:** Requires a GitHub App registration and a GitHub Actions workflow spec. Open a separate DOS:O session once W1 is shipped and validated. The key design work is the bidirectional sync between `.deliveryos/memory.sqlite` and GitHub Issues/PRs — get that contract right before building the adapter.
