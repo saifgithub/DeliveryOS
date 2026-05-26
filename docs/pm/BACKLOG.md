@@ -20,6 +20,7 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-009 | Rollback — reject a result and restore to pre-run state | 🟡 Medium | One-click rejection of a bad run result: DOS uses the brief's allowed-file list to `git checkout` exactly the files the agent touched. Reduces the cost and fear of failed runs. See § B-009 below. |
 | B-010 | Delivery health dashboard — metrics across the SDLC | 🟢 Low | Surface the data DOS already captures (tests before/after, advisor escalations, forbidden writes caught, files changed per brief) as a delivery health view. Shows whether discipline is improving over time. See § B-010 below. |
 | B-011 | **Workgroup** — team coordination substrate | 🔴 High | DOS for teams: role separation, brief review gate, shared memory store, requirement state machine, standup view, non-developer access. Full roadmap: [`docs/pm/WORKGROUP.md`](WORKGROUP.md). |
+| B-012 | Semantic delivery search — find anything, understand why it was built | 🔴 High | Search across the full DOS memory graph and codebase. Not just where code lives — the complete intent-to-delivery trail: requirement → test spec → brief → result → verification → decisions. See § B-012 below. |
 
 ---
 
@@ -455,3 +456,82 @@ This also closes a credibility gap: DOS's essay claims it improves delivery disc
 **Success signal:** After completing three delivery sessions (each with at least one brief run), open the delivery health dashboard. Confirm it shows per-session test counts, at least one forbidden write event (if any occurred), and verification pass/fail rates. Click a metric to confirm it navigates to the underlying result entry.
 
 **Session tag when picked up:** DOS:O9 for spec (after B-004 is implemented — depends on session memory), then DOS:R22 or later for implementation.
+
+---
+
+## § B-012 — Semantic delivery search: find anything, understand why it was built
+
+**What:** A search capability that spans the entire DOS memory graph and codebase, returning results in delivery context — not just where something appears in code, but the full intent-to-delivery trail that explains why it was built that way. A developer searching "interest calculation" in a core banking system should find the requirement that specified it, the test spec that defined correct behaviour, the brief that scoped the implementation, the result that captured what the agent did, the verification that confirmed it passed, and the decisions recorded along the way.
+
+**Why:** Code search already exists — `grep`, ripgrep, GitHub code search, IDE Find-in-Files. These tools tell you _where_ something is. They cannot tell you _why it was built_, _what constraints the agent was given_, _what was explicitly forbidden_, _what decisions were made_, or _what evidence exists that it works correctly_. DOS has all of that information in the memory graph. Search is the interface that makes it accessible.
+
+This is the capability that transforms DOS from a delivery process tool into a **living project intelligence layer**. A new team member can onboard by searching, not by reading documentation. An auditor can find all verified deliveries related to a compliance requirement. A tech lead investigating a production incident can trace the code back to the brief, the requirement, and the original intent — in seconds.
+
+**Two search modes:**
+
+_Full-text search_ — fast, exact match across all memory body files and source code. Finds literal occurrences of the search terms. Implemented as SQLite FTS5 (already available in the `sql.js` runtime DOS uses) against all stored memory bodies, plus a ripgrep pass against the codebase files.
+
+_Semantic search_ — finds conceptually related content even when the words differ. Searching "interest calculation" finds requirements that mention "APR computation", "yield accrual", or "penalty rate" because the concepts are related. Implemented via embeddings (small local model or API call). Slower than full-text but dramatically more useful for domain-rich codebases where terminology varies.
+
+**Result structure:**
+
+Each search result surfaces the full delivery chain for that match:
+
+```text
+REQ-007 — Calculate compound interest monthly          [requirement]
+  ├── Discovery note: "compound chosen over simple — regulatory requirement"
+  ├── Test spec TS-REQ-007 — 4 verification criteria
+  ├── Brief brief_a3f9... — allowed: src/finance/interest.ts; forbidden: src/finance/principal.ts
+  ├── Result result_c7d2... — agent touched 2 files, 1 test added
+  └── Verification — PASSED 2026-05-14
+```
+
+The user can expand any node to navigate directly to that artifact in the relevant DOS panel.
+
+**Search entry points:**
+
+- Command palette: `DOS: Search project` (global, any time)
+- Activity bar: persistent search box above the stage tree
+- Contextual: right-click any file in VS Code Explorer → "Find in DOS delivery history" (searches by file path — shows all briefs that touched this file, all requirements that mentioned it)
+- Panel-specific: search within a panel (e.g. requirements catalogue search already exists; this extends it to cross-artifact search)
+
+**What the search indexes:**
+
+| Content | Search type | Notes |
+| --- | --- | --- |
+| All memory body files (`.md`) | Full-text + semantic | Requirement descriptions, PRD sections, brief content, result summaries, decision notes |
+| Memory payload JSON fields | Full-text | Requirement IDs, brief IDs, file paths, tag values |
+| Source code files | Full-text | Codebase files in the workspace — bridges delivery context to code |
+| Canned responses / handoff files | Full-text | `.deliveryos-handoff/` contents if present |
+
+**The archaeology use case (example: core banking):**
+
+A developer is investigating a production bug in interest compounding. They search "compound interest" in DOS Search. Results show:
+
+- REQ-007 and REQ-012 — the two requirements that specified compound interest behaviour
+- Brief `brief_a3f9` — scoped to `src/finance/interest.ts`; forbidden: `src/finance/principal.ts` (revealing the boundary the agent was given)
+- A decision note from the brief review: "Tech Lead flagged: rounding mode must be HALF_UP per regulatory guidance"
+- Result capture: agent touched `interest.ts` + `interest.test.ts`; 3 tests added
+- Verification: PASSED — but criteria 3 ("rounding mode") was marked low-confidence at the time
+
+The developer now knows the rounding mode decision was flagged during delivery, was only low-confidence at verification, and the file `principal.ts` was explicitly off-limits — possible root cause located in under five seconds.
+
+**Key design questions:**
+
+1. **Embedding model choice.** Local (fast, private, no API cost) vs hosted (higher quality, requires network). For Phase 1, full-text search alone is valuable. Semantic search is an enhancement that can be added later without changing the interface.
+
+2. **Index freshness.** The full-text index must update when memory entries are written. SQLite FTS5 triggers handle this automatically. The semantic embedding index needs re-computation on writes — acceptable if async (background indexing after each save).
+
+3. **Cross-project search.** Phase 1: single project (current workspace). Phase W3 (multi-platform): search across all projects in the organisation's DOS workspace. This is the enterprise knowledge base use case.
+
+4. **Search and the non-code domain.** For a film production, searching "submarine interior" should find every requirement, brief, and result that mentioned the submarine setting — across all scenes. The search is domain-agnostic because the memory store is domain-agnostic.
+
+**Relationship to B-002 (reverse engineer):** B-002 populates the memory store from existing code. B-012 makes that populated store searchable. Together they answer the brownfield onboarding question: "I inherited this codebase — what was the intent behind X?" B-002 fills the gaps; B-012 navigates them.
+
+**Relationship to B-008 (impact analysis):** Impact analysis asks "what does this brief put at risk?" — it traverses the graph from a starting point. Search asks "where is X in this project?" — it finds the starting point. They are complementary navigation modes over the same memory graph.
+
+**Relationship to VISION.md (non-code domains):** The core banking interest calculation example is software. The same search in a film production finds every scene brief that mentioned the submarine set, every director's note about underwater lighting constraints, every result that confirmed the visual brief was delivered. Domain-agnostic search is the interface that makes DOS's domain-agnostic memory useful.
+
+**Success signal:** In a project with at least 5 requirements and 3 completed delivery cycles, search "interest calculation" (or any domain term from the project). Confirm results group by artifact type, each result shows the delivery chain, and clicking any result navigates to that artifact in the correct DOS panel. Run the same search in semantic mode and confirm it returns a related result that doesn't contain the exact search string.
+
+**Session tag when picked up:** DOS:O8 for spec (can be co-specced with B-008 — both navigate the memory graph), then DOS:R21 or DOS:R22 for implementation.
