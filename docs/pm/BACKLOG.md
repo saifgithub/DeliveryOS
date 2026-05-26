@@ -20,8 +20,7 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-009 | Rollback — reject a result and restore to pre-run state | 🟡 Medium | One-click rejection of a bad run result: DOS uses the brief's allowed-file list to `git checkout` exactly the files the agent touched. Reduces the cost and fear of failed runs. See § B-009 below. |
 | B-010 | Delivery health dashboard — metrics across the SDLC | 🟢 Low | Surface the data DOS already captures (tests before/after, advisor escalations, forbidden writes caught, files changed per brief) as a delivery health view. Shows whether discipline is improving over time. See § B-010 below. |
 | B-011 | **Workgroup** — team coordination substrate | 🔴 High | DOS for teams: role separation, brief review gate, shared memory store, requirement state machine, standup view, non-developer access. Full roadmap: [`docs/pm/WORKGROUP.md`](WORKGROUP.md). |
-| B-012 | Semantic delivery search — find anything, understand why it was built | 🔴 High | Search across the full DOS memory graph and codebase. Not just where code lives — the complete intent-to-delivery trail: requirement → test spec → brief → result → verification → decisions. See § B-012 below. |
-| B-013 | Project knowledge wiki — Karpathy LLM Wiki pattern as DOS synthesis layer | 🔴 High | DOS maintains a living wiki of synthesised project knowledge (one page per domain concept) above the structured memory. Pages compound across deliveries and inject into agent sessions as context. Replaces vector search for many queries. See § B-013 below. |
+| B-012 | Project intelligence — search and knowledge injection | 🔴 High | Make the DOS memory graph navigable and injectable: find any delivery artifact by intent or keyword, surface the full delivery chain behind it, and inject standing project knowledge into agent sessions at start. Three implementation options — see § B-012 below. |
 
 ---
 
@@ -460,197 +459,83 @@ This also closes a credibility gap: DOS's essay claims it improves delivery disc
 
 ---
 
-## § B-012 — Semantic delivery search: find anything, understand why it was built
+## § B-012 — Project intelligence: search and knowledge injection
 
-**What:** A search capability that spans the entire DOS memory graph and codebase, returning results in delivery context — not just where something appears in code, but the full intent-to-delivery trail that explains why it was built that way. A developer searching "interest calculation" in a core banking system should find the requirement that specified it, the test spec that defined correct behaviour, the brief that scoped the implementation, the result that captured what the agent did, the verification that confirmed it passed, and the decisions recorded along the way.
+**What:** Make the DOS memory graph navigable and injectable. A developer searching "interest calculation" in a core banking project should find the requirement that specified it, the brief that scoped it, the decision that locked in rounding mode, and the verification that passed — not just the file where the code lives. That same knowledge should also flow automatically into the next agent session so the agent starts with it, not from scratch.
 
-**Why:** Code search already exists — `grep`, ripgrep, GitHub code search, IDE Find-in-Files. These tools tell you _where_ something is. They cannot tell you _why it was built_, _what constraints the agent was given_, _what was explicitly forbidden_, _what decisions were made_, or _what evidence exists that it works correctly_. DOS has all of that information in the memory graph. Search is the interface that makes it accessible.
+**Why:** Code search already exists. What doesn't exist is delivery-chain archaeology: not _where_ something is, but _why it was built_, _what constraints the agent was given_, _what was forbidden_, _what was decided_, and _what evidence says it works_. DOS has all of that in the memory graph. This item is the interface that makes it accessible — for humans navigating, and for agents starting a new session.
 
-This is the capability that transforms DOS from a delivery process tool into a **living project intelligence layer**. A new team member can onboard by searching, not by reading documentation. An auditor can find all verified deliveries related to a compliance requirement. A tech lead investigating a production incident can trace the code back to the brief, the requirement, and the original intent — in seconds.
+**The use case:**
 
-**Two search modes:**
-
-_Full-text search_ — fast, exact match across all memory body files and source code. Finds literal occurrences of the search terms. Implemented as SQLite FTS5 (already available in the `sql.js` runtime DOS uses) against all stored memory bodies, plus a ripgrep pass against the codebase files.
-
-_Semantic search_ — finds conceptually related content even when the words differ. Searching "interest calculation" finds requirements that mention "APR computation", "yield accrual", or "penalty rate" because the concepts are related. Implemented via embeddings (small local model or API call). Slower than full-text but dramatically more useful for domain-rich codebases where terminology varies.
-
-**Result structure:**
-
-Each search result surfaces the full delivery chain for that match:
-
-```text
-REQ-007 — Calculate compound interest monthly          [requirement]
-  ├── Discovery note: "compound chosen over simple — regulatory requirement"
-  ├── Test spec TS-REQ-007 — 4 verification criteria
-  ├── Brief brief_a3f9... — allowed: src/finance/interest.ts; forbidden: src/finance/principal.ts
-  ├── Result result_c7d2... — agent touched 2 files, 1 test added
-  └── Verification — PASSED 2026-05-14
-```
-
-The user can expand any node to navigate directly to that artifact in the relevant DOS panel.
-
-**Search entry points:**
-
-- Command palette: `DOS: Search project` (global, any time)
-- Activity bar: persistent search box above the stage tree
-- Contextual: right-click any file in VS Code Explorer → "Find in DOS delivery history" (searches by file path — shows all briefs that touched this file, all requirements that mentioned it)
-- Panel-specific: search within a panel (e.g. requirements catalogue search already exists; this extends it to cross-artifact search)
-
-**What the search indexes:**
-
-| Content | Search type | Notes |
-| --- | --- | --- |
-| All memory body files (`.md`) | Full-text + semantic | Requirement descriptions, PRD sections, brief content, result summaries, decision notes |
-| Memory payload JSON fields | Full-text | Requirement IDs, brief IDs, file paths, tag values |
-| Source code files | Full-text | Codebase files in the workspace — bridges delivery context to code |
-| Canned responses / handoff files | Full-text | `.deliveryos-handoff/` contents if present |
-
-**The archaeology use case (example: core banking):**
-
-A developer is investigating a production bug in interest compounding. They search "compound interest" in DOS Search. Results show:
-
-- REQ-007 and REQ-012 — the two requirements that specified compound interest behaviour
-- Brief `brief_a3f9` — scoped to `src/finance/interest.ts`; forbidden: `src/finance/principal.ts` (revealing the boundary the agent was given)
-- A decision note from the brief review: "Tech Lead flagged: rounding mode must be HALF_UP per regulatory guidance"
-- Result capture: agent touched `interest.ts` + `interest.test.ts`; 3 tests added
-- Verification: PASSED — but criteria 3 ("rounding mode") was marked low-confidence at the time
-
-The developer now knows the rounding mode decision was flagged during delivery, was only low-confidence at verification, and the file `principal.ts` was explicitly off-limits — possible root cause located in under five seconds.
-
-**Key design questions:**
-
-1. **Embedding model choice.** Local (fast, private, no API cost) vs hosted (higher quality, requires network). For Phase 1, full-text search alone is valuable. Semantic search is an enhancement that can be added later without changing the interface.
-
-2. **Index freshness.** The full-text index must update when memory entries are written. SQLite FTS5 triggers handle this automatically. The semantic embedding index needs re-computation on writes — acceptable if async (background indexing after each save).
-
-3. **Cross-project search.** Phase 1: single project (current workspace). Phase W3 (multi-platform): search across all projects in the organisation's DOS workspace. This is the enterprise knowledge base use case.
-
-4. **Search and the non-code domain.** For a film production, searching "submarine interior" should find every requirement, brief, and result that mentioned the submarine setting — across all scenes. The search is domain-agnostic because the memory store is domain-agnostic.
-
-**Relationship to B-002 (reverse engineer):** B-002 populates the memory store from existing code. B-012 makes that populated store searchable. Together they answer the brownfield onboarding question: "I inherited this codebase — what was the intent behind X?" B-002 fills the gaps; B-012 navigates them.
-
-**Relationship to B-008 (impact analysis):** Impact analysis asks "what does this brief put at risk?" — it traverses the graph from a starting point. Search asks "where is X in this project?" — it finds the starting point. They are complementary navigation modes over the same memory graph.
-
-**Relationship to VISION.md (non-code domains):** The core banking interest calculation example is software. The same search in a film production finds every scene brief that mentioned the submarine set, every director's note about underwater lighting constraints, every result that confirmed the visual brief was delivered. Domain-agnostic search is the interface that makes DOS's domain-agnostic memory useful.
-
-**Success signal:** In a project with at least 5 requirements and 3 completed delivery cycles, search "interest calculation" (or any domain term from the project). Confirm results group by artifact type, each result shows the delivery chain, and clicking any result navigates to that artifact in the correct DOS panel. Run the same search in semantic mode and confirm it returns a related result that doesn't contain the exact search string.
-
-**Session tag when picked up:** DOS:O8 for spec (can be co-specced with B-008 — both navigate the memory graph), then DOS:R21 or DOS:R22 for implementation.
+A developer investigates a production bug in interest compounding. They search "compound interest." Results show REQ-007 (the requirement), brief `brief_a3f9` (scoped to `interest.ts`; `principal.ts` explicitly forbidden), a Tech Lead decision note ("rounding mode must be HALF_UP — regulatory"), and verification PASSED but criteria 3 marked low-confidence. Root cause located in under five seconds — from a search, not from reading code.
 
 ---
 
-## § B-013 — Project knowledge wiki (Karpathy LLM Wiki pattern)
+### Implementation options
 
-**Status:** Backlogged
-**Priority:** 🔴 High
+Three approaches exist. We will pick one when we come to build it.
 
-### The problem
+#### Option A — SQLite FTS5 _(recommended)_
 
-DOS accumulates structured artifacts — intent memory, requirements, briefs, results, verification records — across every delivery cycle. But each agent session starts from near-zero. The handover protocol injects the previous session's context, but that context is narrow: what was done last time, what's in flight now. The agent has no standing knowledge of what this project _is_.
+Full-text search over all memory body files, indexed automatically on write. FTS5 is already inside the `sql.js` runtime DOS uses — zero new dependencies, zero API cost, works offline. Implementation is roughly 50 lines of SQL and a search panel. Results are keyword-matched and BM25-ranked.
 
-A developer joining a new team spends days reading the codebase to build a mental model: how auth works here, where the data layer is, what conventions the team follows, what traps to avoid. A new AI agent session has to re-derive all of this from scratch on every invocation — or rely on a CLAUDE.md file that inevitably becomes stale and generic.
+_Effective for:_ delivery-chain archaeology, finding a requirement by name, locating all briefs that touched a file. Works well because DOS artifacts have deliberately consistent vocabulary — the same terms appear in requirement, brief, and result.
 
-The result: agents make decisions that contradict established project knowledge because they weren't told it. DOS has the data — every brief, every result, every verification record is in the memory store — but no synthesis layer that turns that data into injected standing knowledge.
+_Limitation:_ no semantic leap. Searching "interest rate" won't surface a requirement that only says "APR calculation" unless the terms overlap.
 
-### The insight (Karpathy LLM Wiki pattern)
+_Effort:_ low. New dependency count: 0. API cost: $0.
 
-In April 2026, Andrej Karpathy described a memory architecture for LLM agents that separates three layers:
+---
 
-1. **Source** — raw structured facts (like DOS's SQLite memory store)
-2. **Wiki** — synthesised, human-readable pages, one per domain concept, maintained by an AI agent as a living document
-3. **Injection** — relevant wiki pages injected into the agent's context window at session start
+#### Option B — Haiku context-injection
 
-The key property: wiki pages _compound_. Each delivery cycle, the wiki agent reads new artifacts and updates the relevant pages. Knowledge accumulates rather than being re-derived per query. The wiki becomes the project's institutional memory — the thing a new team member reads to understand how this project works.
+For each search query, inject relevant memory artifacts into a Haiku prompt and ask it to find and rank the matches. No embedding index, no vector store — just an API call. Returns semantically ranked results with a one-line explanation of why each result is relevant.
 
-DOS already has the bones of this pattern: markdown body files per memory artifact, a structured graph linking them. What's missing is the synthesis layer above the graph — the wiki that turns "here is a list of all decisions made in this project" into "here is what you need to know about this project before you touch it."
+_Effective for:_ semantic queries ("where do we handle authentication edge cases?"), cross-domain terminology mismatch, natural language questions about the project.
+
+_Limitation:_ requires an API call per search (~$0.01/query). Slower than FTS5. Requires network. Context window caps how many artifacts can be injected per query — large projects need chunking logic.
+
+_Effort:_ low-medium. Builds on existing API integration. New dependency count: 0.
+
+---
+
+#### Option C — Karpathy LLM Wiki pattern
+
+After each verified delivery, a Sonnet-class agent synthesises the new artifacts into a `wiki/` folder under `.deliveryos/` — one plain markdown page per domain concept (`interest-calculation.md`, `auth-conventions.md`, `known-constraints.md`). At session start, DOS injects the relevant pages into the agent's context window. Knowledge compounds across deliveries rather than being re-derived per query.
 
 Reference: [Karpathy LLM Wiki gist — April 2026](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
 
-### What it looks like
+_Effective for:_ standing agent knowledge — the agent starts the session already knowing project conventions, constraints, and domain model without reading a line of code. Also works as onboarding for new team members (read the wiki, not the codebase). Domain-agnostic: a film production wiki has `character-voice.md` and `submarine-setting.md`; a marketing project has `brand-voice.md` and `campaign-constraints.md`.
 
-A DOS project grows a `wiki/` folder under `.deliveryos/`. Each file is a plain markdown page for a domain concept:
+_Limitation:_ highest implementation effort of the three. Requires B-003 (agent team) and B-006 (change propagation) to be spec-complete first — wiki staleness semantics follow the same model as requirement staleness. Cold-start on brownfield projects requires a one-time synthesis pass (pairs with B-002). Ingest is Sonnet-class per delivery cycle — not free.
 
-```text
-.deliveryos/
-  wiki/
-    auth-conventions.md          ← how authentication works in this project
-    data-access-patterns.md      ← ORM? raw SQL? query builder conventions?
-    interest-calculation.md      ← where it lives, how it works, known edge cases
-    known-constraints.md         ← things agents must not do and why
-    test-conventions.md          ← how tests are structured, what helpers exist
-    domain-model.md              ← the core entities and their relationships
-```
+_Effort:_ high. Pre-conditions: B-003, B-006. New specialist type required.
 
-At session start, DOS injects the relevant pages into the agent's context. For a brief targeting the billing module, DOS injects `interest-calculation.md`, `data-access-patterns.md`, and `known-constraints.md`. The agent starts with standing knowledge, not a blank slate.
+---
 
-### Three operations
+### Comparison
 
-**Ingest** (after each verified delivery):
-A wiki agent reads the completed brief, result, and verification record. It identifies which domain concepts were touched and updates the relevant wiki pages — or creates new ones if a concept appears for the first time. The update is a synthesis, not a dump: the agent writes what a competent developer would want to know, not a transcription of the brief.
+| | Option A — FTS5 | Option B — Haiku injection | Option C — Wiki |
+| --- | --- | --- | --- |
+| New dependencies | None | None | None |
+| API cost | $0 | ~$0.01/search | ~$0.05/delivery cycle (Sonnet ingest) |
+| Works offline | Yes | No | Yes (once built) |
+| Semantic understanding | No | Yes | Yes |
+| Knowledge compounds | No | No | Yes |
+| Implementation effort | Low | Low–medium | High |
+| Pre-conditions | None | None | B-003, B-006 |
+| **Recommended** | **Yes** | — | — |
 
-**Query / inject** (at session start):
-When a new agent session opens, DOS reads the brief's Allowed list and the requirement text, identifies the relevant domain concepts, and injects the corresponding wiki pages into the context window. The agent knows the project before it reads a line of code.
+### What all three share
 
-**Lint** (linked to B-006 change propagation):
-If a brief's result contradicts a wiki page — e.g. a convention is changed, a constraint is lifted — DOS flags the wiki page as stale. The wiki agent is prompted to reconcile. This closes the loop between B-006 (change propagation) and B-013: staleness detection applies to synthesised knowledge, not just raw requirements.
+Each option surfaces results grouped by delivery artifact type, with the full chain visible: requirement → test spec → brief → result → verification. Each result links directly to the relevant DOS panel. Search is domain-agnostic — a film production search works the same way as a software search because the memory graph is domain-agnostic.
 
-### Relationship to other backlog items
+**Relationship to B-002:** B-002 populates the memory store from an existing codebase. B-012 makes that populated store navigable. Together they answer the brownfield onboarding question: "I inherited this — what was the intent behind X?"
 
-**B-012 (delivery search):** B-012 finds a delivery artifact. B-013 synthesises the knowledge _from_ those artifacts into injected context. They complement each other — search is for when you want to navigate; wiki injection is for when you want the agent to already know. Together they make B-012's vector search layer less necessary for many queries: if the wiki page for "interest calculation" already exists and is current, the agent doesn't need to search — it was injected.
+**Relationship to B-004 (session continuity):** Option C's wiki layer is the deep session continuity mechanism. The handover protocol keeps short-term context alive across windows. The wiki keeps long-term project knowledge alive across sessions, team members, and model versions.
 
-**B-004 (session continuity):** The wiki layer IS the deep session continuity mechanism. The handover protocol keeps short-term session context alive across windows. The wiki keeps long-term project knowledge alive across sessions, team members, and agent model versions.
+**Relationship to B-008 (impact analysis):** Impact analysis traverses the graph _forward_ from a starting point ("what does this brief put at risk?"). Search finds the starting point. They are complementary navigation modes over the same graph.
 
-**B-001 (DOS built with DOS):** DOS's own wiki would contain pages like `extension-architecture.md`, `memory-schema.md`, `webview-conventions.md`, `specialist-interface.md`. Every new R-session would inject the relevant pages rather than re-reading BUILD_STATUS.md and scattered source files.
+**Success signal:** In a project with at least 5 requirements and 3 completed delivery cycles, search "interest calculation" (or any domain term). Results group by artifact type, each shows the delivery chain, clicking any result navigates to the correct DOS panel.
 
-### Non-code domain application
-
-The wiki pattern is domain-agnostic because DOS's memory store is. For a film production:
-
-- `submarine-setting.md` — established visual rules, lighting constraints, confirmed set pieces
-- `character-voice.md` — tone, vocabulary, known contradictions to avoid per character
-- `act-structure.md` — what's established in Acts 1 and 2 that Act 3 briefs must not violate
-
-For a marketing campaign:
-
-- `brand-voice.md` — tone rules, terms to avoid, approved language
-- `audience-segments.md` — what's been established about each segment
-- `campaign-constraints.md` — legal review outcomes, regulatory limits
-
-The wiki page is the domain expert's briefing note, synthesised from all prior delivery evidence.
-
-### Implementation sketch
-
-Phase 1 (simple, high value):
-
-- A `wiki/` folder under `.deliveryos/`
-- A "Synthesise wiki page" action in the verification panel (manual trigger after each verified delivery)
-- Pages injected into the brief composer panel as a collapsible "Project context" section
-- Pages are plain markdown — editable by the developer, versioned in git
-
-Phase 2 (automated ingest):
-
-- Post-verification hook: trigger wiki agent automatically after each `verified` state transition
-- Diff-based update: the wiki agent reads only the new artifacts since last wiki update (not the whole project each time)
-- Staleness detection: if a result contradicts a wiki page, flag it in the verification panel
-
-Phase 3 (smart injection):
-
-- Relevance scoring: inject only the pages relevant to the current brief (not all pages — context budget)
-- Wiki page quality scoring: surface pages that haven't been updated in N delivery cycles as candidates for review
-- Cross-project wiki: Phase W3 — a team's wiki pages are shared across all projects, building an organisation-level knowledge base
-
-**Pre-conditions:** B-003 (agent team) spec complete — the wiki agent is a specialist type (§ B-003). B-006 (change propagation) spec locked — staleness semantics for wiki pages follow the same model as requirement staleness.
-
-**Key design questions:**
-
-1. **Wiki agent model tier.** Ingest is a synthesis task — Sonnet-class at minimum. Injection selection (choosing which pages to inject) is cheaper — Haiku-class. The lint/staleness check is a comparison task — Haiku-class.
-
-2. **Page granularity.** One page per domain concept is the target. Too coarse (one page for the whole project) loses the relevance scoring benefit. Too fine (one page per requirement) recreates the memory store with extra steps. The right granularity is: one page per concept a developer would search for in the team wiki.
-
-3. **Git versioning.** Wiki pages in `.deliveryos/wiki/` are committed to the repo. They are versioned alongside the code they describe. A `git blame` on a wiki page shows which delivery cycle last updated it — instant provenance.
-
-4. **Cold start.** A brownfield project has no wiki. B-002 (reverse engineer) populates the memory store. B-013 Phase 1 then runs a one-time "synthesise from existing memory" pass to bootstrap the wiki from those artifacts. B-002 → B-013 cold start is the brownfield onboarding path.
-
-**Success signal:** A new agent session for an existing project receives wiki-page injection in the brief composer. The agent's first action references a project convention it was not told in the brief itself — it got it from the wiki. A developer reviewing the agent's output confirms the convention reference was correct.
-
-**Session tag when picked up:** DOS:O9 for spec (can be co-specced with B-003 — the wiki agent is a specialist), then DOS:R23+ for implementation.
+**Session tag when picked up:** DOS:O8 for spec (can be co-specced with B-008), then DOS:R21+ for implementation.
