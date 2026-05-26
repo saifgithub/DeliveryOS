@@ -21,6 +21,7 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-010 | Delivery health dashboard — metrics across the SDLC | 🟢 Low | Surface the data DOS already captures (tests before/after, advisor escalations, forbidden writes caught, files changed per brief) as a delivery health view. Shows whether discipline is improving over time. See § B-010 below. |
 | B-011 | **Workgroup** — team coordination substrate | 🔴 High | DOS for teams: role separation, brief review gate, shared memory store, requirement state machine, standup view, non-developer access. Full roadmap: [`docs/pm/WORKGROUP.md`](WORKGROUP.md). |
 | B-012 | Semantic delivery search — find anything, understand why it was built | 🔴 High | Search across the full DOS memory graph and codebase. Not just where code lives — the complete intent-to-delivery trail: requirement → test spec → brief → result → verification → decisions. See § B-012 below. |
+| B-013 | Project knowledge wiki — Karpathy LLM Wiki pattern as DOS synthesis layer | 🔴 High | DOS maintains a living wiki of synthesised project knowledge (one page per domain concept) above the structured memory. Pages compound across deliveries and inject into agent sessions as context. Replaces vector search for many queries. See § B-013 below. |
 
 ---
 
@@ -535,3 +536,121 @@ The developer now knows the rounding mode decision was flagged during delivery, 
 **Success signal:** In a project with at least 5 requirements and 3 completed delivery cycles, search "interest calculation" (or any domain term from the project). Confirm results group by artifact type, each result shows the delivery chain, and clicking any result navigates to that artifact in the correct DOS panel. Run the same search in semantic mode and confirm it returns a related result that doesn't contain the exact search string.
 
 **Session tag when picked up:** DOS:O8 for spec (can be co-specced with B-008 — both navigate the memory graph), then DOS:R21 or DOS:R22 for implementation.
+
+---
+
+## § B-013 — Project knowledge wiki (Karpathy LLM Wiki pattern)
+
+**Status:** Backlogged
+**Priority:** 🔴 High
+
+### The problem
+
+DOS accumulates structured artifacts — intent memory, requirements, briefs, results, verification records — across every delivery cycle. But each agent session starts from near-zero. The handover protocol injects the previous session's context, but that context is narrow: what was done last time, what's in flight now. The agent has no standing knowledge of what this project _is_.
+
+A developer joining a new team spends days reading the codebase to build a mental model: how auth works here, where the data layer is, what conventions the team follows, what traps to avoid. A new AI agent session has to re-derive all of this from scratch on every invocation — or rely on a CLAUDE.md file that inevitably becomes stale and generic.
+
+The result: agents make decisions that contradict established project knowledge because they weren't told it. DOS has the data — every brief, every result, every verification record is in the memory store — but no synthesis layer that turns that data into injected standing knowledge.
+
+### The insight (Karpathy LLM Wiki pattern)
+
+In April 2026, Andrej Karpathy described a memory architecture for LLM agents that separates three layers:
+
+1. **Source** — raw structured facts (like DOS's SQLite memory store)
+2. **Wiki** — synthesised, human-readable pages, one per domain concept, maintained by an AI agent as a living document
+3. **Injection** — relevant wiki pages injected into the agent's context window at session start
+
+The key property: wiki pages _compound_. Each delivery cycle, the wiki agent reads new artifacts and updates the relevant pages. Knowledge accumulates rather than being re-derived per query. The wiki becomes the project's institutional memory — the thing a new team member reads to understand how this project works.
+
+DOS already has the bones of this pattern: markdown body files per memory artifact, a structured graph linking them. What's missing is the synthesis layer above the graph — the wiki that turns "here is a list of all decisions made in this project" into "here is what you need to know about this project before you touch it."
+
+Reference: [Karpathy LLM Wiki gist — April 2026](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)
+
+### What it looks like
+
+A DOS project grows a `wiki/` folder under `.deliveryos/`. Each file is a plain markdown page for a domain concept:
+
+```text
+.deliveryos/
+  wiki/
+    auth-conventions.md          ← how authentication works in this project
+    data-access-patterns.md      ← ORM? raw SQL? query builder conventions?
+    interest-calculation.md      ← where it lives, how it works, known edge cases
+    known-constraints.md         ← things agents must not do and why
+    test-conventions.md          ← how tests are structured, what helpers exist
+    domain-model.md              ← the core entities and their relationships
+```
+
+At session start, DOS injects the relevant pages into the agent's context. For a brief targeting the billing module, DOS injects `interest-calculation.md`, `data-access-patterns.md`, and `known-constraints.md`. The agent starts with standing knowledge, not a blank slate.
+
+### Three operations
+
+**Ingest** (after each verified delivery):
+A wiki agent reads the completed brief, result, and verification record. It identifies which domain concepts were touched and updates the relevant wiki pages — or creates new ones if a concept appears for the first time. The update is a synthesis, not a dump: the agent writes what a competent developer would want to know, not a transcription of the brief.
+
+**Query / inject** (at session start):
+When a new agent session opens, DOS reads the brief's Allowed list and the requirement text, identifies the relevant domain concepts, and injects the corresponding wiki pages into the context window. The agent knows the project before it reads a line of code.
+
+**Lint** (linked to B-006 change propagation):
+If a brief's result contradicts a wiki page — e.g. a convention is changed, a constraint is lifted — DOS flags the wiki page as stale. The wiki agent is prompted to reconcile. This closes the loop between B-006 (change propagation) and B-013: staleness detection applies to synthesised knowledge, not just raw requirements.
+
+### Relationship to other backlog items
+
+**B-012 (delivery search):** B-012 finds a delivery artifact. B-013 synthesises the knowledge _from_ those artifacts into injected context. They complement each other — search is for when you want to navigate; wiki injection is for when you want the agent to already know. Together they make B-012's vector search layer less necessary for many queries: if the wiki page for "interest calculation" already exists and is current, the agent doesn't need to search — it was injected.
+
+**B-004 (session continuity):** The wiki layer IS the deep session continuity mechanism. The handover protocol keeps short-term session context alive across windows. The wiki keeps long-term project knowledge alive across sessions, team members, and agent model versions.
+
+**B-001 (DOS built with DOS):** DOS's own wiki would contain pages like `extension-architecture.md`, `memory-schema.md`, `webview-conventions.md`, `specialist-interface.md`. Every new R-session would inject the relevant pages rather than re-reading BUILD_STATUS.md and scattered source files.
+
+### Non-code domain application
+
+The wiki pattern is domain-agnostic because DOS's memory store is. For a film production:
+
+- `submarine-setting.md` — established visual rules, lighting constraints, confirmed set pieces
+- `character-voice.md` — tone, vocabulary, known contradictions to avoid per character
+- `act-structure.md` — what's established in Acts 1 and 2 that Act 3 briefs must not violate
+
+For a marketing campaign:
+
+- `brand-voice.md` — tone rules, terms to avoid, approved language
+- `audience-segments.md` — what's been established about each segment
+- `campaign-constraints.md` — legal review outcomes, regulatory limits
+
+The wiki page is the domain expert's briefing note, synthesised from all prior delivery evidence.
+
+### Implementation sketch
+
+Phase 1 (simple, high value):
+
+- A `wiki/` folder under `.deliveryos/`
+- A "Synthesise wiki page" action in the verification panel (manual trigger after each verified delivery)
+- Pages injected into the brief composer panel as a collapsible "Project context" section
+- Pages are plain markdown — editable by the developer, versioned in git
+
+Phase 2 (automated ingest):
+
+- Post-verification hook: trigger wiki agent automatically after each `verified` state transition
+- Diff-based update: the wiki agent reads only the new artifacts since last wiki update (not the whole project each time)
+- Staleness detection: if a result contradicts a wiki page, flag it in the verification panel
+
+Phase 3 (smart injection):
+
+- Relevance scoring: inject only the pages relevant to the current brief (not all pages — context budget)
+- Wiki page quality scoring: surface pages that haven't been updated in N delivery cycles as candidates for review
+- Cross-project wiki: Phase W3 — a team's wiki pages are shared across all projects, building an organisation-level knowledge base
+
+**Pre-conditions:** B-003 (agent team) spec complete — the wiki agent is a specialist type (§ B-003). B-006 (change propagation) spec locked — staleness semantics for wiki pages follow the same model as requirement staleness.
+
+**Key design questions:**
+
+1. **Wiki agent model tier.** Ingest is a synthesis task — Sonnet-class at minimum. Injection selection (choosing which pages to inject) is cheaper — Haiku-class. The lint/staleness check is a comparison task — Haiku-class.
+
+2. **Page granularity.** One page per domain concept is the target. Too coarse (one page for the whole project) loses the relevance scoring benefit. Too fine (one page per requirement) recreates the memory store with extra steps. The right granularity is: one page per concept a developer would search for in the team wiki.
+
+3. **Git versioning.** Wiki pages in `.deliveryos/wiki/` are committed to the repo. They are versioned alongside the code they describe. A `git blame` on a wiki page shows which delivery cycle last updated it — instant provenance.
+
+4. **Cold start.** A brownfield project has no wiki. B-002 (reverse engineer) populates the memory store. B-013 Phase 1 then runs a one-time "synthesise from existing memory" pass to bootstrap the wiki from those artifacts. B-002 → B-013 cold start is the brownfield onboarding path.
+
+**Success signal:** A new agent session for an existing project receives wiki-page injection in the brief composer. The agent's first action references a project convention it was not told in the brief itself — it got it from the wiki. A developer reviewing the agent's output confirms the convention reference was correct.
+
+**Session tag when picked up:** DOS:O9 for spec (can be co-specced with B-003 — the wiki agent is a specialist), then DOS:R23+ for implementation.
