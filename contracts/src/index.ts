@@ -10,3 +10,4 @@ export * from './profiles';
 export * from './handoff';
 export * as Hello from './panels/hello';
 export * from './result';
+export * from './diff';

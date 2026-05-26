@@ -23,6 +23,7 @@ export default defineConfig({
         'brief-composer': resolve(__dirname, 'src/panels/brief-composer/index.html'),
         'result-detail': resolve(__dirname, 'src/panels/result/index-detail.html'),
         'result-paste': resolve(__dirname, 'src/panels/result/index-paste.html'),
+        'diff-results': resolve(__dirname, 'src/panels/diff-results/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

@@ -39,6 +39,8 @@ import { REQUIREMENTS_VIEW_TYPE } from './webview/requirementsPanel';
 import { TEST_DESIGNER_VIEW_TYPE, openTestDesignerPanel } from './webview/testDesignerPanel';
 import { captureFromHandoff, onResultCaptured } from './result/captureFlow';
 import { openPasteFallbackPanel } from './panels/result/resultHost';
+import { registerDiffOpenForResultCommand } from './panels/diff-results/diffResultsCommand';
+import { registerRecomputeDiffCommand } from './diff/recompute';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('DeliveryOS activated');
@@ -119,6 +121,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       openPasteFallbackPanel(context, host),
     ),
   );
+
+  // CHUNK-13: diff commands.
+  if (memoryStore) {
+    context.subscriptions.push(
+      registerDiffOpenForResultCommand(context, memoryStore),
+      registerRecomputeDiffCommand(memoryStore),
+    );
+    // deliveryos.diff.installClaudeHook is handled by the diff-results panel itself.
+  }
 
   context.subscriptions.push(
     registerProjectCreate({

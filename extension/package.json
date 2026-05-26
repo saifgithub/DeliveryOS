@@ -127,6 +127,21 @@
         "command": "deliveryos.result.openPasteFallback",
         "title": "DeliveryOS: Paste Harness Result",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.diff.openForResult",
+        "title": "DeliveryOS: Open Diff Results",
+        "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.diff.recompute",
+        "title": "DeliveryOS: Re-run Diff",
+        "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.diff.installClaudeHook",
+        "title": "DeliveryOS: Install Claude Code PreToolUse Hook",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {

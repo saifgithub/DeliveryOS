@@ -104,6 +104,17 @@ export interface ResultNode {
   readonly iconId: string;
 }
 
+export interface DiffOutcomeNode {
+  readonly kind: 'diff-outcome';
+  readonly stageId: 'execute';
+  readonly resultEntryId: string;
+  readonly verdict: 'pass' | 'fail' | null;
+  readonly iconId: string;
+  readonly displayName: string;
+  readonly commandId: string;
+  readonly commandArgs: unknown[];
+}
+
 export type StageTreeNode =
   | StageNode
   | ArtefactNode
@@ -114,7 +125,8 @@ export type StageTreeNode =
   | ExecuteRequirementNode
   | BriefNode
   | ComposeBriefNode
-  | ResultNode;
+  | ResultNode
+  | DiffOutcomeNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -279,7 +291,7 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
     }
     case 'result': {
       const label = `Result — ${new Date(node.capturedAt).toLocaleString()}`;
-      const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+      const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
       item.contextValue = 'deliveryos.execute.result';
       item.iconPath = new vscode.ThemeIcon(node.iconId);
       item.tooltip =
@@ -288,6 +300,23 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
           : node.confidence === 'medium'
             ? `Result captured (medium confidence — some sections missing). Source: ${node.source}.`
             : `Result captured (low confidence — parser could not detect expected sections). Source: ${node.source}.`;
+      return item;
+    }
+    case 'diff-outcome': {
+      const item = new vscode.TreeItem(
+        node.displayName,
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.execute.diffOutcome';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = node.verdict === null
+        ? 'Diff not yet computed. Click to open the diff results panel.'
+        : `Diff outcome: ${node.verdict.toUpperCase()}. Click to open the diff results panel.`;
+      item.command = {
+        command: node.commandId,
+        title: node.displayName,
+        arguments: node.commandArgs,
+      };
       return item;
     }
   }

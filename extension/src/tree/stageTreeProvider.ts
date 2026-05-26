@@ -8,6 +8,7 @@ import {
   ArtefactNode,
   BriefNode,
   ComposeBriefNode,
+  DiffOutcomeNode,
   ExecuteRequirementNode,
   RequirementItemNode,
   RequirementsGroupNode,
@@ -18,7 +19,8 @@ import {
   stageDefToNode,
   toTreeItem,
 } from './stageTreeNodes';
-import type { StoredResultPayload } from '@deliveryos/contracts';
+import type { StoredResultPayload, DiffOutcome } from '@deliveryos/contracts';
+import { diffOutcomeChildBuilder } from '../diff/diffTreeContribution';
 
 const TOTAL_QUESTIONS = DISCOVERY_QUESTIONS_MVP.length;
 
@@ -133,6 +135,9 @@ export class StageTreeProvider
     }
     if (element.kind === 'brief') {
       return this.briefResultChildren(element);
+    }
+    if (element.kind === 'result') {
+      return this.resultChildren(element);
     }
     return [];
   }
@@ -320,6 +325,15 @@ export class StageTreeProvider
         iconId,
       };
     });
+  }
+
+  private async resultChildren(node: ResultNode): Promise<DiffOutcomeNode[]> {
+    if (!this.memoryStore) return [];
+    const entry = await this.memoryStore.read(node.resultEntryId);
+    if (!entry || entry.type !== 'result') return [];
+    const payload = entry.payload as unknown as StoredResultPayload;
+    const diffOutcome = payload.diffOutcome as DiffOutcome | undefined;
+    return [diffOutcomeChildBuilder(node, diffOutcome)];
   }
 
   private async discoverChildren(intentId: string): Promise<ArtefactNode[]> {
