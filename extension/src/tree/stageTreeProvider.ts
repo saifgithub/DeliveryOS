@@ -16,10 +16,14 @@ import {
   StageTreeNode,
   TestSpecNode,
   VerificationCriteriaNode,
+  VerificationsGroupNode,
+  VerificationEntryNode,
+  ReleaseEvidenceGroupNode,
+  ReleaseEvidenceNode,
   stageDefToNode,
   toTreeItem,
 } from './stageTreeNodes';
-import type { StoredResultPayload, DiffOutcome } from '@deliveryos/contracts';
+import type { StoredResultPayload, DiffOutcome, VerificationMemoryPayload, ReleaseMemoryPayload } from '@deliveryos/contracts';
 import { diffOutcomeChildBuilder } from '../diff/diffTreeContribution';
 
 const TOTAL_QUESTIONS = DISCOVERY_QUESTIONS_MVP.length;
@@ -84,11 +88,22 @@ export class StageTreeProvider
             this.refresh();
             return;
           }
+          if (event.kind === 'create' && event.entryType === 'verification') {
+            this.refresh();
+            return;
+          }
+          if (event.kind === 'create' && event.entryType === 'release') {
+            this.refresh();
+            return;
+          }
           if (
             (event.kind === 'link' || event.kind === 'unlink') &&
             (event.linkKind === 'has-test-spec' ||
               event.linkKind === 'derives-from' ||
               event.linkKind === 'supersedes' ||
+              event.linkKind === 'evaluates' ||
+              event.linkKind === 'verifies' ||
+              event.linkKind === 'releases' ||
               event.fromId === active.id ||
               event.toId === active.id)
           ) {
@@ -130,6 +145,15 @@ export class StageTreeProvider
     if (element.kind === 'stage' && element.stageId === 'execute') {
       return this.executeChildren(active.id);
     }
+    if (element.kind === 'stage' && element.stageId === 'verify') {
+      return this.verifyChildren();
+    }
+    if (element.kind === 'verifications-group') {
+      return this.verificationEntries();
+    }
+    if (element.kind === 'release-evidence-group') {
+      return this.releaseEvidenceEntries();
+    }
     if (element.kind === 'execute-requirement') {
       return this.executeRequirementChildren(element);
     }
@@ -147,6 +171,59 @@ export class StageTreeProvider
       d.dispose();
     }
     this._onDidChangeTreeData.dispose();
+  }
+
+  private verifyChildren(): (VerificationsGroupNode | ReleaseEvidenceGroupNode)[] {
+    return [
+      {
+        kind: 'verifications-group',
+        stageId: 'verify',
+        displayName: 'Verifications',
+        iconId: 'verified',
+      },
+      {
+        kind: 'release-evidence-group',
+        stageId: 'verify',
+        displayName: 'Release Evidence',
+        iconId: 'package',
+      },
+    ];
+  }
+
+  private async verificationEntries(): Promise<VerificationEntryNode[]> {
+    if (!this.memoryStore) return [];
+    const entries = await this.memoryStore.list('verification');
+    return entries.map((e) => {
+      const payload = e.payload as unknown as VerificationMemoryPayload;
+      const verdict = payload.verdict ?? 'fail';
+      const iconId = verdict === 'pass' ? 'pass' : verdict === 'rework' ? 'sync' : 'error';
+      return {
+        kind: 'verification-entry' as const,
+        stageId: 'verify' as const,
+        verificationEntryId: e.id,
+        resultId: payload.resultRef?.id ?? '',
+        verdict,
+        iconId,
+        displayName: e.title,
+      };
+    });
+  }
+
+  private async releaseEvidenceEntries(): Promise<ReleaseEvidenceNode[]> {
+    if (!this.memoryStore) return [];
+    const entries = await this.memoryStore.list('release');
+    return entries.map((e) => {
+      const payload = e.payload as unknown as ReleaseMemoryPayload;
+      return {
+        kind: 'release-evidence' as const,
+        stageId: 'verify' as const,
+        releaseEntryId: e.id,
+        releaseId: (e.payload as { releaseId?: string }).releaseId ?? e.id,
+        requirementTitle: payload.requirementRef?.title ?? e.title,
+        documentPath: payload.documentPath ?? '',
+        iconId: 'file-text',
+      };
+    });
   }
 
   private async defineChildren(

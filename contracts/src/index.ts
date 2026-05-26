@@ -11,3 +11,5 @@ export * from './handoff';
 export * as Hello from './panels/hello';
 export * from './result';
 export * from './diff';
+export * from './verification';
+export * from './release';

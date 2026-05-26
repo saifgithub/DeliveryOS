@@ -41,6 +41,7 @@ import { captureFromHandoff, onResultCaptured } from './result/captureFlow';
 import { openPasteFallbackPanel } from './panels/result/resultHost';
 import { registerDiffOpenForResultCommand } from './panels/diff-results/diffResultsCommand';
 import { registerRecomputeDiffCommand } from './diff/recompute';
+import { openVerificationPanel } from './panels/verification/verificationHost';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('DeliveryOS activated');
@@ -130,6 +131,40 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     // deliveryos.diff.installClaudeHook is handled by the diff-results panel itself.
   }
+
+  // CHUNK-14: verification command.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      'deliveryos.verify.open',
+      (args: { verificationEntryId?: string; requirementEntryId?: string; resultEntryId?: string; testSpecEntryId?: string }) => {
+        if (!memoryStore) {
+          vscode.window.showErrorMessage('DeliveryOS: no memory store available.');
+          return;
+        }
+        const requirementEntryId = args?.requirementEntryId ?? '';
+        const resultEntryId = args?.resultEntryId ?? '';
+        const testSpecEntryId = args?.testSpecEntryId ?? '';
+        return openVerificationPanel(context, memoryStore, {
+          requirementEntryId,
+          resultEntryId,
+          testSpecEntryId,
+        });
+      },
+    ),
+    vscode.commands.registerCommand(
+      'deliveryos.release.openDocument',
+      async (args: { releaseEntryId?: string }) => {
+        if (!memoryStore || !workspaceFolder) return;
+        if (!args?.releaseEntryId) return;
+        const entry = await memoryStore.read(args.releaseEntryId);
+        if (!entry || entry.type !== 'release') return;
+        const payload = entry.payload as { documentPath?: string };
+        if (!payload.documentPath) return;
+        const docUri = vscode.Uri.joinPath(workspaceFolder.uri, payload.documentPath);
+        await vscode.window.showTextDocument(docUri);
+      },
+    ),
+  );
 
   context.subscriptions.push(
     registerProjectCreate({

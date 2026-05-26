@@ -142,6 +142,16 @@
         "command": "deliveryos.diff.installClaudeHook",
         "title": "DeliveryOS: Install Claude Code PreToolUse Hook",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.verify.open",
+        "title": "DeliveryOS: Open Verification Panel",
+        "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.release.openDocument",
+        "title": "DeliveryOS: Open Release Evidence Document",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {
@@ -176,12 +186,14 @@
   },
   "dependencies": {
     "@deliveryos/contracts": "*",
+    "archiver": "^7.0.1",
     "picomatch": "^2.3.2",
     "sql.js": "^1.14.1",
     "vscode-messenger": "^0.4.5",
     "vscode-messenger-common": "^0.4.5"
   },
   "devDependencies": {
+    "@types/archiver": "^6.0.3",
     "@types/node": "^20.0.0",
     "@types/picomatch": "^2.3.4",
     "@types/sql.js": "^1.4.11",

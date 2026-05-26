@@ -115,6 +115,40 @@ export interface DiffOutcomeNode {
   readonly commandArgs: unknown[];
 }
 
+export interface VerificationsGroupNode {
+  readonly kind: 'verifications-group';
+  readonly stageId: 'verify';
+  readonly displayName: string;
+  readonly iconId: string;
+}
+
+export interface VerificationEntryNode {
+  readonly kind: 'verification-entry';
+  readonly stageId: 'verify';
+  readonly verificationEntryId: string;
+  readonly resultId: string;
+  readonly verdict: 'pass' | 'fail' | 'rework';
+  readonly iconId: string;
+  readonly displayName: string;
+}
+
+export interface ReleaseEvidenceGroupNode {
+  readonly kind: 'release-evidence-group';
+  readonly stageId: 'verify';
+  readonly displayName: string;
+  readonly iconId: string;
+}
+
+export interface ReleaseEvidenceNode {
+  readonly kind: 'release-evidence';
+  readonly stageId: 'verify';
+  readonly releaseEntryId: string;
+  readonly releaseId: string;
+  readonly requirementTitle: string;
+  readonly documentPath: string;
+  readonly iconId: string;
+}
+
 export type StageTreeNode =
   | StageNode
   | ArtefactNode
@@ -126,7 +160,11 @@ export type StageTreeNode =
   | BriefNode
   | ComposeBriefNode
   | ResultNode
-  | DiffOutcomeNode;
+  | DiffOutcomeNode
+  | VerificationsGroupNode
+  | VerificationEntryNode
+  | ReleaseEvidenceGroupNode
+  | ReleaseEvidenceNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -316,6 +354,54 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
         command: node.commandId,
         title: node.displayName,
         arguments: node.commandArgs,
+      };
+      return item;
+    }
+    case 'verifications-group': {
+      const item = new vscode.TreeItem(
+        node.displayName,
+        vscode.TreeItemCollapsibleState.Collapsed,
+      );
+      item.contextValue = 'deliveryos.verify.verificationsGroup';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      return item;
+    }
+    case 'verification-entry': {
+      const item = new vscode.TreeItem(
+        node.displayName,
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.verify.verificationEntry';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `Verification (${node.verdict}). Click to open.`;
+      item.command = {
+        command: 'deliveryos.verify.open',
+        title: 'Open Verification',
+        arguments: [{ verificationEntryId: node.verificationEntryId }],
+      };
+      return item;
+    }
+    case 'release-evidence-group': {
+      const item = new vscode.TreeItem(
+        node.displayName,
+        vscode.TreeItemCollapsibleState.Collapsed,
+      );
+      item.contextValue = 'deliveryos.verify.releaseEvidenceGroup';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      return item;
+    }
+    case 'release-evidence': {
+      const item = new vscode.TreeItem(
+        `${node.releaseId} — ${node.requirementTitle}`,
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.verify.releaseEvidence';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `Open release evidence document: ${node.documentPath}`;
+      item.command = {
+        command: 'deliveryos.release.openDocument',
+        title: 'Open Release Evidence',
+        arguments: [{ releaseEntryId: node.releaseEntryId }],
       };
       return item;
     }
