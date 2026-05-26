@@ -1,181 +1,259 @@
 # DeliveryOS
 
-A meta-harness for AI-assisted software delivery. A harness around your harness.
+> A harness around your harness.
 
-**Status:** Build in progress — **Phase 2 closed (Week 9 complete)** (CHUNK-11 File handoff + terminal integration shipped, ~8 weeks ahead of plan). `npm run package` produces a `deliveryos-0.0.2.vsix` that installs into VS Code, Cursor, Windsurf, VSCodium, and Antigravity. The extension persists project memory in a local SQLite database, renders a four-stage tree with DISCOVER + DEFINE + EXECUTE children (Draft PRD + Requirements group in DEFINE; per-requirement brief lists in EXECUTE), and walks an end-to-end manual-mode loop: raw idea → discovery → PRD → requirements → test specs → Execution Briefs → **harness-aware rendering with one-click `CLAUDE.md` / `AGENTS.md` / `.claude/settings.json` updates** → **"Run with Claude Code / Codex" writes `.deliveryos-handoff/` and opens an integrated terminal with the harness command pre-typed**. The Brief composer opens from any requirement, pre-fills 10 canonical sections (with the locked Section 9 `result.md` template), validates Allowed/Forbidden glob lists with picomatch, persists immutable briefs to `.deliveryos/memory/execution/` with `derives-from`/`supersedes` graph edges, supports a revision flow that chains versioned briefs, renders each brief through Claude Code or Codex profiles with a unified-diff suggested-updates panel for harness instruction files (canonical `<!-- DELIVERYOS:BEGIN -->` markdown + `deliveryos.managed` JSON sentinel + `# DELIVERYOS:BEGIN` gitignore markers, idempotent applier, host-confirmed overwrite on hand-edits), **and on click of `Run with Claude Code` / `Run with Codex` atomically writes the 5 `current-*.md` handoff files + a `history/<timestamp>-execution-brief.md` audit snapshot, opens the integrated terminal with the harness command pre-typed (shouldExecute=false — user presses Enter as the audit consent), and observes `.deliveryos-handoff/result.md` via a debounced + SHA-256-deduped FileSystemWatcher**. Result Capture (CHUNK-12) and Allowed/Forbidden diff (CHUNK-13) land next.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Latest release](https://img.shields.io/github/v/release/saifgithub/deliveryos)](https://github.com/saifgithub/deliveryos/releases/latest)
+[![Demo video](https://img.shields.io/badge/Demo-YouTube-red)](https://youtu.be/PLACEHOLDER)
 
-## What this is
+---
 
-DeliveryOS is a structured SDLC memory and orchestration harness around AI coding harnesses such as Claude Code, Codex, Cursor, Replit, Lovable, and local coding agents.
+## Hero
 
-It does not write code. It produces Execution Briefs, hands them off to the coding harness of your choice, captures the result, verifies it against the test specification, and updates project memory.
+![DeliveryOS activity bar](docs/screenshots/01-activity-bar.png)
 
-The thesis: the winning products are not raw models, they are harnesses. DeliveryOS is the SDLC-level harness above the coding harnesses.
+*One icon, five editors.*
 
-## Documents
+---
 
-Current:
+## What is DeliveryOS?
 
-- [docs/PRD.md](docs/PRD.md) — current spec (v0.3)
-- [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md) — 14-week phased build plan
-- [docs/MULTI_AGENT_BUILD_PROCESS.md](docs/MULTI_AGENT_BUILD_PROCESS.md) — how the project ships code via coordinated AI agents
-- [docs/planning/claude-code-build-prompts.md](docs/planning/claude-code-build-prompts.md) — the four-prompt planning loop
-- [docs/CRITIQUE-v2.md](docs/CRITIQUE-v2.md) — current critique (the v0.2 pivot, with v0.3 addendum)
-- [docs/CHANGELOG.md](docs/CHANGELOG.md) — version history
-- [docs/decisions/0001-vsix-extension-not-fork.md](docs/decisions/0001-vsix-extension-not-fork.md) — delivery mechanism decision
-- [docs/architecture/execution-briefs.md](docs/architecture/execution-briefs.md) — the core handoff artefact
-- [docs/architecture/harness-profiles.md](docs/architecture/harness-profiles.md) — how DeliveryOS renders briefs for Claude Code, Codex, Cursor, etc.
-- [docs/architecture/memory-layers.md](docs/architecture/memory-layers.md) — the eight typed memory layers
-- [docs/architecture/stage-configuration.md](docs/architecture/stage-configuration.md) — 4 default stages + configurable mid-stage library (v0.3)
+DeliveryOS turns raw software intent into verified Execution Briefs for AI coding agents, then preserves the memory, validation, and release evidence around their work.
 
-Deprecated (kept for history, see [docs/deprecated/README.md](docs/deprecated/README.md)):
+The thesis is simple. Claude Code's `CLAUDE.md` is a harness — it gives the model context, file conventions, and behavioural rules that make the difference between a useful coding assistant and a dangerous one. But that harness only covers one session. It doesn't know your requirements. It doesn't know your test spec. It doesn't carry the decisions from last month's sprint into this one. It doesn't prevent the agent from touching the user auth module when you told it not to.
 
-- [docs/deprecated/PRD-v0.1.md](docs/deprecated/PRD-v0.1.md) — superseded original PRD
-- [docs/deprecated/CRITIQUE-v1.md](docs/deprecated/CRITIQUE-v1.md) — superseded critique of v0.1
+DeliveryOS is the harness above that harness. It covers the SDLC layer: raw idea → discovery interview → structured PRD → requirement catalogue → test specification → Execution Brief (with explicit allowed and forbidden file lists) → harness handoff → result capture → diff validation → verification → memory update → release evidence. Every artefact is a readable markdown file on disk. The model is interchangeable.
 
-## Delivery
+Who this is for: an AI-native solo builder who runs Claude Code or Codex as a primary coding tool. A technical PM or solution architect who wants structured, auditable AI-assisted delivery. Anyone who has learned, the hard way, that an unconstrained coding agent is not the same thing as a well-briefed one.
 
-DeliveryOS ships as a sideloadable `.vsix` VS Code extension. One file runs in VS Code, Cursor, Windsurf, Antigravity, and VSCodium. Not a fork, not a standalone app. See ADR-0001.
+---
+
+## The five-minute quick-start
+
+1. [Install the `.vsix`](#install) — one command or one file drag.
+2. Open any VS Code-family editor (VS Code, Cursor, Windsurf, VSCodium, Antigravity) in a project folder.
+3. Click the DeliveryOS icon in the activity bar.
+4. Paste a raw idea into **DISCOVER**.
+5. Walk through **DEFINE → EXECUTE → VERIFY** using the manual AI flow — copy prompts out, paste results back.
+6. Export Release Evidence at the end of each requirement cycle.
+
+The whole loop runs in about 30 minutes for a small requirement. The only tool you need besides this extension is whatever AI chat you already use.
+
+---
+
+## Demo video
+
+[![Demo video](docs/screenshots/05-diff-violation.png)](https://youtu.be/PLACEHOLDER)
+
+Three and a half minutes, end to end, including the moment DeliveryOS catches Claude Code touching a forbidden file.
+
+The demo uses the Bug Triage Assistant workspace in `examples/bug-triage/`. Claude Code attempts to edit `src/backend/api/users.py` — a file in the Forbidden list. The PreToolUse hook fires before the write executes. The file is never touched.
+
+If the video is unavailable, the backup `.mp4` is attached to the [v0.1.0 GitHub Release](https://github.com/saifgithub/deliveryos/releases/tag/v0.1.0).
+
+---
 
 ## Install
 
-DeliveryOS ships as a sideloadable `.vsix`. It runs in VS Code, Cursor, Windsurf, VSCodium, and Antigravity.
+### Recommended: install script
 
-### Quick install (macOS / Linux)
+#### macOS and Linux
 
 ```sh
-curl -fsSL https://github.com/saifgithub/DeliveryOS/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/saifgithub/deliveryos/releases/download/v0.1.0/install.sh | sh
 ```
 
-### Quick install (Windows, PowerShell)
+#### Windows (PowerShell)
 
 ```powershell
-iwr -useb https://github.com/saifgithub/DeliveryOS/releases/latest/download/install.ps1 | iex
+iwr -useb https://github.com/saifgithub/deliveryos/releases/download/v0.1.0/install.ps1 | iex
 ```
 
-The install script detects every supported editor on your `PATH` and installs DeliveryOS into each.
+The install script detects every supported editor on your `PATH` and installs DeliveryOS into each one automatically. Run it again later to upgrade.
 
-### Manual install
+### Manual sideload
 
-1. Download `deliveryos-X.Y.Z.vsix` from the [latest release](https://github.com/saifgithub/DeliveryOS/releases/latest).
-2. Verify the SHA-256:
+Download `deliveryos-0.1.0.vsix` from the [latest release](https://github.com/saifgithub/deliveryos/releases/latest), then run the command for each editor you want to use:
 
-    ```sh
-    shasum -a 256 -c SHA256SUMS.txt
-    ```
+| Editor | Command |
+| --- | --- |
+| VS Code | `code --install-extension deliveryos-0.1.0.vsix --force` |
+| Cursor | `cursor --install-extension deliveryos-0.1.0.vsix --force` |
+| Windsurf | `windsurf --install-extension deliveryos-0.1.0.vsix --force` |
+| VSCodium | `codium --install-extension deliveryos-0.1.0.vsix --force` |
+| Antigravity | `antigravity --install-extension deliveryos-0.1.0.vsix --force` |
 
-3. Install into whichever editors you use:
+Or use each editor's "Install from VSIX" command from the command palette (`Cmd/Ctrl+Shift+P`).
 
-    ```sh
-    code        --install-extension deliveryos-X.Y.Z.vsix --force   # VS Code
-    cursor      --install-extension deliveryos-X.Y.Z.vsix --force   # Cursor
-    windsurf    --install-extension deliveryos-X.Y.Z.vsix --force   # Windsurf
-    codium      --install-extension deliveryos-X.Y.Z.vsix --force   # VSCodium
-    antigravity --install-extension deliveryos-X.Y.Z.vsix --force   # Antigravity
-    ```
+### Antigravity path note
 
-   Or use each editor's "Install from VSIX" command from the command palette (`Cmd/Ctrl+Shift+P`).
-
-### Why SHA-256?
-
-Sideloaded VSIX files bypass the editor's Microsoft-signed extension verification by design — that path only applies to Marketplace-installed extensions. DeliveryOS publishes a SHA-256 hash on every release so you can confirm the `.vsix` you downloaded matches what was built by the [release workflow](.github/workflows/release.yml).
-
-### Updates
-
-DeliveryOS checks GitHub Releases on startup and notifies you when a newer version is available. To disable: set `deliveryos.checkForUpdates` to `false` in your editor settings.
-
-### Troubleshooting
-
-- **`command not found: code` (or `cursor` / `windsurf` / `codium` / `antigravity`).** Open the editor, hit `Cmd/Ctrl+Shift+P`, search for `Shell Command: Install '<editor>' command in PATH` (the wording matches the editor). Re-run the install script.
-- **Extension installs but the activity-bar icon doesn't appear.** Reload the window (`Cmd/Ctrl+Shift+P → Developer: Reload Window`). Some editors need a reload before custom activity-bar contributions render.
-- **Antigravity not detected.** Antigravity 1.x ships a CLI at `/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity` (macOS); add that directory to `PATH` if needed. **Antigravity 2.x dropped the CLI entirely** — the install script now surfaces a specific SKIP reason (`Antigravity 2.x — CLI removed; install manually via app UI`) when the `Antigravity.app` bundle is present without a CLI on `PATH`. To sideload into Antigravity 2.x, open the app → Extensions → `…` menu → "Install from VSIX" and pick the `.vsix` you downloaded.
-- **GitHub rate limit on update check.** Harmless — the check fails silently and you won't see the notification. To suppress entirely, set `deliveryos.checkForUpdates` to `false`.
-
-## Quick Start — manual-mode loop
-
-1. Install the extension and open a workspace.
-2. Click the DeliveryOS rocket icon in the activity bar and create a project.
-3. In the tree, expand **DISCOVER** and click **Raw idea** — or run `DeliveryOS: Open Discover` from the command palette.
-4. Type your raw idea and save. Switch to the **Prompt** tab and click **Generate prompt**.
-5. Copy the prompt and paste it into Claude, ChatGPT, or your AI tool of choice.
-6. Paste the AI's response into the **Answers** tab, click **Parse answers**, then **Save answers**.
-7. The **Summary** tab shows your structured discovery record — ready for PRD generation (CHUNK-06).
-
-<!-- screenshot: docs/assets/discover-panel.png -->
-
-## Repo layout
+The Antigravity binary may not be on `PATH` by default. Typical install path on macOS:
 
 ```text
-DeliveryOS/
-├── docs/
-│   ├── PRD.md                  Current spec (v0.3)
-│   ├── BUILD-PLAN.md           14-week phased build plan
-│   ├── CRITIQUE-v2.md          Current critique
-│   ├── CHANGELOG.md            Version history
-│   ├── MULTI_AGENT_BUILD_PROCESS.md  How the project ships code
-│   ├── architecture/           System design notes
-│   ├── decisions/              ADRs
-│   ├── planning/               Phase A: chunk specs + planning loop
-│   ├── build/                  Phase B: build-cycle working area + bugs.json
-│   ├── commands/               Claude Code command sources (copy to .claude/commands/)
-│   ├── prompts/                Prompt templates for SDLC specialist roles
-│   ├── specialists/            Specialist role definitions
-│   ├── research/               Competitive notes, harness research
-│   └── deprecated/             Superseded specs and critiques
-├── extension/                  VS Code extension host package (name: "deliveryos")
-│   ├── src/
-│   │   ├── extension.ts        activate() / deactivate() — wires registry, tree, host messenger, serializer
-│   │   ├── contextKeys.ts      deliveryos.* context-key constants
-│   │   ├── projectRegistry.ts  IProjectRegistry seam — InMemory + Persisted impls (Persisted backed by MemoryStore)
-│   │   ├── memory/             {MemoryStore, sqlJsHost, schema, migrations, paths, ids, markdown, readmeTemplate}.ts
-│   │   ├── commands/           {projectCreate, stagesRefresh, openHello}.ts
-│   │   ├── tree/               {stageDefinitions, stageTreeNodes, stageTreeProvider}.ts
-│   │   ├── webview/            {nonce, htmlFactory, messenger, panelManager, helloPanel}.ts
-│   │   └── serializers/        helloPanelSerializer.ts
-│   ├── test/                   memory.test.ts + vscode-stub.ts (tsx + node:test)
-│   ├── media/                  icon-rocket.svg + deliveryos-logo.png
-│   ├── package.json            Extension manifest (engines, contributes, activationEvents)
-│   ├── tsconfig.json
-│   ├── esbuild.mjs             Bundle src/ + vscode-messenger → dist/extension.js
-│   └── .vscodeignore
-├── webview/                    React + Tailwind webview app (private: @deliveryos/webview)
-│   ├── src/
-│   │   ├── shared/             {vscode, messenger, styles/tailwind.css}
-│   │   └── panels/hello/       {index.html, main.tsx, HelloApp.tsx}
-│   ├── vite.config.ts          Multi-entry build, per-panel Rollup input, manifest.json
-│   ├── tailwind.config.ts      Hybrid theming: dos.* palette + vscode.* CSS-var anchors
-│   ├── postcss.config.js
-│   ├── package.json            (name: @deliveryos/webview)
-│   └── tsconfig.json
-├── contracts/                  Type-only shared contracts (name: @deliveryos/contracts)
-│   └── src/
-│       ├── messages.ts         Base RequestType / NotificationType helpers
-│       ├── panels/hello.ts     GetHelloText RequestType
-│       └── index.ts            Namespaced barrel (export * as Hello)
-├── scripts/build.mjs           Orchestrator: contracts → webview → extension, then copy webview/dist → extension/dist/webview
-├── tsconfig.base.json          Shared strict TS options
-├── package.json                Root workspaces manifest
-└── .github/workflows/
+/Applications/Antigravity.app/Contents/Resources/app/bin/antigravity
 ```
 
-## Getting started
+Add that directory to your `PATH`, then re-run the install script. Antigravity 2.x dropped the CLI binary entirely — the install script prints a specific skip reason when the `.app` bundle is present without a CLI on `PATH`. In that case, install manually: open the app → Extensions → `...` menu → "Install from VSIX".
 
-```bash
-npm install
-npm run package
-code --install-extension extension/deliveryos-0.0.4.vsix
+<details>
+<summary>Troubleshooting</summary>
+
+**`command not found: code`** (or `cursor` / `windsurf` / `codium` / `antigravity`)**:** Open the editor, press `Cmd/Ctrl+Shift+P`, search for `Shell Command: Install '<editor>' command in PATH`. Re-run the install script after that.
+
+**Activity-bar icon doesn't appear after install:** Reload the window — `Cmd/Ctrl+Shift+P → Developer: Reload Window`. Some editors require a reload before custom activity-bar contributions render.
+
+**The extension is not signed:** The sideloadable `.vsix` is unsigned. The "Install from VSIX" GUI path presents a one-click trust prompt. The install-script path also accepts it automatically. Signature verification in the VS Code-family applies to Marketplace-installed extensions; sideloaded ones bypass it by design. Verify the SHA-256 hash instead (see below).
+
+**Activity-bar icon missing after reload:** Press `Cmd/Ctrl+Shift+P` → `DeliveryOS: Show DeliveryOS` to force the view container open.
+
+</details>
+
+---
+
+## Verify the download (SHA-256)
+
+The hash for each release is in `SHA256SUMS.txt`, attached as a release asset alongside the `.vsix`.
+
+### Verify on macOS and Linux
+
+```sh
+# Download the hash file and the .vsix, then:
+shasum -a 256 -c SHA256SUMS.txt
 ```
 
-After install, click the rocket icon in the activity bar. A welcome panel offers **Create a project**; submitting a name renders the four stage rows (DISCOVER, DEFINE, EXECUTE, VERIFY). Each row is empty — artefacts arrive in later chunks. The Extension Host output shows `DeliveryOS activated` on startup.
+Or check the single file manually:
 
-Smoke-test the webview round trip via the command palette: **DeliveryOS: Open Hello (dev smoke test)** opens a React + Tailwind panel that calls `Hello.GetHelloText` against the extension host and renders the reply + a server-side ISO timestamp. Use **Developer: Open Webview Developer Tools** to confirm zero CSP violations.
+```sh
+shasum -a 256 deliveryos-0.1.0.vsix
+# Compare the output against SHA256SUMS.txt from the release page.
+```
 
-### Known limitations (CHUNK-01 + CHUNK-02)
+### Verify on Windows
 
-- **Project state is in-memory only.** Closing VS Code forgets the project — the welcome view returns on next launch. Persistence lands in [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md).
-- **Workspace trust required.** DeliveryOS declines to activate in restricted or virtual workspaces, by design (see `capabilities.{untrustedWorkspaces,virtualWorkspaces}.description`).
-- **`deliveryos.openHello` is a dev smoke test.** It remains user-visible in the command palette through CHUNK-04 — hiding it behind a `deliveryos.devMode` `when` clause is deferred until after Phase 0.
+```powershell
+Get-FileHash deliveryos-0.1.0.vsix -Algorithm SHA256
+# Compare the output against SHA256SUMS.txt from the release page.
+```
 
-## What's next
+Expected hash for `deliveryos-0.1.0.vsix`: `<sha256-to-be-filled-on-release>`
 
-Week-by-week build steps are in [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md). The week-2 milestone is a `.vsix` that installs into both VS Code and Cursor — the Phase 0 demoable state after [CHUNK-03](docs/planning/chunks/chunk-03-memory-store.md) (memory store) and [CHUNK-04](docs/planning/chunks/chunk-04-multi-editor-verify.md) (multi-editor verify) land.
+DeliveryOS is sideloaded, not signed by a marketplace. Verifying the hash confirms you have the same `.vsix` the [release workflow](.github/workflows/release.yml) built from this commit.
+
+---
+
+## Screenshots
+
+### Activity bar in any VS Code-family editor
+
+![Activity bar icon](docs/screenshots/01-activity-bar.png)
+
+*Full VS Code chrome with the DeliveryOS icon highlighted. One click opens the SDLC sidebar.*
+
+### Stage tree view
+
+![Stage tree view](docs/screenshots/02-tree-view.png)
+
+*Four-stage tree fully populated — DISCOVER, DEFINE, EXECUTE, VERIFY — with the Bug Triage project half-complete.*
+
+### PRD editor
+
+![PRD editor](docs/screenshots/03-prd-editor.png)
+
+*PRD editor with a section being edited. Word counts and empty-section placeholders guide the author.*
+
+### Execution Brief composer
+
+![Execution Brief composer](docs/screenshots/04-brief-composer.png)
+
+*Execution Brief with Allowed and Forbidden file sections visible. Green border = allowed, red border = forbidden.*
+
+### Diff violation panel — the headline moment
+
+![Diff violation panel](docs/screenshots/05-diff-violation.png)
+
+*Diff panel showing a blocked write to a forbidden file. The file was never touched; the hook fired first.*
+
+### Release Evidence
+
+![Release Evidence](docs/screenshots/06-release-evidence.png)
+
+*Release Evidence markdown in the webview preview. Full traceability chain from raw idea to verified result.*
+
+---
+
+## Architecture at a glance
+
+- **Three npm workspaces**: `extension/` (VS Code extension host), `webview/` (React + Tailwind webview), `contracts/` (shared TypeScript types).
+- **Four SDLC stages**: DISCOVER, DEFINE, EXECUTE, VERIFY. Configurable mid-stages can be added per project type (Security, Privacy, Compliance, and others).
+- **Memory graph**: eight typed memory layers — Intent, Requirement, Design, Codebase, Execution, Result, Verification, Release. Stored as SQLite on disk; all artefacts are also readable markdown files.
+- **Execution Briefs**: formal 10-section handoff documents with explicit Allowed and Forbidden file lists. Validated by picomatch before the run starts.
+- **Harness profiles**: Claude Code and Codex profiles in v0.1.0. Each profile renders the brief in the format the target harness expects and suggests the appropriate `CLAUDE.md` / `AGENTS.md` updates.
+- **PreToolUse hook**: a Claude Code hook written to `.claude/settings.json` that fires before every file write and aborts writes to Forbidden paths.
+- **Result capture**: a debounced, SHA-256-deduped `FileSystemWatcher` on `.deliveryos-handoff/result.md`. No polling.
+- **Sideloadable**: one `.vsix` file installs into VS Code, Cursor, Windsurf, VSCodium, and Antigravity.
+
+Full spec: [docs/PRD.md](docs/PRD.md)
+
+Full architecture: [docs/architecture/](docs/architecture/)
+
+---
+
+## The meta-harness essay
+
+The model is not the product. The harness around the model is the product — and the SDLC harness is the layer that's been missing.
+
+I wrote a longer argument about why this matters, how DeliveryOS compares to Linear, Devin, and raw harnesses like Claude Code, and what the dogfooding evidence actually shows: [docs/essay/meta-harness.md](docs/essay/meta-harness.md).
+
+---
+
+## Dogfooding
+
+DeliveryOS planned its own build using the same discipline it enforces on other projects.
+
+- [docs/PRD.md](docs/PRD.md) is a DeliveryOS PRD — written in the format the product itself produces.
+- [docs/BUILD-PLAN.md](docs/BUILD-PLAN.md) is a phased build schedule of the same kind DeliveryOS generates for its users.
+- [docs/planning/part-1-plan.md](docs/planning/part-1-plan.md) is the chunk-by-chunk breakdown produced by the planning loop.
+- [docs/planning/chunks/](docs/planning/chunks/) holds the per-chunk spec for each of the 16 implementation chunks — including the spec for this release preparation step.
+- [docs/decisions/](docs/decisions/) holds Architecture Decision Records in the format DeliveryOS templates for user projects.
+
+The planning artefacts are verifiable in two clicks.
+
+---
+
+## Project status
+
+`v0.1.0, proof of work.`
+
+This is a sideloadable MVP. The full idea-to-release loop closes. Sixteen chunks across four phases. No API integration — manual copy-paste is deliberate in v0.1.0; it keeps the harness boundaries honest. One specialist (Test Designer). Two harness profiles (Claude Code, Codex). One demo (Bug Triage Assistant).
+
+Full MVP scope: [docs/PRD.md § 15](docs/PRD.md)
+
+---
+
+## Roadmap
+
+- **API integration** — direct Claude API calls from within the brief composer and specialist panels, removing the copy-paste step.
+- **MCP server mode** — DeliveryOS memory graph as an MCP resource, accessible from any MCP-compatible tool.
+- **OpenVSX publishing** — publish to the Open VSX Registry for editors that don't support the Microsoft Marketplace.
+- **Additional specialists** — Security Analyst, Architecture Reviewer, and others as mid-stage plugins.
+- **v0.2 dogfooding loop** — use DeliveryOS to plan and execute its own v0.2 development in a live, recorded session.
+
+Full roadmap: [docs/PRD.md § 26](docs/PRD.md)
+
+---
+
+## Contributing
+
+This is a personal proof-of-work build. Issues are welcome. Pull requests are not actively solicited until v0.2 — the codebase is still moving fast enough that coordinating outside contributions would slow the core work down.
+
+---
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+---
+
+## Acknowledgements
+
+Built with [Claude Code](https://claude.ai/claude-code). Harness profiles target [Claude Code](https://claude.ai/claude-code) and [OpenAI Codex](https://openai.com/codex). Runs in [VS Code](https://code.visualstudio.com/), [Cursor](https://cursor.sh/), [Windsurf](https://windsurf.ai/), [VSCodium](https://vscodium.com/), and [Antigravity](https://antigravity.dev/).

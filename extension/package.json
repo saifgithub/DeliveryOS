@@ -2,10 +2,14 @@
   "name": "deliveryos",
   "displayName": "DeliveryOS",
   "description": "A meta-harness for AI-assisted software delivery. Sits above Claude Code / Codex / Cursor as the SDLC memory and orchestration layer.",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "publisher": "deliveryos",
   "license": "MIT",
   "icon": "media/deliveryos-logo.png",
+  "homepage": "https://github.com/saifgithub/DeliveryOS#readme",
+  "bugs": {
+    "url": "https://github.com/saifgithub/DeliveryOS/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -18,7 +22,9 @@
     "claude-code",
     "codex",
     "harness",
-    "memory"
+    "memory",
+    "execution-brief",
+    "delivery"
   ],
   "repository": {
     "type": "git",

@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.0] — 2026-08-24
+
+First public proof-of-work release. The full idea-to-release loop closes: raw idea → discovery interview → PRD → requirements catalogue → test specification → Execution Brief → Claude Code or Codex run → result capture → diff validation → verification → release evidence. Sixteen implementation chunks across four phases. One specialist (Test Designer), two harness profiles (Claude Code, Codex), one demo workspace (Bug Triage Assistant). Sideloadable `.vsix` for VS Code, Cursor, Windsurf, VSCodium, and Antigravity. SHA-256-verified release artefact. PreToolUse hook blocks forbidden-file writes before they execute. Full release notes: `RELEASE_NOTES.md`.
+
 ## Process setup (2026-05-21)
 
 Added the build process, separate from the product spec.
