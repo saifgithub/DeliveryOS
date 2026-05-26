@@ -19,6 +19,7 @@ export function AllowedForbiddenEditor({
   readOnly,
   onChange,
 }: AllowedForbiddenEditorProps) {
+  const allowedEmpty = allowed.length === 0;
   return (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-dos-accent">7. Allowed Changes & 8. Forbidden Changes</h3>
@@ -26,18 +27,21 @@ export function AllowedForbiddenEditor({
         One glob per line. Comments start with <code>#</code>. Trailing slash on directories is
         auto-expanded to <code>dir/**</code>. Allowed must contain at least one glob.
       </p>
+      {allowedEmpty && !readOnly && (
+        <p className="text-xs text-amber-400">Add at least one allowed path before saving the brief.</p>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <ListPane
           label="Allowed"
           globs={allowed}
-          placeholder={'- src/api/endpoint.ts\n- tests/integration/endpoint.test.ts'}
+          placeholder={'src/api/endpoint.ts\ntests/integration/endpoint.test.ts'}
           readOnly={readOnly}
           onChange={(globs) => onChange('allowed', globs)}
         />
         <ListPane
           label="Forbidden"
           globs={forbidden}
-          placeholder={'- migrations/**\n- src/frontend/**'}
+          placeholder={'migrations/\nsrc/frontend/'}
           readOnly={readOnly}
           onChange={(globs) => onChange('forbidden', globs)}
         />
@@ -69,9 +73,26 @@ function ListPane({ label, globs, placeholder, readOnly, onChange }: ListPanePro
     debounceRef.current = setTimeout(() => onChange(parsed), 250);
   };
 
+  const isAllowed = label === 'Allowed';
+  const isEmpty = globs.length === 0;
+  const borderClass = isAllowed
+    ? isEmpty && !readOnly
+      ? 'border-amber-400'
+      : 'border-green-500/60'
+    : 'border-red-400/60';
+  const labelColor = isAllowed ? 'text-green-400' : 'text-red-400';
+
   return (
     <div className="space-y-1">
-      <label className="text-xs font-semibold text-vscode-fg">{label}</label>
+      <div className="flex items-center gap-2">
+        <label className={`text-xs font-semibold ${labelColor}`}>{label}</label>
+        {isAllowed && isEmpty && !readOnly && (
+          <span className="text-xs text-amber-400">(required)</span>
+        )}
+        {!isEmpty && (
+          <span className="text-xs text-dos-muted">{globs.length} path{globs.length === 1 ? '' : 's'}</span>
+        )}
+      </div>
       <textarea
         value={text}
         onChange={(e) => handleChange(e.target.value)}
@@ -79,7 +100,7 @@ function ListPane({ label, globs, placeholder, readOnly, onChange }: ListPanePro
         spellCheck={false}
         rows={8}
         placeholder={placeholder}
-        className="w-full text-xs font-mono p-3 rounded border border-vscode-border bg-vscode-bg text-vscode-fg focus:outline-none focus:ring-1 focus:ring-dos-accent disabled:opacity-60"
+        className={`w-full text-xs font-mono p-3 rounded border ${borderClass} bg-vscode-bg text-vscode-fg focus:outline-none focus:ring-1 focus:ring-dos-accent disabled:opacity-60`}
       />
     </div>
   );

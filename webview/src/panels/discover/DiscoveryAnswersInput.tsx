@@ -42,6 +42,7 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
   const [unmatchedText, setUnmatchedText] = useState('');
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pasteError, setPasteError] = useState('');
 
   const pasteTextareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -53,7 +54,11 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
   };
 
   const handleParse = async () => {
-    if (!rawPaste.trim()) return;
+    if (!rawPaste.trim()) {
+      setPasteError('Paste the AI\'s response before parsing.');
+      return;
+    }
+    setPasteError('');
     setParsing(true);
     try {
       const res = await messenger.sendRequest(DiscoverParseAnswers, HOST_EXTENSION, {
@@ -104,10 +109,10 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
   return (
     <section className="max-w-2xl space-y-6">
       <div>
-        <h2 className="text-base font-semibold text-vscode-fg mb-1">Paste AI response</h2>
+        <h2 className="text-base font-semibold text-vscode-fg mb-1">Paste answers here</h2>
         <p className="text-xs text-dos-muted mb-2">
-          Copy the AI's answers from your tool and paste them here. Click "Parse" to pre-fill the
-          question cards below.
+          Copy the AI's answers from your tool and paste them below. Click "Parse" to pre-fill the
+          question cards, then click "Save answers" to store them.
         </p>
         {pasteIsLarge && (
           <p className="text-xs text-dos-muted mb-1">
@@ -117,18 +122,31 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
         <textarea
           ref={pasteTextareaRef}
           value={rawPaste}
-          onChange={handlePasteChange}
+          onChange={(e) => { handlePasteChange(e); setPasteError(''); }}
           placeholder="Paste the AI's discovery interview response here…"
           style={{ minHeight: '6rem', overflowY: 'auto' }}
-          className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-none font-[var(--vscode-editor-font-family)]"
+          className={[
+            'w-full rounded-md border bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-none font-[var(--vscode-editor-font-family)]',
+            pasteError ? 'border-red-400' : 'border-vscode-inputBorder',
+          ].join(' ')}
         />
-        <button
-          onClick={handleParse}
-          disabled={parsing || !rawPaste.trim()}
-          className="mt-2 px-4 py-2 rounded-md border border-vscode-border bg-dos-surface text-dos-ink text-sm font-medium disabled:opacity-50 hover:bg-vscode-panel transition-colors"
-        >
-          {parsing ? 'Parsing…' : 'Parse answers'}
-        </button>
+        {pasteError && (
+          <p className="mt-1 text-xs text-red-400">{pasteError}</p>
+        )}
+        <div className="mt-2 flex items-center gap-3">
+          <button
+            onClick={handleParse}
+            disabled={parsing}
+            className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-semibold disabled:opacity-50 hover:brightness-110 active:brightness-95 transition-all shadow-sm"
+          >
+            {parsing ? (
+              <span className="flex items-center gap-2">
+                <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                Parsing…
+              </span>
+            ) : 'Parse answers'}
+          </button>
+        </div>
       </div>
 
       {unmatchedText && (

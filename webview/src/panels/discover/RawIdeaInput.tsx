@@ -111,7 +111,7 @@ export function RawIdeaInput({ projectTitle, rawIdea, onSaved }: Props) {
           value={body}
           onChange={handleChange}
           onBlur={handleBlur}
-          placeholder="What are you trying to build? What problem does it solve?"
+          placeholder="e.g. I want a bug triage assistant"
           style={{ minHeight: '10rem', overflowY: 'auto' }}
           className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-none font-[var(--vscode-editor-font-family)]"
         />
@@ -121,7 +121,7 @@ export function RawIdeaInput({ projectTitle, rawIdea, onSaved }: Props) {
         <button
           onClick={() => doSave(body, title)}
           disabled={saving || !body.trim()}
-          className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+          className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-semibold disabled:opacity-50 hover:brightness-110 active:brightness-95 transition-all shadow-sm"
         >
           {saving ? 'Saving…' : 'Save idea'}
         </button>

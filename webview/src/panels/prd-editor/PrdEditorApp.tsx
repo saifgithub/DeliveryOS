@@ -6,6 +6,35 @@ import { messenger } from '../../shared/messenger';
 import { PrdGenerationPrompt } from './PrdGenerationPrompt';
 import { SectionEditor } from './SectionEditor';
 
+/** Approve PRD button — disabled until all sections are non-empty. */
+function ApprovePrdButton({ prd, onToast }: { prd: DraftPrd; onToast: (msg: string) => void }) {
+  const emptySections = prd.sections.filter((s) => !s.body.trim());
+  const allFilled = emptySections.length === 0;
+  const tooltip = allFilled
+    ? undefined
+    : `Fill in ${emptySections.length} empty section${emptySections.length === 1 ? '' : 's'} before approving: ${emptySections.map((s) => s.title).join(', ')}`;
+
+  return (
+    <div className="pt-4 border-t border-vscode-border">
+      <div className="group relative inline-block">
+        <button
+          disabled={!allFilled}
+          onClick={() => onToast('PRD approved — proceed to Requirements.')}
+          title={tooltip}
+          className="px-5 py-2.5 rounded-md bg-dos-accent text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 active:brightness-95 transition-all shadow-sm"
+        >
+          Approve PRD
+        </button>
+        {!allFilled && tooltip && (
+          <div className="pointer-events-none absolute bottom-full left-0 mb-2 w-72 rounded-md bg-vscode-panel border border-vscode-border px-3 py-2 text-xs text-dos-muted opacity-0 group-hover:opacity-100 transition-opacity z-10">
+            {tooltip}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 type AppState =
   | { phase: 'loading' }
   | { phase: 'noProject' }
@@ -142,6 +171,7 @@ export function PrdEditorApp() {
                   onToast={showToast}
                 />
               ))}
+              <ApprovePrdButton prd={appState.prd} onToast={showToast} />
             </div>
           )}
         </div>

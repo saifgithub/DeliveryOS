@@ -19,19 +19,22 @@ export function PassFailBanner({ outcome }: PassFailBannerProps): React.ReactEle
   return (
     <div
       style={{
-        padding: '16px',
-        marginBottom: '16px',
-        borderRadius: '4px',
+        padding: '20px 24px',
+        marginBottom: '20px',
+        borderRadius: '6px',
         color: 'white',
-        fontWeight: 'bold',
-        fontSize: '1.1em',
         ...(isPass
           ? { backgroundColor: 'var(--vscode-testing-iconPassed, #4caf50)' }
           : { backgroundColor: 'var(--vscode-testing-iconFailed, #f44336)' }),
       }}
     >
-      <div>{headlineCopy}</div>
-      <div style={{ fontSize: '0.85em', fontWeight: 'normal', marginTop: '4px', opacity: 0.9 }}>
+      <div style={{ fontSize: '1.5em', fontWeight: 'bold', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
+        {isPass ? '✓ PASS' : '✕ FAIL'}
+      </div>
+      <div style={{ marginTop: '6px', fontSize: '0.95em', fontWeight: '500' }}>
+        {headlineCopy}
+      </div>
+      <div style={{ fontSize: '0.8em', fontWeight: 'normal', marginTop: '6px', opacity: 0.85 }}>
         Engine v{outcome.engineVersion} · Computed {new Date(outcome.computedAt).toLocaleString()}
       </div>
     </div>

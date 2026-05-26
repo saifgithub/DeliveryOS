@@ -1,0 +1,77 @@
+# seed-demo.source.yml — source of truth for seeded DeliveryOS memory content.
+# Run `npx tsx scripts/seed-demo.ts` to regenerate .deliveryos/memory.sqlite
+# and the two .md body files from this source.
+
+project:
+  name: "Bug Triage Assistant"
+
+intent:
+  id: "intent-a1b2c3d4"
+  rawIdea: "I want a bug triage assistant"
+  discovery:
+    - question: "Who are the primary users of this system?"
+      answer: "Internal engineering teams who need to submit, track, and prioritise bug reports without leaving their development workflow."
+    - question: "What does success look like in the first iteration?"
+      answer: "A developer can POST a bug report via the API, retrieve it by ID, and the system returns a machine-readable severity suggestion so the team can triage faster."
+  title: "Bug Triage Assistant"
+
+codebase:
+  id: "codebase-e5f6g7h8"
+  title: "Bug Triage Assistant — Codebase"
+  body: |
+    ## Layout
+
+    ```
+    src/backend/
+      app.py           — FastAPI app factory; registers routers
+      api/
+        users.py       — reference thin-handler (do not modify)
+        bugs.py        — ★ TARGET: implement POST /bugs + GET /bugs/{id}
+      models/          — Pydantic models (bug_report.py to be created)
+      services/        — Business logic (bug_report_service.py to be created)
+      core/
+        auth.py        — bearer-token middleware + require_auth dependency
+        db.py          — InMemoryRepository + get_repository dependency
+    migrations/
+      0001_init.sql    — existing schema (do not modify)
+    tests/
+      conftest.py      — pytest fixtures: AsyncClient + auth header
+      integration/     — test_bugs_api.py to be created
+    ```
+
+    ## Conventions
+
+    - **Thin handlers**: route functions import from `services/`, no business
+      logic inline. See `src/backend/api/users.py` as the reference pattern.
+    - **Pydantic models** for all request/response shapes.
+    - **Dependency injection** via FastAPI `Depends()` for auth and repo.
+
+    ## Test runner
+
+    ```bash
+    pytest -q
+    ```
+
+    ## Lint
+
+    ```bash
+    ruff check .
+    ```
+
+    ## Auth module
+
+    `src/backend/core/auth.py` — use `require_auth` as a FastAPI `Depends()`
+    parameter. Accept any Bearer token beginning with `"demo"` in tests.
+
+    ## Known constraints
+
+    - Migrations are handled separately. Do not alter `migrations/0001_init.sql`
+      or add new migration files.
+    - The frontend (`src/frontend/`) is out of scope for REQ-001.
+    - `src/backend/api/users.py` must not be modified — it is the reference
+      pattern, not a file to extend.
+
+    ## Note
+
+    See `src/backend/api/users.py` as the reference pattern for thin route
+    handlers. Follow its structure when implementing `src/backend/api/bugs.py`.

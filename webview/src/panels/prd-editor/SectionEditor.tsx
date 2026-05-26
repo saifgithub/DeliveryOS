@@ -71,23 +71,30 @@ export function SectionEditor({
     debounceRef.current = setTimeout(() => doSave(latestBody.current), DEBOUNCE_MS);
   };
 
+  const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
+
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold text-vscode-fg">{section.title}</h2>
-        {saveState === 'saving' && (
-          <span className="text-xs text-dos-muted">Saving…</span>
-        )}
-        {saveState === 'saved' && (
-          <span className="text-xs text-dos-muted">Saved</span>
-        )}
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-vscode-fg">{section.title}</h2>
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-xs text-dos-muted tabular-nums">
+            {wordCount} {wordCount === 1 ? 'word' : 'words'}
+          </span>
+          {saveState === 'saving' && (
+            <span className="text-xs text-dos-muted">Saving…</span>
+          )}
+          {saveState === 'saved' && (
+            <span className="text-xs text-dos-muted">Saved</span>
+          )}
+        </div>
       </div>
 
       <textarea
         ref={textareaRef}
         value={body}
         onChange={handleChange}
-        placeholder="(empty — fill in or revise with AI)"
+        placeholder="(empty — fill in this section before approving the PRD)"
         style={{ minHeight: '6rem', overflowY: 'auto' }}
         className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-none font-[var(--vscode-editor-font-family)]"
       />

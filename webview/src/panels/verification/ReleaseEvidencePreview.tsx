@@ -25,20 +25,24 @@ export function ReleaseEvidencePreview({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-3">
+      <div className="flex gap-3 flex-wrap">
         <button
           onClick={onOpenDocument}
-          className="px-4 py-2 bg-blue-700 hover:bg-blue-600 text-white rounded font-semibold"
+          className="px-5 py-2.5 bg-blue-700 hover:bg-blue-600 text-white rounded font-semibold text-sm shadow-sm transition-colors flex items-center gap-2"
+          title="Open traceability document in a VS Code side panel"
         >
-          Open document
+          <span>↗</span> Open in side panel
         </button>
         <button
           onClick={onExportZip}
-          className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded font-semibold"
+          className="px-4 py-2 bg-purple-700 hover:bg-purple-600 text-white rounded font-semibold text-sm shadow-sm transition-colors"
         >
           Export package (zip)
         </button>
       </div>
+      <p className="text-xs text-gray-400">
+        Traceability chain: Idea → PRD → Requirement → Test Spec → Brief → Result → Verification → Release Evidence
+      </p>
       <div
         ref={contentRef}
         className="p-4 rounded border border-gray-600 bg-gray-800 prose prose-invert prose-sm max-w-none overflow-auto"

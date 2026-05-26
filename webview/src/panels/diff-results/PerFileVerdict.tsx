@@ -27,11 +27,18 @@ export function PerFileVerdict({ verdict, onMessage }: PerFileVerdictProps): Rea
       ? 'Section 8 (Forbidden)'
       : 'no rule matched';
 
+  const isForbidden = verdict.classification === 'forbidden-but-touched';
+  const rowBg = isForbidden
+    ? 'rgba(244, 67, 54, 0.08)'
+    : verdict.classification === 'unclassified-but-touched'
+      ? 'rgba(255, 152, 0, 0.06)'
+      : 'transparent';
+
   return (
-    <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--vscode-editorWidget-border, #444)' }}>
+    <div style={{ padding: '6px 8px', borderBottom: '1px solid var(--vscode-editorWidget-border, #444)', backgroundColor: rowBg }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
         <span style={{ color, fontWeight: 'bold', minWidth: '16px' }}>{icon}</span>
-        <code style={{ flex: 1, fontSize: '0.9em', wordBreak: 'break-all' }}>{verdict.path}</code>
+        <code style={{ flex: 1, fontSize: '0.9em', wordBreak: 'break-all', fontWeight: isForbidden ? 'bold' : 'normal', color: isForbidden ? color : 'inherit' }}>{verdict.path}</code>
         <button
           style={{
             fontSize: '0.75em',

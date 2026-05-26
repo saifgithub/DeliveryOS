@@ -78,7 +78,16 @@ export function ResultDetail({ resultId, payload }: Props) {
     <div className="p-4 max-w-3xl">
       {confidence === 'low' && (
         <div className="mb-4 p-3 bg-vscode-inputValidation-warningBackground border border-vscode-inputValidation-warningBorder rounded text-sm">
-          Parser could not detect expected sections — showing raw output.
+          <p className="font-semibold mb-1">result.md could not be parsed — sections missing or malformed.</p>
+          <p className="text-xs text-vscode-descriptionForeground mb-2">
+            Expected sections: Summary of Changes, Files Changed, Tests Added/Updated, Tests Run, Risks, Unresolved Questions.
+          </p>
+          <button
+            onClick={handleAcknowledge}
+            className="text-xs px-2 py-1 rounded border border-vscode-inputValidation-warningBorder hover:bg-vscode-inputValidation-warningBackground"
+          >
+            Paste manually instead
+          </button>
         </div>
       )}
       {!filesChanged.gitAvailable && (

@@ -176,10 +176,19 @@ export function VerificationApp() {
     ? ((loaded.testSpec.payload as unknown as TestSpecPayload).scenarios?.map((s) => s.description) ?? [])
     : [];
 
+  const allCriteriaMet =
+    loaded !== null &&
+    loaded.diff?.verdict === 'pass' &&
+    availableCriteria.length > 0 &&
+    step === 'verify';
+
   if (!loaded) {
     return (
       <div className="p-6 text-gray-300">
-        <p>Loading verification data…</p>
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-4 h-4 rounded-full border-2 border-gray-400 border-t-transparent animate-spin" />
+          <p>Loading verification data…</p>
+        </div>
       </div>
     );
   }
@@ -196,6 +205,13 @@ export function VerificationApp() {
 
       {loading && (
         <div className="p-3 rounded bg-gray-700 text-gray-300 text-sm">Processing…</div>
+      )}
+
+      {allCriteriaMet && (
+        <div className="p-4 rounded border border-green-500 bg-green-900/30 text-green-300 font-semibold flex items-center gap-2">
+          <span>✓</span>
+          <span>All criteria met — ready to approve.</span>
+        </div>
       )}
 
       {step === 'verify' && (

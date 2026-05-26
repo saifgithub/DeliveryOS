@@ -121,8 +121,9 @@ export function DiffResultsApp(): React.ReactElement {
             </div>
           )}
           {!outcome && !error && (
-            <div style={{ color: 'var(--vscode-descriptionForeground, #999)' }}>
-              Loading diff results…
+            <div style={{ color: 'var(--vscode-descriptionForeground, #999)', padding: '32px 0', textAlign: 'center' }}>
+              <div style={{ fontSize: '14px', marginBottom: '8px' }}>No diff yet — run a brief first.</div>
+              <div style={{ fontSize: '12px' }}>After Claude Code finishes, the result will appear here automatically.</div>
             </div>
           )}
           {outcome && (

@@ -18,8 +18,20 @@ if (payload && resultId) {
   ReactDOM.createRoot(rootEl).render(<ResultDetail resultId={resultId} payload={payload} />);
 } else {
   ReactDOM.createRoot(rootEl).render(
-    <div style={{ padding: 16 }}>
-      <p>Loading result…</p>
+    <div style={{ padding: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <span style={{
+        display: 'inline-block',
+        width: 14,
+        height: 14,
+        borderRadius: '50%',
+        border: '2px solid var(--vscode-descriptionForeground, #999)',
+        borderTopColor: 'transparent',
+        animation: 'spin 0.8s linear infinite',
+      }} />
+      <p style={{ color: 'var(--vscode-descriptionForeground, #999)', fontSize: 13 }}>
+        Waiting for result.md…
+      </p>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>,
   );
 }
