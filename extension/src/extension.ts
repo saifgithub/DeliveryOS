@@ -37,6 +37,8 @@ import { HostMessenger } from './webview/messenger';
 import { PRD_VIEW_TYPE } from './webview/prdPanel';
 import { REQUIREMENTS_VIEW_TYPE } from './webview/requirementsPanel';
 import { TEST_DESIGNER_VIEW_TYPE, openTestDesignerPanel } from './webview/testDesignerPanel';
+import { captureFromHandoff, onResultCaptured } from './result/captureFlow';
+import { openPasteFallbackPanel } from './panels/result/resultHost';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('DeliveryOS activated');
@@ -92,15 +94,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         workspaceRoot: workspaceFolder.uri,
         workspaceState: context.workspaceState,
       });
+      const capturedWorkspaceFolder = workspaceFolder;
+      const capturedMemoryStore = memoryStore;
       const handoffDisposable = host.registerHandoffHandlers({
         registry,
         memoryStore,
         workspace: workspaceFolder,
         globalState: context.globalState,
+        onResultMdReady: (event) =>
+          void captureFromHandoff(event, capturedMemoryStore, capturedWorkspaceFolder),
       });
       context.subscriptions.push(handoffDisposable);
     }
   }
+
+  // CHUNK-12: result capture — subscribe tree provider to result events.
+  context.subscriptions.push(
+    onResultCaptured(() => stageTreeProvider.refresh()),
+  );
+
+  // CHUNK-12: register paste fallback command.
+  context.subscriptions.push(
+    vscode.commands.registerCommand('deliveryos.result.openPasteFallback', () =>
+      openPasteFallbackPanel(context, host),
+    ),
+  );
 
   context.subscriptions.push(
     registerProjectCreate({

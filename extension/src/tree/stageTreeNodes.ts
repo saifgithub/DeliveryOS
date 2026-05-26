@@ -93,6 +93,17 @@ export interface ComposeBriefNode {
   readonly iconId: string;
 }
 
+export interface ResultNode {
+  readonly kind: 'result';
+  readonly stageId: 'execute';
+  readonly resultEntryId: string;
+  readonly briefEntryId: string;
+  readonly capturedAt: string;
+  readonly confidence: 'high' | 'medium' | 'low';
+  readonly source: 'watcher' | 'paste';
+  readonly iconId: string;
+}
+
 export type StageTreeNode =
   | StageNode
   | ArtefactNode
@@ -102,7 +113,8 @@ export type StageTreeNode =
   | TestSpecNode
   | ExecuteRequirementNode
   | BriefNode
-  | ComposeBriefNode;
+  | ComposeBriefNode
+  | ResultNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -235,7 +247,7 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
     case 'brief': {
       const item = new vscode.TreeItem(
         `Brief — ${node.briefId} — v${node.version}`,
-        vscode.TreeItemCollapsibleState.None,
+        vscode.TreeItemCollapsibleState.Collapsed,
       );
       item.contextValue = 'deliveryos.execute.brief';
       item.description = node.lockedAt;
@@ -263,6 +275,19 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
         title: 'Compose Execution Brief',
         arguments: [{ requirementEntryId: node.requirementEntryId }],
       };
+      return item;
+    }
+    case 'result': {
+      const label = `Result — ${new Date(node.capturedAt).toLocaleString()}`;
+      const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
+      item.contextValue = 'deliveryos.execute.result';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip =
+        node.confidence === 'high'
+          ? `Result captured (high confidence). Source: ${node.source}.`
+          : node.confidence === 'medium'
+            ? `Result captured (medium confidence — some sections missing). Source: ${node.source}.`
+            : `Result captured (low confidence — parser could not detect expected sections). Source: ${node.source}.`;
       return item;
     }
   }

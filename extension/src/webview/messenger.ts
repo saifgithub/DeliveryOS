@@ -127,6 +127,7 @@ import {
 import { HandoffWriter } from '../handoff/writer';
 import { TerminalLauncher } from '../handoff/terminalLauncher';
 import { ResultWatcher } from '../handoff/resultWatcher';
+import type { ResultWatchEvent } from '../handoff/resultWatcher';
 import {
   applyGitignoreBlock,
   gitignoreState,
@@ -181,6 +182,8 @@ export interface HandoffDeps {
   readonly workspace: vscode.WorkspaceFolder;
   /** Per-project flag store for the `.gitignore` first-write prompt. */
   readonly globalState: vscode.Memento;
+  /** CHUNK-12: called when result.md is observed, to trigger capture pipeline. */
+  readonly onResultMdReady?: (event: ResultWatchEvent) => void;
 }
 
 const LAST_USED_PROFILE_KEY = 'deliveryos.profiles.lastUsed';
@@ -1120,6 +1123,10 @@ export class HostMessenger {
         observedAt: event.observedAt,
         kind: event.kind,
       });
+      // CHUNK-12: also invoke the capture callback if wired up.
+      if (deps.onResultMdReady) {
+        deps.onResultMdReady(event);
+      }
     });
 
     const launcherSub = launcher.onClose((event) => {

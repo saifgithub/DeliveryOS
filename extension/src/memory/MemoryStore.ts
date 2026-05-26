@@ -1027,6 +1027,57 @@ export class MemoryStore {
     return bodyPath(this.workspaceUri, 'execution', briefEntryId);
   }
 
+  // --- Result CRUD (CHUNK-12) -------------------------------------------
+
+  /**
+   * List all result entries produced by the given brief entry, newest first.
+   * Queries via the `produced` link kind (brief → result).
+   */
+  async listResultsForBrief(briefEntryId: string): Promise<Array<{
+    entryId: string;
+    title: string;
+    payload: import('@deliveryos/contracts').ResultPayload;
+    createdAt: number;
+    updatedAt: number;
+  }>> {
+    const stmt = this.host.db.prepare(
+      `SELECT e.id, e.title, e.payload_json, e.created_at, e.updated_at
+         FROM memory_entries e
+         JOIN memory_links l ON l.to_id = e.id
+        WHERE l.from_id = ? AND l.kind = 'produced' AND e.type = 'result'
+        ORDER BY e.created_at DESC`,
+    );
+    try {
+      stmt.bind([briefEntryId]);
+      const out: Array<{
+        entryId: string;
+        title: string;
+        payload: import('@deliveryos/contracts').ResultPayload;
+        createdAt: number;
+        updatedAt: number;
+      }> = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as {
+          id: string;
+          title: string;
+          payload_json: string;
+          created_at: number;
+          updated_at: number;
+        };
+        out.push({
+          entryId: row.id,
+          title: row.title,
+          payload: JSON.parse(row.payload_json) as import('@deliveryos/contracts').ResultPayload,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      }
+      return out;
+    } finally {
+      stmt.free();
+    }
+  }
+
   /** Scan the store for the highest REQ-NNN already assigned. Returns next number to use. */
   private async nextRequirementIdNumber(): Promise<number> {
     const stmt = this.host.db.prepare(

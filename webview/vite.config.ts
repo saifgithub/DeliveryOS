@@ -21,6 +21,8 @@ export default defineConfig({
         requirements: resolve(__dirname, 'src/panels/requirements/index.html'),
         'test-designer': resolve(__dirname, 'src/panels/test-designer/index.html'),
         'brief-composer': resolve(__dirname, 'src/panels/brief-composer/index.html'),
+        'result-detail': resolve(__dirname, 'src/panels/result/index-detail.html'),
+        'result-paste': resolve(__dirname, 'src/panels/result/index-paste.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

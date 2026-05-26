@@ -11,12 +11,14 @@ import {
   ExecuteRequirementNode,
   RequirementItemNode,
   RequirementsGroupNode,
+  ResultNode,
   StageTreeNode,
   TestSpecNode,
   VerificationCriteriaNode,
   stageDefToNode,
   toTreeItem,
 } from './stageTreeNodes';
+import type { StoredResultPayload } from '@deliveryos/contracts';
 
 const TOTAL_QUESTIONS = DISCOVERY_QUESTIONS_MVP.length;
 
@@ -72,6 +74,14 @@ export class StageTreeProvider
             this.refresh();
             return;
           }
+          if (event.kind === 'create' && event.entryType === 'result') {
+            this.refresh();
+            return;
+          }
+          if (event.kind === 'link' && event.linkKind === 'produced') {
+            this.refresh();
+            return;
+          }
           if (
             (event.kind === 'link' || event.kind === 'unlink') &&
             (event.linkKind === 'has-test-spec' ||
@@ -120,6 +130,9 @@ export class StageTreeProvider
     }
     if (element.kind === 'execute-requirement') {
       return this.executeRequirementChildren(element);
+    }
+    if (element.kind === 'brief') {
+      return this.briefResultChildren(element);
     }
     return [];
   }
@@ -286,6 +299,27 @@ export class StageTreeProvider
       superseded: supersededIds.has(brief.entryId),
       iconId: supersededIds.has(brief.entryId) ? 'archive' : 'rocket',
     }));
+  }
+
+  private async briefResultChildren(node: BriefNode): Promise<ResultNode[]> {
+    if (!this.memoryStore) return [];
+    const results = await this.memoryStore.listResultsForBrief(node.briefEntryId);
+    return results.map((r) => {
+      const payload = r.payload as unknown as StoredResultPayload;
+      const confidence = (payload.parsed?.confidence ?? payload.parseConfidence === 'high' ? 'high' : 'low') as 'high' | 'medium' | 'low';
+      const iconId =
+        confidence === 'high' ? 'pass' : confidence === 'medium' ? 'warning' : 'error';
+      return {
+        kind: 'result' as const,
+        stageId: 'execute' as const,
+        resultEntryId: r.entryId,
+        briefEntryId: node.briefEntryId,
+        capturedAt: payload.capturedAt ?? new Date(r.createdAt).toISOString(),
+        confidence,
+        source: (payload.source ?? 'watcher') as 'watcher' | 'paste',
+        iconId,
+      };
+    });
   }
 
   private async discoverChildren(intentId: string): Promise<ArtefactNode[]> {

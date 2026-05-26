@@ -122,6 +122,11 @@
         "command": "deliveryos.brief.openFile",
         "title": "DeliveryOS: Open Execution Brief Markdown",
         "category": "DeliveryOS"
+      },
+      {
+        "command": "deliveryos.result.openPasteFallback",
+        "title": "DeliveryOS: Paste Harness Result",
+        "category": "DeliveryOS"
       }
     ],
     "menus": {
