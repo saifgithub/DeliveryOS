@@ -19,6 +19,7 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-008 | Impact analysis — blast radius before a run | 🟡 Medium | Using the existing memory graph, show which files, tests, and memory entries a given brief puts at risk before the user clicks Run. Especially critical for change requests touching existing functionality. See § B-008 below. |
 | B-009 | Rollback — reject a result and restore to pre-run state | 🟡 Medium | One-click rejection of a bad run result: DOS uses the brief's allowed-file list to `git checkout` exactly the files the agent touched. Reduces the cost and fear of failed runs. See § B-009 below. |
 | B-010 | Delivery health dashboard — metrics across the SDLC | 🟢 Low | Surface the data DOS already captures (tests before/after, advisor escalations, forbidden writes caught, files changed per brief) as a delivery health view. Shows whether discipline is improving over time. See § B-010 below. |
+| B-011 | **Workgroup** — team coordination substrate | 🔴 High | DOS for teams: role separation, brief review gate, shared memory store, requirement state machine, standup view, non-developer access. Full roadmap: [`docs/pm/WORKGROUP.md`](WORKGROUP.md). |
 
 ---
 
