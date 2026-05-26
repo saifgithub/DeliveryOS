@@ -14,6 +14,11 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-003 | Agent team delivery — cost-optimised multi-tier orchestration | 🟡 Medium | Make the three-tier agent pattern a first-class DOS delivery mode: Haiku for routine work, Sonnet for implementation, Opus on failure only. See § B-003 below. |
 | B-004 | Session continuity — handover and start-fresh as a DOS-native concept | 🔴 High | DOS should manage its own session lifecycle: persist carry-overs, resume from last state, wrap completed work — without relying on external Claude Code skills. See § B-004 below. |
 | B-005 | AI-driven elicitation — business analysis integrated across the SDLC | 🔴 High | The AI interrogates the human at every stage (not just discovery) to extract requirements, resolve ambiguity, and populate DOS artifacts. Replaces ad-hoc prompting with structured BA-style conversation flows. See § B-005 below. |
+| B-006 | Change propagation — PRD and requirements as living documents | 🔴 High | When a PRD section or requirement changes, DOS flags all downstream artifacts that are now stale. Prevents silent divergence between spec and delivery. See § B-006 below. |
+| B-007 | Pre-flight completeness check — spec compiler before the expensive run | 🔴 High | Before a brief reaches an agent, DOS scores it for completeness: uncovered acceptance criteria, undefined terms, inconsistent allowed/forbidden scope. Catches spec errors before they become runtime failures. See § B-007 below. |
+| B-008 | Impact analysis — blast radius before a run | 🟡 Medium | Using the existing memory graph, show which files, tests, and memory entries a given brief puts at risk before the user clicks Run. Especially critical for change requests touching existing functionality. See § B-008 below. |
+| B-009 | Rollback — reject a result and restore to pre-run state | 🟡 Medium | One-click rejection of a bad run result: DOS uses the brief's allowed-file list to `git checkout` exactly the files the agent touched. Reduces the cost and fear of failed runs. See § B-009 below. |
+| B-010 | Delivery health dashboard — metrics across the SDLC | 🟢 Low | Surface the data DOS already captures (tests before/after, advisor escalations, forbidden writes caught, files changed per brief) as a delivery health view. Shows whether discipline is improving over time. See § B-010 below. |
 
 ---
 
@@ -36,10 +41,12 @@ _Nothing closed yet._
 **Why:** The dogfooding claim in `docs/essay/meta-harness.md` is currently partial — the BUILD-PLAN + chunk specs were produced by the O/R/P multi-track session model, not by the extension UI itself. Closing the loop means the next feature cycle runs through the full in-extension workflow: raw idea → discovery → PRD → requirements catalogue → test spec → execution brief → harness run → result capture → diff → verification → release evidence.
 
 **Pre-conditions:**
+
 - v0.1.0 tagged and published (screenshots + video done, `git push`, GitHub release live).
 - Extension installed from the published `.vsix` (not from source) into VS Code.
 
 **Steps (one-time setup):**
+
 1. Open this repo (`/Volumes/Extreme Pro/DeliveryOS`) in VS Code with the published extension active.
 2. Run **DeliveryOS: Create Project** → name it "DeliveryOS".
 3. Confirm `.deliveryos/memory.sqlite` initialises at the repo root.
@@ -257,3 +264,193 @@ A `session` memory row captures:
 **Success signal:** Open a PRD section with a deliberately vague description. Click "Analyse". The AI surfaces 3–5 targeted questions. Answer them. Confirm the section is updated with the answers incorporated and a `decisions[]` entry records what was asked and answered.
 
 **Session tag when picked up:** DOS:O7 for spec, then DOS:R19 or DOS:R20 for implementation.
+
+---
+
+## § B-006 — Change propagation: PRD and requirements as living documents
+
+**What:** When any upstream artifact changes — a PRD section is edited, a requirement is updated, a discovery answer is revised — DOS traces the downstream dependency graph and flags every artifact that is now potentially stale. The user sees a clear "stale since [change]" indicator on affected requirements, test specs, and briefs, and can choose to re-derive, manually reconcile, or dismiss each one.
+
+**Why:** This was the most dangerous silent failure mode during the DOS build. A PRD edit propagates no signal downstream. A requirement change doesn't invalidate the test spec written against the old version. A brief composed before a scope change remains unlocked and composable even though its foundation shifted. In a long-running project — exactly the kind DOS is designed for — these divergences compound. By the time a forbidden write fires, the root cause may be a PRD edit made three sessions ago.
+
+**The core mechanism:** DOS already has the memory graph (`derives-from`, `has-test-spec`, `supersedes` links). Change propagation is a write-time side effect on that graph: when artifact A is updated, walk `derives-from` forward and mark every reachable artifact with a `staleReason` annotation pointing back to A's entry ID and the timestamp of the change.
+
+**Staleness states:**
+
+| State | Meaning | UI treatment |
+| --- | --- | --- |
+| `current` | No upstream change since last confirmed | No indicator |
+| `stale:upstream-changed` | A linked upstream artifact was edited | Amber warning banner in the artifact's panel |
+| `stale:dismissed` | User reviewed + dismissed the staleness signal | Dimmed indicator (audit trail preserved) |
+| `stale:reconciled` | User re-derived or manually updated in response | Cleared; new `reconciled-with` link written |
+
+**Key design questions:**
+
+1. **Granularity.** Does a single-word edit in a PRD section trigger staleness downstream, or only structural changes (section added/removed, requirement scope changed)? Too sensitive = noise; too coarse = misses real drift. Likely answer: user-confirmed saves trigger propagation, not every keystroke.
+
+2. **Reconciliation path.** "Stale" is only useful if DOS helps the user resolve it. For each stale artifact, DOS should offer: (a) re-run the generation step that produced it (e.g. re-decompose requirements from the updated PRD); (b) open the artifact for manual edit with the upstream change highlighted as context; (c) dismiss with a reason recorded in `decisions[]`.
+
+3. **Circular protection.** The memory graph can have cycles (a requirement that supersedes another, which derives from the same PRD). The staleness walker must be cycle-safe — same pattern as the verification memory graph walker in CHUNK-14.
+
+4. **Scope.** Staleness propagates forward (upstream → downstream) only. A change to a result memory entry does not mark its parent brief as stale — the brief was the spec; the result is the outcome.
+
+**Relationship to B-005:** Elicitation (B-005) surfaces gaps within an artifact. Change propagation (B-006) surfaces gaps _between_ artifacts caused by time. Together they keep the whole spec layer coherent.
+
+**Success signal:** Edit a PRD section. Confirm that the requirements derived from it show an amber "stale since [timestamp]" indicator. Open one stale requirement and confirm DOS offers the reconciliation options. Dismiss one — confirm the dismissal reason is recorded and the indicator dims but persists.
+
+**Session tag when picked up:** DOS:O7 for spec (pairs naturally with B-005 spec session), then DOS:R20 for implementation.
+
+---
+
+## § B-007 — Pre-flight completeness check: spec compiler before the expensive run
+
+**What:** Before an Execution Brief is handed to an agent, DOS runs a structured completeness check — a "spec compiler" — that scores the brief against the requirement and test spec it derives from. Gaps are surfaced as blocking warnings or advisory notes in the Brief Composer before the user can click Run. The goal: catch spec errors before they become runtime failures, agent confusion, or forbidden writes.
+
+**Why:** The lean brief pattern worked because the orchestrator manually pre-resolved ambiguity. That discipline was human-enforced, not tool-enforced. A new user, or an experienced user in a hurry, skips the pre-resolution step and gets a vague brief. The agent then fills the gaps with guesses — usually wrong ones. Pre-flight makes the discipline automatic.
+
+Think of it as the compiler analogy for specs: just as a compiler catches type errors before the program runs, the pre-flight check catches spec errors before the agent runs.
+
+**Checks to implement (graduated severity):**
+
+| Check | Severity | Description |
+| --- | --- | --- |
+| Acceptance criteria coverage | 🔴 Blocking | Each criterion in the linked test spec must appear in the brief's Section 10 (Verification Checklist). Missing criteria = agent has no way to self-verify. |
+| Forbidden list non-empty | 🔴 Blocking | A brief with an empty Forbidden list is almost always under-specified. At minimum, DOS should warn. |
+| Allowed list scope coherent | 🟡 Advisory | Allowed globs should cover the files the acceptance criteria would require touching. If the criteria mention `api/bugs.py` but the allowed list doesn't include it, flag the mismatch. |
+| Undefined terms | 🟡 Advisory | Terms that appear in the brief but have no corresponding memory entry (requirement ID, file path, function name) and weren't in the codebase memory. Likely a copy-paste from a stale spec. |
+| PRD section cited but stale | 🟡 Advisory | If the brief references a PRD section that is marked stale (B-006), surface the staleness inline. |
+| Brief derived from locked requirement | ℹ️ Info | Informational — confirms the requirement the brief derives from is approved, not draft. |
+| Test spec exists for requirement | ℹ️ Info | Confirms a test spec was created before the brief. A brief without a test spec is composing blind. |
+
+**Key design questions:**
+
+1. **Blocking vs advisory.** Blocking checks prevent the user from clicking Run until resolved or explicitly overridden. Advisory checks surface warnings but don't block. The user can bypass a blocking check with a recorded justification (same pattern as the Memory Update gate bypass in CHUNK-14).
+
+2. **Where does the check run?** Options: (a) on Save-and-Lock (existing trigger — natural gate since locking is the point of no return); (b) on-demand via a "Check brief" button; (c) both. Option (a) is best — it integrates into the existing flow with no new UX.
+
+3. **Allowed list coherence check requires reading the codebase.** Checking whether the allowed globs cover the files the acceptance criteria reference is a light static analysis — no execution needed, just pattern matching against the codebase memory entry. Codebase memory (already in the memory store from CHUNK-03) provides the file tree.
+
+**Relationship to B-003 (agent team):** The pre-flight check is the natural integration point for the Planner tier in agent team mode. The Planner's output should satisfy the same completeness criteria — if the Planner's plan fails the check, it escalates before the Implementer is spawned.
+
+**Success signal:** Compose a brief with an empty Forbidden list and a verification checklist missing two criteria from the linked test spec. Attempt to lock the brief. DOS blocks the lock, shows two blocking warnings (missing criteria + empty forbidden list), and offers inline links to the test spec and the forbidden-list editor. Add the missing items. Re-lock. Pre-flight passes.
+
+**Session tag when picked up:** DOS:O7 or DOS:O8 for spec, then DOS:R20 or DOS:R21 for implementation.
+
+---
+
+## § B-008 — Impact analysis: blast radius before a run
+
+**What:** Before the user clicks Run on an Execution Brief, DOS uses the memory graph to answer: "What does this brief put at risk?" It shows the blast radius — which existing test cases exercise the files in the brief's Allowed scope, which other requirements share those files, which previously verified briefs touched the same area. The user sees a pre-run risk summary and can make an informed decision before committing to the agent run.
+
+**Why:** Every agent run is a bet. The brief's Allowed list scopes _what the agent may touch_, but it doesn't tell you _what already depends on those things_. A change to `api/bugs.py` might break three test cases written for REQ-001 even though the current brief is for REQ-004. DOS has the data to surface this — the memory graph, the test spec, the result history — but currently doesn't connect it to the Run decision.
+
+**The blast radius calculation:**
+
+1. Expand the brief's Allowed glob list against the codebase memory file tree → set of concrete file paths in scope.
+2. Walk the result memory graph backwards: find all prior result entries whose `changedFiles` intersect the in-scope set.
+3. From those results, find the briefs they came from, and from those briefs, find the requirements.
+4. From the requirements, find the test specs and their verification criteria.
+5. Surface: "N test cases in M requirements exercise files this brief will touch. Last run touching this area: [date/commit]."
+
+**Output format (pre-run panel):**
+
+- **Safe to run:** no prior results touch the same files. Green signal.
+- **Shared scope:** X prior results overlap. Amber — shows which requirements and test cases are at risk. User confirms before proceeding.
+- **Direct conflict:** the brief's scope includes files that a _currently in-progress_ brief (session state from B-004) also covers. Red block — concurrent modification risk.
+
+**Key design questions:**
+
+1. **Cost of the calculation.** The memory graph walk is cheap (it's SQL). The codebase file tree expansion is a glob match against a stored list — also cheap. This should run in under 100ms and display inline in the Brief Composer before Run.
+
+2. **False positives.** Two briefs touching the same file doesn't always mean conflict — one may add a function, another may add a test for a different function in the same file. The blast radius is a signal, not a block. The user decides whether the overlap is real.
+
+3. **Integration with B-009 (rollback).** If the user runs despite an amber signal and the run fails, B-009's rollback should restore exactly the files flagged in the blast radius — confirming the pre-run analysis was accurate.
+
+**Relationship to B-006:** Change propagation tells you what's stale. Impact analysis tells you what's at risk. Together they answer the two questions before any delivery: "Is my spec up to date?" and "What could break if I run it?"
+
+**Success signal:** Compose a brief for REQ-004 whose Allowed scope overlaps files from a previous REQ-001 result. Open the Brief Composer. Before clicking Run, DOS shows an amber "Shared scope" warning: "2 test cases for REQ-001 exercise files this brief will touch." Confirm the warning is accurate by checking the REQ-001 test spec.
+
+**Session tag when picked up:** DOS:O8 for spec, then DOS:R21 for implementation.
+
+---
+
+## § B-009 — Rollback: reject a result and restore to pre-run state
+
+**What:** A one-click "Reject and restore" action in the Result Capture panel that undoes the agent's file changes and returns the working tree to its pre-run state. DOS uses the brief's Allowed file list and the run's recorded `changedFiles` to determine the exact set of files to restore via `git checkout`. No manual `git` commands required; no guessing which files were touched.
+
+**Why:** Fear of rollback is one of the hidden costs of agent-assisted delivery. If running an agent might leave the codebase in a broken state that's hard to unpick, users run agents less aggressively — especially on complex or risky requirements. Making rollback trivial removes that friction. It also makes it safe to run agents on partially-specified briefs, gather the result, reject it, and refine the spec — a tighter iteration loop.
+
+**The rollback mechanism:**
+
+DOS already has all the information needed:
+
+- `ResultPayload.changedFiles` — the exact files the agent touched (captured by CHUNK-12's result parser)
+- The brief's Allowed glob list — the files the agent _was permitted_ to touch
+- The pre-run git commit — the clean state to restore to (the commit HEAD at the time the brief was locked)
+
+Restore steps:
+
+1. Assert the working tree has no uncommitted changes outside the brief's scope (safety guard — mirrors `reset-demo.sh` pattern from CHUNK-15).
+2. Run `git checkout <pre-run-commit> -- <file>` for each file in `changedFiles`.
+3. If the agent also created new files (not in the pre-run tree), run `git clean -f` scoped to those paths.
+4. Write a `rejection` annotation to the result memory entry (`status: 'rejected', rejectedAt, rejectedReason`).
+5. Surface the rejected brief as a candidate for revision (link to Brief Composer with the same requirement pre-loaded).
+
+**What rollback does NOT do:**
+
+- Does not delete the result memory entry — the rejected run is preserved as audit evidence.
+- Does not revert database changes, network calls, or side effects the agent caused outside the file system.
+- Does not rollback commits the agent made (if the agent committed mid-run). In that case, DOS surfaces a `git revert` suggestion instead of a file-level restore.
+
+**Key design questions:**
+
+1. **Mid-run commits.** Some harness profiles (Claude Code in particular) commit frequently. If the agent made commits, file-level `git checkout` isn't enough — DOS needs to detect committed vs uncommitted changes and offer `git revert` for committed ones.
+
+2. **Partial rollback.** The user may want to keep some of the agent's changes and discard others (e.g. keep the new test file, discard the implementation file that violated a boundary). The restore UI should show a checklist of changed files and allow per-file selection.
+
+3. **Safety guard scope.** The guard against uncommitted changes outside the brief's scope (step 1) must be airtight. Restoring files that the user was editing independently would be a data-loss bug. The guard should enumerate any such files and require explicit user confirmation before proceeding.
+
+**Relationship to B-007 (pre-flight) and B-008 (impact analysis):** Pre-flight catches spec errors before the run. Impact analysis flags risks before the run. Rollback recovers after a failed run. Together the three form a complete risk management layer around the agent execution step.
+
+**Success signal:** Run a brief that produces a forbidden write (deliberately). Diff panel shows the violation. Click "Reject and restore" in the Result Capture panel. Confirm the forbidden file is restored to its pre-run state. Confirm the result memory entry is preserved with `status: 'rejected'`. Confirm the Brief Composer opens pre-loaded with the same requirement.
+
+**Session tag when picked up:** DOS:O8 for spec (pairs with B-008), then DOS:R21 or DOS:R22 for implementation.
+
+---
+
+## § B-010 — Delivery health dashboard: metrics across the SDLC
+
+**What:** A dashboard panel that surfaces the delivery data DOS already captures — test counts before/after each run, files changed per brief, forbidden writes caught, advisor escalations triggered, verification pass rates — as a health view across the project's history. Shows whether delivery discipline is improving, where quality problems cluster, and which requirements have cost the most delivery effort.
+
+**Why:** DOS is a structured delivery tool but currently produces no summary of how well delivery is going. All the evidence is there — in the memory graph, the result entries, the diff outcomes, the session wraps — but none of it is aggregated. A team using DOS can't answer "are we getting better?" without reading individual memory entries. A dashboard answers that at a glance.
+
+This also closes a credibility gap: DOS's essay claims it improves delivery discipline. The dashboard is how you measure whether that claim is true.
+
+**Metrics to surface:**
+
+| Metric | Source | Signal |
+| --- | --- | --- |
+| Requirements shipped per session | Session memory + result entries | Velocity |
+| Tests added per requirement | Test spec + result `testCountAfter − testCountBefore` | Quality coverage |
+| Forbidden writes caught (pre-commit) | Diff outcome entries | Safety net effectiveness |
+| Forbidden writes caught (post-run) | Diff outcome entries | Brief quality (fewer post-run = better specs) |
+| Advisor escalation rate | Agent team result entries (B-003) | Brief quality (lower = better) |
+| Verification pass rate (first attempt) | Verification memory entries | End-to-end quality |
+| Rollback rate | Result entries with `status: 'rejected'` | Run reliability |
+| Average files changed per brief | Result `changedFiles.length` | Scope discipline |
+
+**Key design questions:**
+
+1. **Scope: project vs cross-project.** The dashboard is per-project initially (all memory lives in one `.deliveryos/` store). Cross-project aggregation (B-009's multi-project concern) is post-MVP.
+
+2. **Time axis.** Metrics should be trended over sessions, not just totals. A bar chart of "tests added per session" is more useful than a lifetime total. Session memory entries (B-004) provide the time axis.
+
+3. **Actionability.** A metric with no action path is noise. Each metric should link to the underlying artifacts: clicking "3 forbidden writes" opens the diff results for those three runs. The dashboard is a navigation surface, not just a report.
+
+4. **When to show it.** Natural trigger: session wrap (B-004). After wrapping a session, show the health snapshot for the session that just closed — what shipped, what was caught, what regressed. This makes the wrap feel productive, not bureaucratic.
+
+**Relationship to B-004 (session continuity):** The session memory entries that B-004 introduces are the time-series backbone of the dashboard. Without B-004, the dashboard has no session axis — only a flat lifetime view. Implement B-004 first.
+
+**Success signal:** After completing three delivery sessions (each with at least one brief run), open the delivery health dashboard. Confirm it shows per-session test counts, at least one forbidden write event (if any occurred), and verification pass/fail rates. Click a metric to confirm it navigates to the underlying result entry.
+
+**Session tag when picked up:** DOS:O9 for spec (after B-004 is implemented — depends on session memory), then DOS:R22 or later for implementation.
