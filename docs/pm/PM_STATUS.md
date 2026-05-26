@@ -1,6 +1,6 @@
 # Handover — Project Management (DOS:P)
 
-**Last updated:** 2026-05-26 (end of DOS:P3 — CHUNK-13 + CHUNK-14 delivered autonomously via lean three-tier orchestration; Phase 3 complete; Phase 3 demoable state achieved). Narrative in [`history/DOS_P0003.md`](history/DOS_P0003.md).
+**Last updated:** 2026-05-26 (end of DOS:P4 — CHUNK-15 + CHUNK-16 delivered autonomously via lean three-tier orchestration; Phase 4 complete; all 16 chunks done; product built and publication-ready). Narrative in [`history/DOS_P0004.md`](history/DOS_P0004.md).
 
 Read this file **first** when starting a new Project Management session (`/start-fresh P`). It carries current state + carry-overs only. Per-session narratives live in [`history/`](history/) — `/handover P` writes one file per wrap.
 
@@ -10,19 +10,20 @@ Read this file **first** when starting a new Project Management session (`/start
 
 | Field | Value |
 | --- | --- |
-| Commits on `main` | **102** (CHUNK-14 commit `d147b81`) |
-| HEAD | `d147b81 feat(verification): CHUNK-14 — verification workflow + memory update + release evidence (DOS:P3)` |
-| Tags | **`v0.0.1` + `v0.0.2`** (both on `origin`). Next planned tag: `v0.1.0` at CHUNK-16. |
-| Tests | **378 passing** (extension/ suite; +27 from CHUNK-14). `npm test` from `extension/` runs in ~3.8 s. |
-| Bugs (`docs/build/bugs.json`) | **4** — b001 + b004 pending_review on `main`; b002 + b003 open by user fiat. None block scheduling. |
-| Open chunk | **CHUNK-15** (Demo; Phase 4 Week 13). CHUNK-14 closed `d147b81`. |
-| Phase | **Phase 3 complete. Phase 4 next.** (Phase 0–3 complete; Phase 4 = CHUNK-15..16 ⬜). **Phase 3 demoable state achieved**: "The full loop, idea to verified release, with the diff catching a violation live." |
-| Days ahead of nominal | **~9 weeks** (BUILD-PLAN nominal CHUNK-15 start = Week 13, 2026-08-17; actual date 2026-05-26). |
+| Commits on `main` | **106** (CHUNK-16 commit `e1cf862`) |
+| HEAD | `e1cf862 feat(release): CHUNK-16 — README + essay + release prep (DOS:P4)` |
+| Tags | **`v0.0.1` + `v0.0.2`** (both on `origin`). Next tag: `v0.1.0` — manual step, after recording + screenshots. |
+| Tests | **378 passing** (extension/ suite; held from CHUNK-14). `npm test` from `extension/` runs in ~3.8 s. |
+| Bugs (`docs/build/bugs.json`) | **4** — b001 + b004 pending_review on `main`; b002 + b003 open by user fiat. None block publishing. |
+| Open chunk | **None.** All 16 chunks done. |
+| Phase | **Phase 4 complete. All phases done (0–4).** Product built. Remaining = manual publication steps only. |
+| Days ahead of nominal | **~9 weeks** (BUILD-PLAN nominal CHUNK-16 end = Week 14, 2026-08-24; actual date 2026-05-26). |
 | Worktree residue | None |
-| Last R wrap | DOS:R16 — `bf34d80` (CHUNK-11 complete; Phase 2 closed; 2026-05-24). CHUNK-12 + CHUNK-13 + CHUNK-14 shipped via P-track orchestration (no R-track wrap commits). |
+| Last R wrap | DOS:R16 — `bf34d80` (CHUNK-11 complete; Phase 2 closed; 2026-05-24). CHUNK-12..16 shipped via P-track orchestration. |
 | Last O wrap | DOS:O5 — standalone PRD coherence + completeness audit (2026-05-21). |
 | Session model | `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12. |
 | Session config | `.claude/session-config.yml` (prefix `DOS`, tracks **O · R · P**). |
+| Origin | ~67 commits ahead of `origin/main` — push when ready to publish. |
 
 ---
 
@@ -53,8 +54,8 @@ Track P owns **schedule + cadence management** for the DeliveryOS build. Concret
 | Today | 2026-05-26 |
 | BUILD-PLAN nominal start | 2026-05-25 (Week 1) |
 | BUILD-PLAN demo target | 2026-08-24 (Week 14) |
-| Calendar days to demo | **90** (≈ 12.9 weeks) |
-| BUILD-PLAN week shipped through | end of Week 12 (CHUNK-14 ✅) |
+| Calendar days to target | **90** (≈ 12.9 weeks) |
+| BUILD-PLAN week shipped through | end of Week 14 (CHUNK-16 ✅) |
 | Days ahead of nominal | **~9 weeks** |
 
 ### Chunk burn-down (16 chunks total)
@@ -75,35 +76,35 @@ Track P owns **schedule + cadence management** for the DeliveryOS build. Concret
 | 12 | Result capture | 3 | 10 | ✅ | DOS:P2 (orchestrated) — `25a78ae` |
 | 13 | Allowed/Forbidden diff | 3 | 11 | ✅ | DOS:P3 (orchestrated) — `e15b061` |
 | 14 | Verification + release evidence | 3 | 12 | ✅ | DOS:P3 (orchestrated) — `d147b81` |
-| 15 | Demo | 4 | 13 | ⬜ | — |
-| 16 | Record + write | 4 | 14 | ⬜ | — |
+| 15 | Demo | 4 | 13 | ✅ | DOS:P4 (orchestrated) — `787d936` |
+| 16 | Record + write | 4 | 14 | ✅ | DOS:P4 (orchestrated) — `e1cf862` |
 
-Done: **14 / 16**. Remaining: **2**. **Phase 3 complete.**
+Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 
 ### Pace + slack
 
 | Metric | Value | Read |
 | --- | --- | --- |
-| Calendar weeks remaining | 12.9 | until 2026-08-24 demo |
-| Chunks remaining | 2 | CHUNK-15..16 |
-| Required pace | ≈ 0.16 chunks/week | 2 chunks ÷ 12.9 weeks |
-| Nominal Phase 4 pace (2 chunks / 2 weeks) | 1.0 chunks/week | BUILD-PLAN Weeks 13–14 |
-| Slack vs BUILD-PLAN | **~9 weeks ahead** | nominal CHUNK-15 start = Week 13 (2026-08-17) |
-| Status | 🟢 **green — massively ahead** | **Phase 3 minimum viable ship is done.** Phase 4 = Demo + Record. |
+| Calendar weeks remaining (to target) | 12.9 | until 2026-08-24 |
+| Chunks remaining | **0** | all done |
+| Required pace | N/A | build complete |
+| Slack vs BUILD-PLAN | **~9 weeks ahead** | nominal end = Week 14 (2026-08-24) |
+| Status | 🟢 **done** | All 16 chunks shipped. Manual publication steps remain. |
 
 ### Drift signals
 
 | Session | Signal |
 | --- | --- |
 | DOS:P1 (2026-05-22) | Baseline — 3/16 chunks, ~10 days ahead. No prior data. |
-| DOS:P2 (2026-05-26) | +9 chunks in 4 calendar days via 12 R-sessions + 1 P-orchestrated chunk. Pace vastly exceeds nominal. Slack now ~9 weeks. Risk: demo date may be too conservative; consider bringing forward or adding stretch scope after CHUNK-14 closes. |
-| DOS:P3 (2026-05-26) | CHUNK-13 + CHUNK-14 delivered in one session via lean orchestration. Tests: 312 → 351 → 378 (+39 + +27). No Advisor escalations. Phase 3 complete. Lean brief approach confirmed as canonical. Phase 4 (Demo + Record) is next. |
+| DOS:P2 (2026-05-26) | +9 chunks in 4 calendar days via 12 R-sessions + 1 P-orchestrated chunk. Pace vastly exceeds nominal. Slack ~9 weeks. |
+| DOS:P3 (2026-05-26) | CHUNK-13 + CHUNK-14 delivered in one session. Tests: 312 → 351 → 378. Phase 3 complete. |
+| DOS:P4 (2026-05-26) | CHUNK-15 + CHUNK-16 delivered in one session. Tests: 378 → 378 (held — no new unit tests). Phase 4 complete. All 16 chunks done. |
 
 ---
 
 ## § Orchestration trial — autonomous chunk delivery
 
-**Pattern established DOS:P2.** Three-tier hierarchy:
+**Pattern fully validated across DOS:P2..P4.** Three-tier hierarchy:
 
 | Tier | Role | Model | Trigger |
 | --- | --- | --- | --- |
@@ -111,22 +112,23 @@ Done: **14 / 16**. Remaining: **2**. **Phase 3 complete.**
 | 2 | Implementer | Sonnet | Receives brief → reads codebase itself → implements → tests → commits |
 | 3 | Advisor | Opus | Spawned by orchestrator on **objective failure** only (test regression, typecheck error, unexpected diff) |
 
-**Pilot results:**
+**Final results (all 5 P-orchestrated chunks):**
 
 | Chunk | Session | Tests before → after | Advisor needed? | Notes |
 | --- | --- | --- | --- | --- |
 | CHUNK-12 | DOS:P2 | 292 → 312 (+20) | No | Fat brief (10+ src files read by orchestrator) — worked but consumed ~70% context |
-| CHUNK-13 | DOS:P3 | 312 → 351 (+39) | No | Lean brief (spec + BUILD_STATUS only; implementer read codebase itself) — succeeded cleanly |
+| CHUNK-13 | DOS:P3 | 312 → 351 (+39) | No | Lean brief canonical — succeeded cleanly |
+| CHUNK-14 | DOS:P3 | 351 → 378 (+27) | No | Lean brief — succeeded cleanly |
+| CHUNK-15 | DOS:P4 | 378 → 378 (held) | No | Lean brief; no new unit tests (demo/polish chunk) |
+| CHUNK-16 | DOS:P4 | 378 → 378 (held) | No | Lean brief; no new unit tests (publication chunk) |
 
-**Context budget lesson (DOS:P2):** Orchestrator reading 10+ source files consumed ~70% of context window — unsustainable for a 4-chunk chain.
-
-**Lean approach (confirmed DOS:P3 — canonical pattern from CHUNK-13 onwards):**
+**Lean approach (canonical, confirmed across CHUNK-13..16):**
 
 - Orchestrator reads: chunk spec key sections + BUILD_STATUS.md note (actual test count override if stale).
-- Brief pre-resolves key design decisions from the spec (data types, algorithm, integration points, file breakdown).
-- Brief tells implementer to read the codebase itself (fresh context window) for all source file details.
+- Brief pre-resolves key design decisions (data types, algorithm, integration points, file breakdown).
+- Brief tells implementer to read the codebase itself (fresh context window).
 - Orchestrator does NOT read implementation source files.
-- Orchestrator stays lean across CHUNK-14 → 16.
+- Advisor reserved for objective failure only — never needed across 5 chunks.
 
 ---
 
@@ -134,32 +136,37 @@ Done: **14 / 16**. Remaining: **2**. **Phase 3 complete.**
 
 | Item | Status |
 | --- | --- |
-| CHUNK-13 (Allowed/Forbidden diff) | ✅ Done DOS:P3 — `e15b061` |
-| CHUNK-14 (Verification + release evidence) | ✅ Done DOS:P3 — `d147b81` |
-| Lean orchestration approach confirmed + documented | ✅ Done DOS:P3 |
-| Phase 3 complete — demoable state achieved | ✅ 2026-05-26 |
-| CHUNK-15 (Bug Triage Assistant demo run) | 🔵 carry-over to DOS:P4 |
-| CHUNK-16 (Record + write + publish) | 🔵 carry-over to DOS:P4 |
+| CHUNK-15 (Bug Triage demo skeleton + webview polish) | ✅ Done DOS:P4 — `787d936` |
+| CHUNK-16 (README + essay + release prep) | ✅ Done DOS:P4 — `e1cf862` |
+| All 16 chunks complete | ✅ 2026-05-26 |
+| Manual publication steps | 🔵 For user to execute (see below) |
+
+### Manual steps remaining before v0.1.0 ships
+
+1. Record demo video following `docs/demo/recording-storyboard.md`
+2. Capture 6 screenshots into `docs/screenshots/` (spec: `docs/screenshots/README.md`)
+3. Upload video to YouTube → replace `https://youtu.be/PLACEHOLDER` in `README.md` + `RELEASE_NOTES.md`
+4. Commit `demo.mp4` at repo root
+5. `git push origin main` (~67 commits ahead)
+6. `git tag -a v0.1.0 -m "DeliveryOS v0.1.0 — first public proof of work" && git push origin v0.1.0`
+7. Watch GitHub Action → verify release page
+8. Replace `<sha256-to-be-filled-on-release>` in `README.md` with real hash from `SHA256SUMS.txt`
 
 ---
 
 ## § How to start the next session
 
-Next session: **DOS:P4**.
+There are no more P-track chunk deliveries. If a follow-up session is needed (v0.2 planning, bug fixes after publication, stretch scope):
 
 ```text
 /start-fresh P
 ```
 
-**Suggested DOS:P4 work:**
-
-1. **CHUNK-15** — Bug Triage Assistant demo run. Run DeliveryOS end-to-end using the Bug Triage Assistant project (CHUNK-15 spec: `docs/planning/chunks/chunk-15-bug-triage-demo.md`). Script the demo to include a moment where Claude Code modifies a forbidden file and DeliveryOS catches it. Tidy the webview UI.
-2. **CHUNK-16** — Record + write. Record a short demo video of the full loop. Write the README and a short essay on the meta-harness thesis. Publish the `.vsix` on GitHub Releases. Tag `v0.1.0`.
-
-**Pre-DOS:P4 note:** Phase 3 is the minimum acceptable ship. The product is now demoable end-to-end as of `d147b81`. Phase 4 is polish + public proof of work.
+Next session would be: **DOS:P5**.
 
 ### § Recent sessions (newest first)
 
+- [DOS:P4](history/DOS_P0004.md)
 - [DOS:P3](history/DOS_P0003.md)
 - [DOS:P2](history/DOS_P0002.md)
 - [DOS:P1](history/DOS_P0001.md)
