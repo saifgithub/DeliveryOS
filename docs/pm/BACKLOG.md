@@ -715,14 +715,16 @@ The MABP should express all model references in capability tiers, not provider n
 
 | Tier | Capability profile | Cost profile | When to use |
 | --- | --- | --- | --- |
-| **Economy** | Fast, low context, good at routing and extraction | Lowest | Status reads, log parsing, simple file searches |
-| **Standard** | Strong reasoning, large context, good at implementation | Medium | Writing code, running tests, standard analysis, most builder work |
-| **Premium** | Highest reasoning, best at complex design and judgment calls | Highest | Architecture decisions, BLOCKER resolution, escalated builder attempts, advisor role |
+| **Economy** | Fast, low context, good at mechanical and deterministic tasks | Lowest | Pre-fire audit execution, status reads, log parsing, boilerplate scaffolding, config-only chunks, file searches, `BUILD_STATUS.md` updates |
+| **Standard** | Strong reasoning, large context, good at implementation | Medium | Writing code, running tests, standard analysis, most builder and QA work |
+| **Premium** | Highest reasoning, best at complex design and judgment calls | Highest | Architecture decisions, BLOCKER resolution, escalated builder attempts, advisor role, complex chunk design |
 
 Current provider examples (not normative — update as models evolve):
 _Economy_: Haiku-class. _Standard_: Sonnet-class. _Premium_: Opus-class.
 
 The MABP never names a specific model. It names a tier. Teams running on non-Anthropic providers map their own models to these tiers.
+
+**When to start a builder at Economy tier:** A chunk qualifies for an economy-tier builder when it has no design decisions — the output is fully determined by the spec. Examples: a chunk that generates boilerplate files from a template, applies a pre-defined migration, or makes only configuration changes. If any part of the chunk requires the builder to choose between approaches, it is not an economy-tier chunk.
 
 ### Change 1 — Task-proportionate tier selection for the architect
 
@@ -730,29 +732,39 @@ The architect session tier is selected based on the nature of the work being ope
 
 | Architect task | Tier |
 | --- | --- |
+| `BUILD_STATUS.md` update, status sync, log parsing | Economy |
 | Opening a session to build a straightforward implementation chunk | Standard |
-| Opening a session to resolve a BLOCKER or redesign a chunk | Premium |
 | Opening a session for a cross-chunk cohesion review (B-014 Change 4) | Standard |
-| Spawning the Advisor role (three-tier pattern, objective failure only) | Premium |
-| Status sync, `BUILD_STATUS.md` update, fix-prompt drafting for a simple revision | Standard |
+| Fix-prompt drafting for a simple revision | Standard |
+| Opening a session to resolve a BLOCKER or redesign a chunk | Premium |
 | Invocation drafting for a complex chunk with non-obvious design decisions | Premium |
+| Spawning the Advisor role (three-tier pattern, objective failure only) | Premium |
 
-The default for routine build sessions is **Standard**. Premium is reserved for sessions where the architect is doing design work or resolving something that proved beyond standard capability. When in doubt, start Standard and escalate to Premium if the session's analysis proves insufficient.
+The default for routine build sessions is **Standard**. Economy is appropriate for pure mechanical tasks where the architect is reading and writing structured state, not reasoning about design. Premium is reserved for sessions where the architect is doing design work or resolving something that proved beyond standard capability. When in doubt, start Standard.
 
 ### Change 2 — Model-escalation iteration budget
 
-Replace the flat 3-attempt rule with a tiered ladder. The builder's starting tier determines the ladder:
+Replace the flat 3-attempt rule with a tiered escalation ladder. The builder's starting tier determines the ladder. The principle: Economy failure signals "needs more capability" — step up immediately. Standard and Premium failure might be noise — allow one same-tier retry before stepping up.
 
-**Standard-tier builder:**
+**Economy-tier builder** (mechanical chunks with no design decisions):
 
 | Attempt | Tier | Rationale |
 | --- | --- | --- |
-| 1 | Standard | First pass — may succeed |
-| 2 | Standard | Retry at same tier — first failure may be noise or a minor miss |
-| 3 | Premium | Problem has proven itself beyond standard capability — escalate |
-| 4+ | BLOCKER → human | Premium failed — this requires human judgement, not more compute |
+| 1 | Economy | First pass |
+| 2 | Standard | Economy failure = task needs reasoning, not just execution — step up |
+| 3 | Premium | Standard failed — problem is genuinely complex |
+| 4+ | BLOCKER → human | Premium failed — requires human judgement |
 
-**Premium-tier builder** (used when the architect judges the chunk to be complex from the outset):
+**Standard-tier builder** (most implementation chunks):
+
+| Attempt | Tier | Rationale |
+| --- | --- | --- |
+| 1 | Standard | First pass |
+| 2 | Standard | Single retry — first failure may be noise or a minor miss |
+| 3 | Premium | Two standard failures = capability ceiling reached — escalate |
+| 4+ | BLOCKER → human | Premium failed — requires human judgement |
+
+**Premium-tier builder** (complex chunks, used when the architect judges design risk is high from the outset):
 
 | Attempt | Tier | Rationale |
 | --- | --- | --- |
@@ -760,9 +772,11 @@ Replace the flat 3-attempt rule with a tiered ladder. The builder's starting tie
 | 2 | Premium | Single retry at same tier |
 | 3+ | BLOCKER → human | Premium twice is the maximum reasonable spend — further attempts will not change the outcome |
 
-**QA tier follows builder's final attempt tier.** If a chunk's builder escalated to premium for attempt 3, QA runs at premium. Standard builder on attempt 1 or 2 → standard QA. The reviewer's capability should match the complexity level that was required to produce the work.
+The economy ladder is the most complete: three tier escalations before human. The premium ladder is the shortest: premium is already the ceiling, so two attempts is the hard cap.
 
-**The signal.** Two failures at the same tier is not bad luck — it is a signal that the tier is insufficient. One failure at premium is also a signal, but a different one: the problem may be ambiguous, the spec may be wrong, or the chunk may need to be redesigned. Human judgement is the correct response to premium failure, not premium retry.
+**QA tier follows builder's final attempt tier.** Economy chunk that passed on attempt 1 → economy QA. Chunk that escalated to premium on attempt 3 → premium QA. The reviewer's capability should match the complexity level that was required to produce the work.
+
+**The signal.** Economy failure = capability mismatch (step up, no retry). Same-tier failure twice = tier ceiling (escalate). Premium failure = beyond compute (human). These are signals, not penalties — the ladder is how the process learns what a chunk actually requires.
 
 ### What this changes vs B-014 Change 5
 
