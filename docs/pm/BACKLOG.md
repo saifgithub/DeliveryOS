@@ -23,6 +23,7 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-012 | Project intelligence — search and knowledge injection | 🔴 High | Make the DOS memory graph navigable and injectable: find any delivery artifact by intent or keyword, surface the full delivery chain behind it, and inject standing project knowledge into agent sessions at start. Three implementation options — see § B-012 below. |
 | B-013 | MABP — structural quality gate | 🔴 High | Agents prioritise completion over clean structure. Four targeted changes to the MABP cycle (invocation stance, QA structural sweep, blocking-default for structural hot spots, debt register) to push cleanliness upstream and reduce remediation. See § B-013 below. |
 | B-014 | MABP — prompt and process tightening | 🔴 High | Builder invocations are too long and create compliance theatre. Five process improvements: succinctness rule, pre-fire audit interpretation, QA independence, cross-chunk cohesion review, and iteration budget reform. See § B-014 below. |
+| B-015 | MABP — model-tier awareness and escalation protocol | 🔴 High | Architects default to premium tier for all work regardless of task complexity. The flat 3-attempt builder budget burns identical compute on every retry. Two changes: task-proportionate tier selection for architects; model-escalation ladder for builders (standard → standard → premium → human). Provider-agnostic tier language throughout. Supersedes B-014 Change 5. See § B-015 below. |
 
 ---
 
@@ -688,3 +689,93 @@ B-014 changes how the process runs. B-013 changes what quality standard the agen
 **Implementation note:** B-014 is a document edit, not a code change. The same O-track session that implements B-013 should implement B-014 — both edit `docs/MULTI_AGENT_BUILD_PROCESS.md` and the changes are tightly coupled.
 
 **Session tag when picked up:** Same O-track session as B-013 — edit `docs/MULTI_AGENT_BUILD_PROCESS.md` in one pass.
+
+---
+
+## § B-015 — MABP: model-tier awareness and escalation protocol
+
+**Status:** Backlogged
+**Priority:** 🔴 High
+**Applies to:** `docs/MULTI_AGENT_BUILD_PROCESS.md`
+**Supersedes:** B-014 Change 5 (iteration budget reform)
+
+### Two flaws
+
+The MABP is implicitly Claude-centric and cost-unaware. Two specific flaws:
+
+**Flaw 1 — Architect tier defaults to premium regardless of task.** In practice, architect sessions run on the highest-capability model available. But not all architect tasks require that. Syncing `BUILD_STATUS.md`, running a pre-fire audit, or writing a straightforward fix prompt are standard-tier tasks being billed at premium rates. Over a 16-chunk build, this is significant waste.
+
+**Flaw 2 — The iteration budget is tier-blind.** The current rule gives a builder three attempts at the same model tier, then a BLOCKER. This wastes premium compute (if the builder was already premium) on attempts that won't change the outcome, and wastes human escalation bandwidth (if the builder was standard) on problems that a higher-capability model could have resolved.
+
+The deeper principle: **the tier of the agent is the escalation mechanism.** A problem that a standard-tier agent cannot solve in two tries is not a problem that a third standard-tier try will resolve — it is a problem that warrants premium compute. A problem that a premium-tier agent cannot solve in two tries is not a problem that any amount of compute will resolve — it requires human judgement.
+
+### Generic tier model
+
+The MABP should express all model references in capability tiers, not provider names or version strings. The team fills each tier with whatever model their chosen provider offers at that capability level.
+
+| Tier | Capability profile | Cost profile | When to use |
+| --- | --- | --- | --- |
+| **Economy** | Fast, low context, good at routing and extraction | Lowest | Status reads, log parsing, simple file searches |
+| **Standard** | Strong reasoning, large context, good at implementation | Medium | Writing code, running tests, standard analysis, most builder work |
+| **Premium** | Highest reasoning, best at complex design and judgment calls | Highest | Architecture decisions, BLOCKER resolution, escalated builder attempts, advisor role |
+
+Current provider examples (not normative — update as models evolve):
+_Economy_: Haiku-class. _Standard_: Sonnet-class. _Premium_: Opus-class.
+
+The MABP never names a specific model. It names a tier. Teams running on non-Anthropic providers map their own models to these tiers.
+
+### Change 1 — Task-proportionate tier selection for the architect
+
+The architect session tier is selected based on the nature of the work being opened, not defaulted to premium:
+
+| Architect task | Tier |
+| --- | --- |
+| Opening a session to build a straightforward implementation chunk | Standard |
+| Opening a session to resolve a BLOCKER or redesign a chunk | Premium |
+| Opening a session for a cross-chunk cohesion review (B-014 Change 4) | Standard |
+| Spawning the Advisor role (three-tier pattern, objective failure only) | Premium |
+| Status sync, `BUILD_STATUS.md` update, fix-prompt drafting for a simple revision | Standard |
+| Invocation drafting for a complex chunk with non-obvious design decisions | Premium |
+
+The default for routine build sessions is **Standard**. Premium is reserved for sessions where the architect is doing design work or resolving something that proved beyond standard capability. When in doubt, start Standard and escalate to Premium if the session's analysis proves insufficient.
+
+### Change 2 — Model-escalation iteration budget
+
+Replace the flat 3-attempt rule with a tiered ladder. The builder's starting tier determines the ladder:
+
+**Standard-tier builder:**
+
+| Attempt | Tier | Rationale |
+| --- | --- | --- |
+| 1 | Standard | First pass — may succeed |
+| 2 | Standard | Retry at same tier — first failure may be noise or a minor miss |
+| 3 | Premium | Problem has proven itself beyond standard capability — escalate |
+| 4+ | BLOCKER → human | Premium failed — this requires human judgement, not more compute |
+
+**Premium-tier builder** (used when the architect judges the chunk to be complex from the outset):
+
+| Attempt | Tier | Rationale |
+| --- | --- | --- |
+| 1 | Premium | First pass |
+| 2 | Premium | Single retry at same tier |
+| 3+ | BLOCKER → human | Premium twice is the maximum reasonable spend — further attempts will not change the outcome |
+
+**QA tier follows builder's final attempt tier.** If a chunk's builder escalated to premium for attempt 3, QA runs at premium. Standard builder on attempt 1 or 2 → standard QA. The reviewer's capability should match the complexity level that was required to produce the work.
+
+**The signal.** Two failures at the same tier is not bad luck — it is a signal that the tier is insufficient. One failure at premium is also a signal, but a different one: the problem may be ambiguous, the spec may be wrong, or the chunk may need to be redesigned. Human judgement is the correct response to premium failure, not premium retry.
+
+### What this changes vs B-014 Change 5
+
+B-014 Change 5 addressed structural shortcuts taken under iteration pressure. B-015 supersedes it with a more complete approach: the iteration budget rule changes such that structural shortcuts are less tempting because the model is upgraded before the attempt budget runs out. The rule from B-014 Change 5 — "structural shortcuts under budget pressure are automatically blocking" — is preserved and incorporated into the B-015 escalation ladder: if a standard builder on attempt 2 is tempted by a structural shortcut, the correct action is to declare a BLOCKER and trigger escalation to premium, not to take the shortcut and mark it advisory.
+
+### Relationship to B-003
+
+B-003 (agent team delivery) addresses tiered orchestration for DOS-native deliveries — the three-tier Haiku/Sonnet/Opus pattern for running briefs. B-015 addresses tiered orchestration for the MABP build process itself. They share the same underlying principle (match compute cost to task complexity) but apply to different layers: B-003 applies to what DOS delivers; B-015 applies to how DOS is built.
+
+Both B-003 and B-015 should use the same generic tier language. When B-003 is implemented, the tier definitions from B-015 should be shared rather than duplicated.
+
+**Success signal:** A MABP build log shows standard-tier sessions for routine chunks and premium-tier sessions only for complex or escalated work. A chunk that required escalation to premium shows in `BUILD_STATUS.md` with a `Tier escalated:` note. No specific model names appear in the MABP document — only tier labels.
+
+**Implementation note:** B-015 is a document edit. It should be implemented in the same O-track session as B-013 and B-014, since all three edit `docs/MULTI_AGENT_BUILD_PROCESS.md` and the changes are interdependent.
+
+**Session tag when picked up:** Same O-track session as B-013 and B-014.
