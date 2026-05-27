@@ -21,6 +21,8 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-010 | Delivery health dashboard — metrics across the SDLC | 🟢 Low | Surface the data DOS already captures (tests before/after, advisor escalations, forbidden writes caught, files changed per brief) as a delivery health view. Shows whether discipline is improving over time. See § B-010 below. |
 | B-011 | **Workgroup** — team coordination substrate | 🔴 High | DOS for teams: role separation, brief review gate, shared memory store, requirement state machine, standup view, non-developer access. Full roadmap: [`docs/pm/WORKGROUP.md`](WORKGROUP.md). |
 | B-012 | Project intelligence — search and knowledge injection | 🔴 High | Make the DOS memory graph navigable and injectable: find any delivery artifact by intent or keyword, surface the full delivery chain behind it, and inject standing project knowledge into agent sessions at start. Three implementation options — see § B-012 below. |
+| B-013 | MABP — structural quality gate | 🔴 High | Agents prioritise completion over clean structure. Four targeted changes to the MABP cycle (invocation stance, QA structural sweep, blocking-default for structural hot spots, debt register) to push cleanliness upstream and reduce remediation. See § B-013 below. |
+| B-014 | MABP — prompt and process tightening | 🔴 High | Builder invocations are too long and create compliance theatre. Five process improvements: succinctness rule, pre-fire audit interpretation, QA independence, cross-chunk cohesion review, and iteration budget reform. See § B-014 below. |
 
 ---
 
@@ -539,3 +541,150 @@ Each option surfaces results grouped by delivery artifact type, with the full ch
 **Success signal:** In a project with at least 5 requirements and 3 completed delivery cycles, search "interest calculation" (or any domain term). Results group by artifact type, each shows the delivery chain, clicking any result navigates to the correct DOS panel.
 
 **Session tag when picked up:** DOS:O8 for spec (can be co-specced with B-008), then DOS:R21+ for implementation.
+
+---
+
+## § B-013 — MABP: structural quality gate
+
+**Status:** Backlogged
+**Priority:** 🔴 High
+**Applies to:** `docs/MULTI_AGENT_BUILD_PROCESS.md`
+
+### The flaw
+
+The MABP defines "done" entirely in functional terms: tests pass, features work, extension activates. There is no structural quality criterion anywhere in the cycle. A builder optimising for "make the red go green" will always take the path of least resistance through schema and code structure — and the MABP currently gives them permission to do so.
+
+Three root causes:
+
+1. **Builder invocations have no design quality stance.** The invocation drafting instructions say: auditor stance + chunk spec + done criteria. Nothing tells the builder to prefer a normalised schema over a flat one, or a clean abstraction over a working hack.
+
+2. **QA has no structural sweep.** Cycle 5 checks functional correctness and test quality. It doesn't check schema design, naming consistency, missing constraints, or hardcoded values.
+
+3. **Hot spots are self-declared by the builder.** A builder who took a structural shortcut to meet their 3-attempt budget has completion bias — they're unlikely to flag the shortcut at the severity it deserves. Under iteration pressure, structural debt becomes advisory rather than blocking.
+
+### Four changes
+
+**Change A — Design quality stance in every builder invocation** (Section 6 Step 4 and Section 9):
+
+Add a mandatory opening paragraph to the architect's invocation drafting guidance:
+
+> "Build clean first. Functional correctness is necessary but not sufficient. If the clean structure and the fast structure diverge, build the clean one. The only permitted shortcut is one explicitly declared as a hot spot — with the clean version described and the reason for deferral stated."
+
+This runs before the chunk spec, not after. Agents anchor on the first instruction.
+
+**Change B — Structural quality sweep in QA** (Section 8, Cycle 5):
+
+Add to QA's mandatory checks a structural audit pass:
+
+- Schema: normalised form respected, all constraints named, foreign keys explicit, no nullable columns where the domain forbids null
+- Code: no magic numbers, no hardcoded strings that belong in config, no TODO/FIXME committed, no dead code
+- Naming: consistent with the codebase's existing conventions (grep three comparable files to establish the baseline)
+- Abstractions: no leaky abstractions introduced for the sake of speed
+
+Any finding here is a hot spot. Schema design and constraint issues are blocking severity by default.
+
+**Change C — Blocking-by-default for structural hot spots** (Section 8, Cycle 4):
+
+Add a severity rule to the hot spots declaration:
+
+> "Structural shortcuts — denormalised schema, missing constraint, magic number, inconsistent naming, leaky abstraction — are **blocking** severity unless the builder explicitly states (a) what the clean version would have been and (b) why it was not feasible within the attempt budget. Advisory is not available for structural issues without that justification."
+
+This closes the gap where "it works, it's just a bit messy" becomes advisory and ships.
+
+**Change D — Structural debt register in BUILD_STATUS.md** (Section 9, architect role contract):
+
+Add to the architect role contract:
+
+> "The architect is the only agent who can approve a structural shortcut. When approving a chunk whose hot spots include a structural shortcut, the `BUILD_STATUS.md` entry for that chunk must include a `Structural debt:` field: what was cut, what the clean version looks like, and which future chunk should clean it up. Debt that is not registered does not exist as far as future architects are concerned."
+
+This makes structural debt visible across sessions and assignable to a future chunk rather than silently accumulating.
+
+### Relationship to B-014
+
+B-013 changes _what quality standard_ the agents are held to. B-014 changes _how the process is run_ (prompt shape, audit rigour, QA independence). Both are needed. B-013 without B-014 sets a higher bar but delivers it via the same long, compliance-theatre invocations. B-014 without B-013 tightens the process but still has no structural quality gate.
+
+**Success signal:** A chunk that touches a database schema or core abstraction is reviewed by QA for structural quality. A shortcut that would previously have shipped as advisory is flagged as blocking. The `BUILD_STATUS.md` chunk entry has either a clean structural audit or an explicit `Structural debt:` field — never silence.
+
+**Implementation note:** B-013 is a document edit, not a code change. An O-track session edits `docs/MULTI_AGENT_BUILD_PROCESS.md` to incorporate the four changes. No R-track work required.
+
+**Session tag when picked up:** DOS:O6 (or the next available O session) — edit `docs/MULTI_AGENT_BUILD_PROCESS.md` directly.
+
+---
+
+## § B-014 — MABP: prompt and process tightening
+
+**Status:** Backlogged
+**Priority:** 🔴 High
+**Applies to:** `docs/MULTI_AGENT_BUILD_PROCESS.md`
+
+### The problem
+
+The MABP's builder invocations are too long. The current instruction is: "auditor stance + chunk spec verbatim + audit corrections + done-criteria runbook." A chunk spec is 100–300 lines. An audit correction log adds 20–50 lines. Done criteria add another 20–40 lines. The result is a 200–400 line prompt delivered to a fresh sub-agent with no prior context.
+
+Long prompts create three failure modes:
+
+1. **Recency bias.** Agents weight the last thing they read most heavily. Constraints buried in the middle of a long invocation are followed inconsistently. The structural quality stance (B-013 Change A) is useless if it appears on line 8 of a 350-line prompt.
+
+2. **Compliance theatre.** When an invocation says "paste the pre-fire audit output verbatim," the builder pastes it — but the act of pasting is not the same as understanding it. The audit becomes a checkbox, not a diagnostic.
+
+3. **QA anchoring.** QA reads the builder's hot spots section first. This primes QA's attention toward what the builder flagged rather than what QA independently finds. QA becomes a verifier of the builder's self-assessment, not an independent reviewer.
+
+Beyond prompt length, the process has two structural weaknesses in how structural consistency across chunks is checked — each chunk is verified in isolation, so cross-chunk pattern drift only surfaces after both chunks are done.
+
+### Five changes
+
+**Change 1 — Minimum-necessary invocation rule** (Section 6 Step 4 and Section 9):
+
+Replace "chunk spec verbatim" with "key decisions pre-resolved + pointer to read the spec." The invocation should state:
+
+- What the chunk must produce (one paragraph)
+- The three to five decisions the builder must not re-litigate (pre-resolved by the architect in the invocation)
+- The constraints that govern the build (scope, forbidden files, design quality stance)
+- A pointer: "Read the chunk spec at `docs/planning/chunks/chunk-NN-<slug>.md` before writing any code"
+- The done criteria as a numbered checklist (10 lines maximum)
+
+Target: invocations under 80 lines. The chunk spec is a reference document, not a paste target.
+
+**Change 2 — Pre-fire audit interpretation rule** (Section 6 Step 3 and Section 8 Cycle 1):
+
+Replace "paste the output verbatim" with "paste the output verbatim AND state one sentence per command: what you expected, what you got, and whether it is a drift." A builder who pastes output and writes "API exists: confirmed" has understood the audit. A builder who pastes output and writes nothing has performed a ritual.
+
+This also applies to the architect's own pre-fire pass. The audit is not done until the interpretation is written.
+
+**Change 3 — QA independent pass before hot spots** (Section 8 Cycle 5):
+
+QA must complete an independent verification pass before reading the builder's hot spots section. The sequence:
+
+1. QA re-runs every done criterion against primary sources (current behaviour)
+2. QA runs the structural quality sweep (B-013 Change B)
+3. QA records its own findings independently
+4. QA then reads the builder's hot spots and reconciles: findings that appear in both are confirmed; findings in hot spots that QA cannot reproduce are flagged as unverified; findings QA made independently that the builder did not flag are elevated
+
+This preserves QA's independence and catches the class of builder self-assessment bias.
+
+**Change 4 — Cross-chunk structural cohesion review** (Section 9, architect role contract):
+
+Every four to five chunks, the architect runs a cross-chunk structural review before firing the next builder:
+
+- Grep for the three most common patterns introduced in the last four chunks (naming conventions, error handling shapes, data access patterns)
+- Confirm they are consistent across all chunks delivered so far
+- If drift is found, raise a fix prompt targeting the inconsistency before continuing
+
+This review is logged in `BUILD_STATUS.md` as a `Cohesion check:` entry. It does not require a full builder fire — the architect does it in-session and either approves as consistent or drafts a targeted fix prompt.
+
+**Change 5 — Iteration budget reform** (Section 8 Cycle 3):
+
+The current 3-attempt budget creates time pressure that encourages structural shortcuts (take the fast fix, not the clean fix). Two additions:
+
+- A structural shortcut taken on attempt 2 or 3 is automatically a blocking hot spot regardless of severity (links to B-013 Change C). The builder cannot trade "I'm running out of attempts" for "I'll mark this advisory."
+- If a builder-owned error persists to attempt 3 and the only available fix is a structural shortcut, the correct action is a BLOCKER, not a shortcut. "I can make this work by denormalising the schema" is not a valid attempt 3 resolution — it is a BLOCKER with a description of what clean resolution requires.
+
+### Relationship to B-013
+
+B-014 changes how the process runs. B-013 changes what quality standard the agents are held to. The changes interact: B-014 Change 1 (shorter invocations) makes B-013 Change A (design quality stance) more effective, because the stance now appears near the top of a short prompt rather than buried in a long one. Implement both together.
+
+**Success signal:** A builder invocation is under 80 lines. The pre-fire audit includes one interpretation sentence per command. QA's report shows an independent pass section distinct from the hot spots reconciliation section. The `BUILD_STATUS.md` shows a `Cohesion check:` entry every four to five chunks. No structural shortcut appears in a report without a blocking severity declaration.
+
+**Implementation note:** B-014 is a document edit, not a code change. The same O-track session that implements B-013 should implement B-014 — both edit `docs/MULTI_AGENT_BUILD_PROCESS.md` and the changes are tightly coupled.
+
+**Session tag when picked up:** Same O-track session as B-013 — edit `docs/MULTI_AGENT_BUILD_PROCESS.md` in one pass.
