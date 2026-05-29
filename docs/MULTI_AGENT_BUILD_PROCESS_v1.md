@@ -1,6 +1,7 @@
-# Multi-Agent Build Process — DeliveryOS
+# Multi-Agent Build Process — DeliveryOS (v1 — DEPRECATED)
 
-> **Updated:** 2026-05-27 (v2) — structural quality gate (B-013), prompt tightening (B-014), model-tier awareness and escalation protocol (B-015). Previous version archived at `docs/MULTI_AGENT_BUILD_PROCESS_v1.md`.
+> **Deprecated:** 2026-05-27. Superseded by `docs/MULTI_AGENT_BUILD_PROCESS.md` (v2).
+> Retained for reference. Do not use for new builds.
 
 How DeliveryOS ships code through coordinated AI agents.
 
@@ -45,7 +46,7 @@ The stakeholder expects to spend very little time. The process is designed so th
 | Role | Who | Does | Doesn't |
 | --- | --- | --- | --- |
 | **Stakeholder** | Saiful (human) | Sets direction, approves trade-offs, final go/no-go authority, BLOCKER triage when the architect escalates | Draft invocations, dispatch toil, write code, run tests |
-| **Architect** | sustained session — tier selected per task (see § 15) | Picks the next chunk from `BUILD_STATUS.md`; selects starting tier for the session and each sub-agent; runs and **interprets** the pre-fire factual audit; writes minimum-necessary builder and QA invocations (under 80 lines each) with a design quality stance; spawns sub-agents via the Agent tool; reads both reports side by side; approves or rejects structural trade-offs and registers approved shortcuts as `Structural debt:` in `BUILD_STATUS.md`; runs a cross-chunk cohesion review every four to five chunks; recommends a verdict; syncs `BUILD_STATUS.md` on approve; curates memory | Write extension code, run the test suite, edit code files, share state with sub-agents |
+| **Architect** | sustained Claude Code session | Picks the next chunk from `BUILD_STATUS.md`; runs the pre-fire factual audit; writes builder and QA invocation prompts inline; spawns sub-agents via the Agent tool; reads both reports side by side; recommends a verdict; syncs `BUILD_STATUS.md` on approve; curates memory | Write extension code, run the test suite, edit code files, share state with sub-agents |
 | **Builder / QA** | fresh sub-agent per chunk fire (Agent tool, `subagent_type: general-purpose`) | Re-runs the pre-fire audit (pastes output verbatim), writes TypeScript code and tests, runs the unit suite and the extension smoke in one session, files a report; OR writes a BLOCKER file and exits if any ambiguity surfaces | Use `AskUserQuestion` (sub-agents do not have it), share memory across fires, edit architect-owned docs, refactor outside the chunk scope |
 
 Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`) and `docs/build/BUILD_STATUS.md` are the only durable state.
@@ -114,8 +115,8 @@ docs/build/
 
 1. **Architect** picks the next chunk from `BUILD_STATUS.md`, following the dependency order in `docs/planning/READY.md`.
 2. **Architect** re-reads the chunk spec for chunk N, plus its pre-reads: the PRD sections it cites, the builder reports of chunks it depends on, and `CLAUDE.md`.
-3. **Architect** runs the pre-fire factual audit (VS Code API checks, file existence checks, prior-chunk-output checks, chunk-spec line-reference verification) and **interprets** each result: one sentence per check stating what was expected, what was found, and whether it represents drift requiring action. Pasting output without interpretation is not a completed audit. Spec drift means the architect fixes the chunk spec, then re-runs the audit.
-4. **Architect** writes the builder invocation inline following four rules: (1) **Under 80 lines** — do not paste the chunk spec verbatim; instead pre-resolve the three to five key design decisions, state scope constraints, and direct the builder to read the spec file. (2) **Open with a design quality stance**: "Build clean first. If the clean structure and the fast structure diverge, build the clean one. Structural shortcuts must be declared as blocking hot spots with the clean version described." (3) **Done criteria as a numbered checklist**, 10 lines maximum. (4) **State the builder's starting tier** (Economy / Standard / Premium — see § 15) and the escalation ladder that applies.
+3. **Architect** runs the pre-fire factual audit (VS Code API checks, file existence checks, prior-chunk-output checks, chunk-spec line-reference verification). Spec drift means the architect fixes the chunk spec, then re-runs the audit.
+4. **Architect** writes the builder invocation inline (auditor stance + chunk spec verbatim + audit corrections + the chunk's "done" criteria as a runbook).
 5. **Architect** spawns the builder via the Agent tool (`subagent_type: general-purpose`, prompt = step 4 output).
 6. **Builder** re-runs the pre-fire audit (pastes output verbatim) → writes TypeScript code and tests in `src/test/chunk-NN-<slug>.test.ts` → runs the unit suite AND the extension smoke in one session → iterates on builder-owned errors (3-attempt budget) OR writes a BLOCKER file and exits (any unresolved ambiguity, contradiction, or missing dependency) → writes `builder_reports/chunk_NN_<slug>.md` with `## For QA — hot spots` filled before closing.
 7. **Architect** reads the builder report. BLOCKER means resolve the spec issue and return to step 1 for a re-fire. Clean means continue.
@@ -172,7 +173,7 @@ Six interleaved cycles, each catching a different failure class.
 
 - **Fires twice:** the architect (while drafting the invocation) and the builder (in their session, before any code change).
 - **Catches:** stale chunk-spec claims that would burn hours on a wrong premise. For a VS Code extension the common ones are: a VS Code API that does not exist in the pinned `engines.vscode` version, a contribution-point key typo in `package.json`, a file that a prior chunk was supposed to create but did not, a shared type or interface named in the spec that has since drifted.
-- **Rule:** every chunk spec has a `### Pre-fire audit` listing 5 to 10 commands. The builder pastes the output verbatim into the report **and writes one sentence per command** stating what was expected, what was found, and whether it represents drift. Paste-without-interpretation is not a completed audit. Any failure means a BLOCKER, no code written.
+- **Rule:** every chunk spec has a `### Pre-fire audit` listing 5 to 10 commands. The builder pastes the output verbatim into the report. Any failure means a BLOCKER, no code written.
 - **Typical commands:** check `package.json` `engines.vscode`; grep the installed `@types/vscode` surface for the APIs the chunk uses; confirm prior-chunk output files exist; confirm the chunk's declared dependency chunks are marked done in `BUILD_STATUS.md`; verify chunk-spec line references.
 
 ### Cycle 2 — Builder one-session test plus smoke (during the build)
@@ -185,48 +186,20 @@ Six interleaved cycles, each catching a different failure class.
 
 - **Fires when a criterion fails.**
 - **Catches:** infinite "diagnose, fix, rerun" loops where the diagnosis has drifted.
-- **Rule:** the iteration budget is a tiered escalation ladder — the builder's starting tier (set by the architect in the invocation) determines the sequence. External, infrastructure, or ambiguous failures get a BLOCKER immediately at any tier (0 retries). Unclear is treated as external.
-
-| Starting tier | Attempt 1 | Attempt 2 | Attempt 3 | Attempt 4 |
-| --- | --- | --- | --- | --- |
-| **Economy** | Economy | Standard | Premium | BLOCKER → human |
-| **Standard** | Standard | Standard (retry — first failure may be noise) | Premium | BLOCKER → human |
-| **Premium** | Premium | Premium (single retry) | BLOCKER → human | — |
-
-Economy failure is never retried at the same tier — it signals the task needs more capability, not another attempt. Standard and Premium each get one same-tier retry before escalating.
-
-**Structural shortcut rule:** a structural shortcut (denormalised schema, missing constraint, magic number, leaky abstraction) taken to meet the attempt budget is not a valid resolution at any tier. It is a BLOCKER with a description of what clean resolution requires. The architect decides whether to approve the shortcut; if approved, it is registered as `Structural debt:` in `BUILD_STATUS.md`.
-
+- **Rule:** a builder-owned error (a bug in your code) gets 3 attempts, then a BLOCKER. An external, infrastructure, or ambiguous failure (the VS Code test host will not download, a dependency will not install, a spec contradiction) gets a BLOCKER immediately, 0 retries. Unclear is treated as external.
 - Iteration history (command, diagnosis, fix, rerun) goes into the builder report per criterion.
-- The tier used for each attempt is recorded in the report.
 
 ### Cycle 4 — Hot-spots self-declaration (closing the build)
 
 - **Fires as the builder closes the report.**
 - **Catches:** the gap between "all criteria pass" and "the builder is genuinely confident". Tests can pass for the wrong reasons.
-- **Rule:** every report must have `## For QA — hot spots`. If there genuinely are none, write `None — all criteria clean on first attempt`. Otherwise 2 to 5 bullets pointing to partial acceptances, material deviations, unverifiable assumptions, tests that might pass incidentally, or stale invocation facts.
-- **Structural shortcut severity:** any hot spot that is a structural shortcut (denormalised schema, missing constraint, magic number, inconsistent naming, leaky abstraction introduced for speed) is **blocking** severity unless the builder states (a) what the clean version would have been and (b) why it was not feasible within the attempt budget. Advisory is not available for structural issues without that explicit justification.
-- QA reads this section **after** completing its own independent pass (see Cycle 5).
+- **Rule:** every report must have `## For QA — hot spots`. If there genuinely are none, write `None — all criteria clean on first attempt`. Otherwise 2 to 5 bullets pointing to partial acceptances, material deviations, unverifiable assumptions, tests that might pass incidentally, or stale invocation facts. QA reads this section first.
 
 ### Cycle 5 — QA independent re-verification (after the build closes)
 
 - **Fires as a separate sub-agent, fresh session, after the builder report is closed.**
 - **Catches:** narrative mismatch, builders can paste stale output, paraphrase, or omit failures.
-- **Rule:** QA works in two passes in this order:
-
-  **Pass 1 — Independent verification (before reading the builder's hot spots):** QA reproduces every "done" criterion against primary sources (actual editor behaviour, the actual installed extension, not just exit codes). QA spot-checks test quality (temporarily break the implementation, confirm the test fails, revert). QA runs the structural quality sweep (see below). QA records its own findings independently.
-
-  **Pass 2 — Hot spot reconciliation:** QA reads the builder's `## For QA — hot spots` section and reconciles: findings that appear in both are confirmed; hot spots QA cannot reproduce are flagged as unverified; findings QA made independently that the builder did not flag are elevated — these are the highest-signal findings.
-
-  QA also: audits report completeness (deviations, sign-off, architect-owned docs untouched); confirms the extension packages cleanly with `vsce package`; assigns severity (`blocking` / `advisory` / `cleared`) to each finding.
-
-- **Structural quality sweep (mandatory, every chunk):** review changed files for:
-  - **Schema:** normalised form respected, all constraints named, foreign keys explicit, no nullable columns where the domain forbids null
-  - **Code:** no magic numbers, no hardcoded strings that belong in config, no TODO/FIXME committed, no dead code
-  - **Naming:** consistent with the codebase's existing conventions (grep three comparable files to establish the baseline before reviewing)
-  - **Abstractions:** no leaky abstractions introduced for the sake of speed
-
-  Schema and constraint findings are blocking severity by default. Any structural finding not declared by the builder in hot spots is a high-signal independent finding.
+- **Rule:** QA reproduces every "done" criterion against primary sources (actual editor behaviour, the actual installed extension, not just exit codes). QA spot-checks test quality (temporarily break the implementation, confirm the test fails, revert). QA audits report completeness (deviations, sign-off, architect-owned docs untouched). QA confirms the extension still packages cleanly with `vsce package` and installs without error. QA reproduces each hot spot and assigns severity (`blocking` / `advisory` / `cleared`).
 - **Isolation sweep:** confirm the chunk's tests did not write into the developer's real DeliveryOS memory store or real workspace. Tests must use a temp workspace or an in-memory store. Any real-state write is a blocking finding.
 - **Mandatory 4-line verdict block** ends QA's turn:
 
@@ -278,13 +251,10 @@ The architect is the only sustained-context AI session. Its responsibilities per
 
 - **Chunk selection and pre-read.** Picks the next chunk in dependency order from `BUILD_STATUS.md` and `READY.md`. Re-reads the chunk spec plus its cited PRD sections and the builder reports of dependency chunks.
 - **Pre-fire audit ownership.** Before drafting an invocation, the architect runs the audit against real state (VS Code API surface, file system, line refs, prior-chunk outputs). Drift means the architect edits the chunk spec to match reality, then re-audits. The builder still runs the audit again in their session; two passes are cheaper than one wrong premise.
-- **Invocation drafting.** Builder invocations are written inline: under 80 lines, no chunk spec verbatim paste (direct the builder to read the spec file), design quality stance in the opening paragraph, key design decisions pre-resolved, done criteria as a numbered checklist (10 lines max), starting tier and escalation ladder stated. QA invocations: hot-spots preamble with severity + primary-source verification commands + structural quality sweep directive.
+- **Invocation drafting.** Builder and QA invocations are written inline by the architect and passed to the Agent tool as the sub-agent's prompt. Auditor stance + chunk spec verbatim + audit corrections + "done"-criteria runbook for builders; hot-spots preamble with severity + primary-source verification commands for QA.
 - **Sub-agent orchestration.** Spawns builder and QA via `Agent(subagent_type: general-purpose, ...)`. Reads the report file directly when the sub-agent returns; the chat summary is not authoritative.
 - **BLOCKER resolution.** Reads `blockers/chunk_NN_*.md`, edits the chunk spec or pre-reads, re-checks cohesion with neighbouring chunks if the interface changed, re-fires.
 - **Verdict and sync.** Recommends a verdict to the stakeholder. On approve, the architect immediately syncs `BUILD_STATUS.md` and confirms the chunk's commit landed.
-- **Cross-chunk cohesion review.** Every four to five chunks, before firing the next builder, the architect greps for the three most common patterns introduced in recent chunks (naming conventions, error-handling shapes, data-access patterns) and confirms they are consistent. If drift is found, a targeted fix prompt is raised before continuing. The review is logged in `BUILD_STATUS.md` as a `Cohesion check:` entry.
-- **Structural debt register.** The architect is the only agent who can approve a structural shortcut. When approving a chunk whose hot spots include a structural shortcut, the `BUILD_STATUS.md` entry for that chunk must include a `Structural debt:` field: what was cut, what the clean version looks like, and which future chunk should address it. Debt not registered does not exist as far as future architects are concerned.
-- **Tier selection.** The architect selects the session tier and each sub-agent's starting tier based on task complexity (see § 15). The default for routine build sessions is Standard. Economy is for mechanical tasks only. Premium is for design work, BLOCKER resolution, and the Advisor role.
 - **Memory curation.** When something non-obvious is learned, the architect saves it as a `feedback_*` or `memory_*` note in the Claude Code memory directory and adds a one-line pointer to the index.
 
 What the architect does NOT do: write extension code, run the test suite, edit code files. If it catches itself reaching for Edit or Write on a `.ts` file, that is a BLOCKER for the builder, not work for the architect.
@@ -390,74 +360,6 @@ Stakeholder triggers (the architect interprets them):
 
 ---
 
----
-
-## 15. Model tier reference
-
-All model references in this document use capability tiers, not provider names or version strings. The team fills each tier with whatever model their chosen provider offers at that capability level. Never name a specific model in an invocation — name the tier.
-
-### Tier definitions
-
-| Tier | Capability profile | When to use |
-| --- | --- | --- |
-| **Economy** | Fast, low context, good at mechanical and deterministic tasks | Pre-fire audit execution, status reads, log parsing, boilerplate scaffolding, config-only chunks, `BUILD_STATUS.md` updates |
-| **Standard** | Strong reasoning, large context, good at implementation | Writing code, running tests, standard analysis — most builder and QA work, routine architect sessions |
-| **Premium** | Highest reasoning, best at complex design and judgment | Architecture decisions, BLOCKER resolution, Advisor role, escalated builder attempts, complex chunk design |
-
-_Current provider examples (not normative — update as models evolve):_
-Economy = Haiku-class · Standard = Sonnet-class · Premium = Opus-class
-
-**When to start a builder at Economy:** the chunk has no design decisions — the output is fully determined by the spec (boilerplate generation, config changes, pre-defined migration). Any chunk that requires the builder to choose between approaches is Standard or higher.
-
-### Architect tier selection
-
-| Architect task | Tier |
-| --- | --- |
-| `BUILD_STATUS.md` update, status sync, log parsing | Economy |
-| Routine implementation chunk — open session, build | Standard |
-| Cross-chunk cohesion review | Standard |
-| Fix-prompt drafting for a simple revision | Standard |
-| BLOCKER resolution or chunk redesign | Premium |
-| Invocation drafting for a complex chunk with non-obvious design decisions | Premium |
-| Spawning the Advisor role (objective failure only) | Premium |
-
-Default for routine build sessions: **Standard**. When in doubt, start Standard and escalate if the session's analysis proves insufficient.
-
-### Escalation ladders
-
-The builder's starting tier determines the attempt sequence. QA tier follows the builder's final attempt tier.
-
-**Economy-start** (no design decisions; mechanical chunk):
-
-| Attempt | Tier | Rationale |
-| --- | --- | --- |
-| 1 | Economy | First pass |
-| 2 | Standard | Economy failure = task needs reasoning, not just execution |
-| 3 | Premium | Standard failed — problem is genuinely complex |
-| 4+ | BLOCKER → human | Premium failed — requires human judgement |
-
-**Standard-start** (most implementation chunks):
-
-| Attempt | Tier | Rationale |
-| --- | --- | --- |
-| 1 | Standard | First pass |
-| 2 | Standard | Retry — first failure may be noise or a minor miss |
-| 3 | Premium | Two standard failures = capability ceiling — escalate |
-| 4+ | BLOCKER → human | Premium failed — requires human judgement |
-
-**Premium-start** (complex chunks where design risk is high from the outset):
-
-| Attempt | Tier | Rationale |
-| --- | --- | --- |
-| 1 | Premium | First pass |
-| 2 | Premium | Single retry |
-| 3+ | BLOCKER → human | Premium twice is the maximum reasonable spend |
-
-Economy failure is never retried at the same tier — it signals a capability mismatch, not noise. Standard and Premium each get one same-tier retry before escalating. The escalation ladder is a signal, not a penalty: it tells you what the chunk actually required.
-
----
-
 **Created:** 2026-05-21.
-**Updated:** 2026-05-27 (v2 — B-013, B-014, B-015).
 **Adapted from:** the AMI multi-agent build process (3-role canonical, 2026-04-29).
 **Phase A planning loop:** `docs/planning/claude-code-build-prompts.md`.
