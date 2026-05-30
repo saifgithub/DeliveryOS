@@ -44,5 +44,50 @@
       "note": "Fixed by bumping actions/checkout + actions/setup-node @v4 → @v5 and node-version 20 → 22 (LTS). Verification deferred: the workflow only runs when a v* tag is pushed, so live verification will happen on the next release tag — fix is mechanical enough that local typecheck isn't applicable.",
       "fixed_commit": "554239ef47af709f1707d5a793798c12cd085fc5"
     }
+  ,
+    {
+      "id": "b005",
+      "title": "Raw idea textarea too small — does not auto-size to panel",
+      "category": "dogfood",
+      "status": "open",
+      "steps": "Open the Raw Idea panel in the DISCOVER stage. The textarea for entering the raw idea is small and fixed-size — does not expand to fill the available panel height/width. Discovered during DOS:P6 dogfood run (B-001/B-002 arc).",
+      "created_at": "2026-05-30",
+      "assigned_branch": null,
+      "note": "Textarea should grow to fill available panel space (flex-grow or height: 100%). Low effort CSS fix.",
+      "fixed_commit": null
+    },
+    {
+      "id": "b006",
+      "title": "Save idea overwrites existing raw idea without warning",
+      "category": "dogfood",
+      "status": "open",
+      "steps": "Open the Raw Idea panel when a raw idea already exists. Type new content and click Save. The existing raw idea is silently overwritten with no confirmation prompt. Discovered during DOS:P6 dogfood run.",
+      "created_at": "2026-05-30",
+      "assigned_branch": null,
+      "note": "Should show a confirmation dialog ('You already have a raw idea saved. Overwrite it?') before replacing existing content.",
+      "fixed_commit": null
+    },
+    {
+      "id": "b007",
+      "title": "Clicking 'Discovery interview' tree item does nothing when Discover panel already open",
+      "category": "dogfood",
+      "status": "open",
+      "steps": "Open the Discover panel (Raw Idea tab visible). Click 'Discovery interview' in the DISCOVER tree. Nothing happens — panel does not switch to the answers tab. broadcastDiscoverMode is called but the webview does not respond when panel is already focused. Discovered during DOS:P6 dogfood run.",
+      "created_at": "2026-05-30",
+      "assigned_branch": null,
+      "note": "Likely the webview message listener for discoverMode is not firing when panel is already active/visible. Check broadcastDiscoverMode handler in the webview.",
+      "fixed_commit": null
+    },
+    {
+      "id": "b008",
+      "title": "Discovery prompt header hardcodes 'DeliveryOS' regardless of project",
+      "category": "dogfood",
+      "status": "open",
+      "steps": "Open any project in DeliveryOS, enter a raw idea, go to the Prompt tab. The generated prompt header reads 'Discovery Interview — DeliveryOS' and the Role section says 'for a small software project' — both are static strings that do not adapt to the actual project context. Discovered during DOS:P6 dogfood run.",
+      "created_at": "2026-05-30",
+      "assigned_branch": null,
+      "note": "Minor: the project title is injected into the body correctly but the top-level heading and role framing are hardcoded in promptBuilder.ts. Broader direction: replace static Q&A template with a dynamic AI-driven interview (see BACKLOG.md B-005 — grill-me pattern, ref https://github.com/mattpocock/skills).",
+      "fixed_commit": null
+    }
   ]
 }
