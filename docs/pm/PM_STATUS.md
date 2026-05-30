@@ -1,6 +1,6 @@
 # Handover — Project Management (DOS:P)
 
-**Last updated:** 2026-05-26 (end of DOS:P4 — CHUNK-15 + CHUNK-16 delivered autonomously via lean three-tier orchestration; Phase 4 complete; all 16 chunks done; product built and publication-ready). Narrative in [`history/DOS_P0004.md`](history/DOS_P0004.md).
+**Last updated:** 2026-05-30 (end of DOS:P5 — BACKLOG B-001..B-016 established; MABP v3 with evidence manifest, adversarial QA, and full project-agnostic generalization). Narrative in [`history/DOS_P0005.md`](history/DOS_P0005.md).
 
 Read this file **first** when starting a new Project Management session (`/start-fresh P`). It carries current state + carry-overs only. Per-session narratives live in [`history/`](history/) — `/handover P` writes one file per wrap.
 
@@ -10,8 +10,8 @@ Read this file **first** when starting a new Project Management session (`/start
 
 | Field | Value |
 | --- | --- |
-| Commits on `main` | **106** (CHUNK-16 commit `e1cf862`) |
-| HEAD | `e1cf862 feat(release): CHUNK-16 — README + essay + release prep (DOS:P4)` |
+| Commits on `main` | **125** (MABP archive move `f3d1ee1`) |
+| HEAD | `f3d1ee1 refactor(docs): move MABP archive files to docs/archive/` |
 | Tags | **`v0.0.1` + `v0.0.2`** (both on `origin`). Next tag: `v0.1.0` — manual step, after recording + screenshots. |
 | Tests | **378 passing** (extension/ suite; held from CHUNK-14). `npm test` from `extension/` runs in ~3.8 s. |
 | Bugs (`docs/build/bugs.json`) | **4** — b001 + b004 pending_review on `main`; b002 + b003 open by user fiat. None block publishing. |
@@ -51,7 +51,7 @@ Track P owns **schedule + cadence management** for the DeliveryOS build. Concret
 
 | Field | Value |
 | --- | --- |
-| Today | 2026-05-26 |
+| Today | 2026-05-30 |
 | BUILD-PLAN nominal start | 2026-05-25 (Week 1) |
 | BUILD-PLAN demo target | 2026-08-24 (Week 14) |
 | Calendar days to target | **90** (≈ 12.9 weeks) |
@@ -99,6 +99,7 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 | DOS:P2 (2026-05-26) | +9 chunks in 4 calendar days via 12 R-sessions + 1 P-orchestrated chunk. Pace vastly exceeds nominal. Slack ~9 weeks. |
 | DOS:P3 (2026-05-26) | CHUNK-13 + CHUNK-14 delivered in one session. Tests: 312 → 351 → 378. Phase 3 complete. |
 | DOS:P4 (2026-05-26) | CHUNK-15 + CHUNK-16 delivered in one session. Tests: 378 → 378 (held — no new unit tests). Phase 4 complete. All 16 chunks done. |
+| DOS:P5 (2026-05-30) | Process-improvement session: BACKLOG B-001..B-016 established; MABP v3 shipped (evidence manifest, adversarial QA, B-013..B-016, full generalization). No chunk delivery. |
 
 ---
 
@@ -162,10 +163,11 @@ There are no more P-track chunk deliveries. If a follow-up session is needed (v0
 /start-fresh P
 ```
 
-Next session would be: **DOS:P5**.
+Next session would be: **DOS:P6**.
 
 ### § Recent sessions (newest first)
 
+- [DOS:P5](history/DOS_P0005.md)
 - [DOS:P4](history/DOS_P0004.md)
 - [DOS:P3](history/DOS_P0003.md)
 - [DOS:P2](history/DOS_P0002.md)
