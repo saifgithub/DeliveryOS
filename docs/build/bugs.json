@@ -79,6 +79,17 @@
       "fixed_commit": null
     },
     {
+      "id": "b009",
+      "title": "Answers tab — answer text boxes constrained width, not full panel width",
+      "category": "dogfood",
+      "status": "open",
+      "steps": "Open the Discover panel, Answers tab, after saving discovery answers. Each answer box has a constrained width rather than spanning the full available width of the panel. Discovered during DOS:P7 dogfood run (B-002 discovery answers pasted).",
+      "created_at": "2026-05-30",
+      "assigned_branch": null,
+      "note": "Answer boxes should use 100% / dynamic width to fill the panel. CSS fix — likely missing width: 100% or box-sizing: border-box on the answer input/textarea elements.",
+      "fixed_commit": null
+    },
+    {
       "id": "b008",
       "title": "Discovery prompt header hardcodes 'DeliveryOS' regardless of project",
       "category": "dogfood",

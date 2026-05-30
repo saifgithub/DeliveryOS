@@ -31,6 +31,8 @@ secrets/
 *.sqlite
 *.sqlite3
 *.db
+# Dogfood project state — track the memory store so the arc is reproducible
+!.deliveryos/memory.sqlite
 
 # IDE
 .vscode/
