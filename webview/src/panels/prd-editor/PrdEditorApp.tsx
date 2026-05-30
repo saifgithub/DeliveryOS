@@ -39,6 +39,7 @@ type AppState =
   | { phase: 'loading' }
   | { phase: 'noProject' }
   | { phase: 'empty'; projectId: string; projectTitle: string }
+  | { phase: 'reimporting'; projectId: string; projectTitle: string; existingPrd: DraftPrd }
   | { phase: 'parsing'; projectId: string; projectTitle: string; prd: DraftPrd; report: PrdParseReport }
   | { phase: 'editing'; projectId: string; projectTitle: string; prd: DraftPrd };
 
@@ -106,14 +107,48 @@ export function PrdEditorApp() {
     <Toast.Provider swipeDirection="right">
       <main className="min-h-screen bg-vscode-bg text-vscode-fg flex flex-col">
         <header className="px-6 pt-6 pb-3 border-b border-vscode-border">
-          <h1 className="text-2xl font-semibold text-dos-accent">PRD Editor</h1>
-          {appState.projectTitle && (
-            <p className="text-sm text-dos-muted mt-0.5">{appState.projectTitle}</p>
-          )}
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-semibold text-dos-accent">PRD Editor</h1>
+              {appState.projectTitle && (
+                <p className="text-sm text-dos-muted mt-0.5">{appState.projectTitle}</p>
+              )}
+            </div>
+            {appState.phase === 'editing' && (
+              <button
+                onClick={() =>
+                  setAppState({
+                    phase: 'reimporting',
+                    projectId: appState.projectId,
+                    projectTitle: appState.projectTitle,
+                    existingPrd: appState.prd,
+                  })
+                }
+                className="shrink-0 mt-1 text-xs text-dos-muted underline underline-offset-2 hover:text-vscode-fg transition-colors"
+              >
+                Re-import draft
+              </button>
+            )}
+            {appState.phase === 'reimporting' && (
+              <button
+                onClick={() =>
+                  setAppState({
+                    phase: 'editing',
+                    projectId: appState.projectId,
+                    projectTitle: appState.projectTitle,
+                    prd: appState.existingPrd,
+                  })
+                }
+                className="shrink-0 mt-1 text-xs text-dos-muted underline underline-offset-2 hover:text-vscode-fg transition-colors"
+              >
+                ← Back to editor
+              </button>
+            )}
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6">
-          {appState.phase === 'empty' && (
+          {(appState.phase === 'empty' || appState.phase === 'reimporting') && (
             <PrdGenerationPrompt
               projectId={appState.projectId}
               projectTitle={appState.projectTitle}

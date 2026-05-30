@@ -79,6 +79,17 @@
       "fixed_commit": null
     },
     {
+      "id": "b010",
+      "title": "PRD section editors auto-save with no explicit Save button — non-obvious to users",
+      "category": "dogfood",
+      "status": "open",
+      "steps": "Open the PRD Editor panel (DEFINE → Draft PRD). The section textareas are editable and auto-save 500ms after typing stops, but there is no visible Save button. Users assume the fields are read-only and look for a Save action. The 'Saved' indicator appears briefly in the section header but is easy to miss. Discovered during DOS:P7 dogfood run.",
+      "created_at": "2026-05-30",
+      "assigned_branch": null,
+      "note": "Options: (1) add a visible 'Save' button that triggers the same debounced save and shows state inline, or (2) make the auto-save indicator more prominent / persistent until user moves away. Auto-save is correct behaviour; the UX gap is discoverability.",
+      "fixed_commit": null
+    },
+    {
       "id": "b009",
       "title": "Answers tab — answer text boxes constrained width, not full panel width",
       "category": "dogfood",
