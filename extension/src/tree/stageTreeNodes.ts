@@ -33,6 +33,7 @@ export interface RequirementsGroupNode {
   readonly displayName: string;
   readonly description: string;
   readonly iconId: string;
+  readonly hasItems: boolean;
 }
 
 export interface RequirementItemNode {
@@ -222,12 +223,22 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
     case 'requirements-group': {
       const item = new vscode.TreeItem(
         node.displayName,
-        vscode.TreeItemCollapsibleState.Collapsed,
+        node.hasItems
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
       );
       item.contextValue = 'deliveryos.requirements.group';
       item.description = node.description;
       item.iconPath = new vscode.ThemeIcon(node.iconId);
-      item.tooltip = `${node.displayName} — ${node.description}`;
+      if (node.hasItems) {
+        item.tooltip = `${node.displayName} — ${node.description}`;
+      } else {
+        item.tooltip = 'Click to decompose your PRD into requirements.';
+        item.command = {
+          command: 'deliveryos.requirements.decompose',
+          title: 'Decompose PRD into Requirements',
+        };
+      }
       return item;
     }
     case 'requirement-item': {

@@ -259,6 +259,7 @@ export class StageTreeProvider
         displayName: 'Requirements',
         description: items.length === 0 ? '(not started)' : `${items.length} items`,
         iconId: items.length === 0 ? 'circle-outline' : 'checklist',
+        hasItems: items.length > 0,
       });
     }
     return nodes;
