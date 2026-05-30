@@ -1,10 +1,13 @@
-# Multi-Agent Build Process
+# Multi-Agent Build Process — DeliveryOS (v2 — archived)
 
-> **Updated:** 2026-05-30 (v3) — evidence manifest and adversarial QA (B-016); project-agnostic generalization. Previous version archived at `docs/MULTI_AGENT_BUILD_PROCESS_v2.md`.
+> **Deprecated:** 2026-05-30. Superseded by `docs/MULTI_AGENT_BUILD_PROCESS.md` (v3). Retained for reference. Do not use for new builds.
+> Was v2 (2026-05-27): structural quality gate (B-013), prompt tightening (B-014), model-tier awareness and escalation protocol (B-015). Previous version archived at `docs/MULTI_AGENT_BUILD_PROCESS_v1.md`.
 
-How an AI-assisted project ships code through coordinated agents.
+How DeliveryOS ships code through coordinated AI agents.
 
-This process is adapted from the AMI multi-agent build process (`ami_ai/core_platform/Docs/MULTI_AGENT_BUILD_PROCESS.md`, 3-role canonical). The shape is the same: separate decisioning from execution, use a sustained architect session and fresh sub-agents, run multiple verification cycles.
+This process is adapted from the AMI multi-agent build process (`ami_ai/core_platform/Docs/MULTI_AGENT_BUILD_PROCESS.md`, 3-role canonical). The shape is the same: separate decisioning from execution, use a sustained architect session and fresh sub-agents, run multiple verification cycles. The differences are the stack (a TypeScript VS Code extension, not a Python/PostgreSQL backend) and the unit of work (a "chunk" from the planning loop, not a numbered prompt).
+
+Building DeliveryOS with this disciplined process is itself part of the proof. DeliveryOS is a meta-harness for AI-assisted delivery; it should be built the way it preaches.
 
 ---
 
@@ -42,7 +45,7 @@ The stakeholder expects to spend very little time. The process is designed so th
 
 | Role | Who | Does | Doesn't |
 | --- | --- | --- | --- |
-| **Stakeholder** | Human stakeholder | Sets direction, approves trade-offs, final go/no-go authority, BLOCKER triage when the architect escalates | Draft invocations, dispatch toil, write code, run tests |
+| **Stakeholder** | Saiful (human) | Sets direction, approves trade-offs, final go/no-go authority, BLOCKER triage when the architect escalates | Draft invocations, dispatch toil, write code, run tests |
 | **Architect** | sustained session — tier selected per task (see § 15) | Picks the next chunk from `BUILD_STATUS.md`; selects starting tier for the session and each sub-agent; runs and **interprets** the pre-fire factual audit; writes minimum-necessary builder and QA invocations (under 80 lines each) with a design quality stance; spawns sub-agents via the Agent tool; reads both reports side by side; approves or rejects structural trade-offs and registers approved shortcuts as `Structural debt:` in `BUILD_STATUS.md`; runs a cross-chunk cohesion review every four to five chunks; recommends a verdict; syncs `BUILD_STATUS.md` on approve; curates memory | Write extension code, run the test suite, edit code files, share state with sub-agents |
 | **Builder / QA** | fresh sub-agent per chunk fire (Agent tool, `subagent_type: general-purpose`) | Re-runs the pre-fire audit (pastes output verbatim), writes TypeScript code and tests, runs the unit suite and the extension smoke in one session, files a report; OR writes a BLOCKER file and exits if any ambiguity surfaces | Use `AskUserQuestion` (sub-agents do not have it), share memory across fires, edit architect-owned docs, refactor outside the chunk scope |
 
@@ -116,7 +119,7 @@ docs/build/
 4. **Architect** writes the builder invocation inline following four rules: (1) **Under 80 lines** — do not paste the chunk spec verbatim; instead pre-resolve the three to five key design decisions, state scope constraints, and direct the builder to read the spec file. (2) **Open with a design quality stance**: "Build clean first. If the clean structure and the fast structure diverge, build the clean one. Structural shortcuts must be declared as blocking hot spots with the clean version described." (3) **Done criteria as a numbered checklist**, 10 lines maximum. (4) **State the builder's starting tier** (Economy / Standard / Premium — see § 15) and the escalation ladder that applies.
 5. **Architect** spawns the builder via the Agent tool (`subagent_type: general-purpose`, prompt = step 4 output).
 6. **Builder** re-runs the pre-fire audit (pastes output verbatim) → writes TypeScript code and tests in `src/test/chunk-NN-<slug>.test.ts` → runs the unit suite AND the extension smoke in one session → iterates on builder-owned errors (3-attempt budget) OR writes a BLOCKER file and exits (any unresolved ambiguity, contradiction, or missing dependency) → writes `builder_reports/chunk_NN_<slug>.md` with `## For QA — hot spots` filled before closing.
-7. **Architect** reads the builder report. BLOCKER means resolve the spec issue and return to step 1 for a re-fire. Clean means continue. After QA returns (step 10), before recommending a verdict, the architect spot-checks 2–3 rows from the QA evidence manifest by re-running those commands independently. If any spot-check fails, the QA verdict is rejected and QA re-fires with a note on which rows failed.
+7. **Architect** reads the builder report. BLOCKER means resolve the spec issue and return to step 1 for a re-fire. Clean means continue.
 8. **Architect** writes the QA invocation inline (hot-spots preamble with severity + primary-source verification commands + spot-check directives such as "break the impl, confirm the test fails, revert").
 9. **Architect** spawns QA via the Agent tool (`subagent_type: general-purpose`, prompt = step 8 output).
 10. **QA** re-runs every "done" criterion against primary sources (actual editor behaviour, not just exit codes), audits test quality, audits report completeness, reproduces each hot spot, writes `qa_reports/chunk_NN_<slug>_qa.md`, and ends with the mandatory 4-line verdict block.
@@ -178,14 +181,6 @@ Six interleaved cycles, each catching a different failure class.
 - **Fires during the builder's session, before the report is closed.**
 - **Catches:** "unit test passed, extension broke" splits, for example the extension fails to activate or a webview throws on load even though the pure logic tests pass.
 - **Rule:** the builder runs BOTH the unit suite AND the extension smoke in ONE session, one report. The extension smoke is either the `@vscode/test-electron` integration test (which launches a real VS Code instance) or a `vsce package` followed by a sideload (`code --install-extension`) and a manual exercise of the chunk's feature. No splitting unless the smoke wall-clock exceeds 30 minutes.
-- **Evidence manifest (required):** before closing the report the builder appends a table with one row per done-criterion item — verbatim output only, no paraphrase:
-
-  | Artifact | Verification command | Output (first 3 lines) |
-  | --- | --- | --- |
-  | function X exported | `grep -r "export function X" src/` | `src/foo.ts:12: export function X` |
-  | tests pass | `npm test 2>&1 \| tail -5` | `378 passing (2s)` |
-
-  Missing manifest = architect rejects without reviewing code. Paraphrased or summarised output does not satisfy this requirement.
 
 ### Cycle 3 — Iteration budget (during the build)
 
@@ -220,9 +215,9 @@ Economy failure is never retried at the same tier — it signals the task needs 
 - **Catches:** narrative mismatch, builders can paste stale output, paraphrase, or omit failures.
 - **Rule:** QA works in two passes in this order:
 
-  **Pass 1 — Independent verification (before reading the builder's hot spots):** QA's default stance is **FAILED until evidence proves otherwise**. QA does not read the builder report in Pass 1. QA reproduces every "done" criterion against primary sources (actual editor behaviour, the actual installed extension, not just exit codes). QA spot-checks test quality (temporarily break the implementation, confirm the test fails, revert). QA runs the structural quality sweep (see below). QA records its own findings in its own evidence manifest (same table format as the builder manifest — one row per criterion, verbatim command output).
+  **Pass 1 — Independent verification (before reading the builder's hot spots):** QA reproduces every "done" criterion against primary sources (actual editor behaviour, the actual installed extension, not just exit codes). QA spot-checks test quality (temporarily break the implementation, confirm the test fails, revert). QA runs the structural quality sweep (see below). QA records its own findings independently.
 
-  **Pass 2 — Hot spot reconciliation:** QA reads the builder's `## For QA — hot spots` section and reconciles: findings that appear in both are confirmed; hot spots QA cannot reproduce are flagged as unverified; findings QA made independently that the builder did not flag are elevated — these are the highest-signal findings. QA manifest rows not matched by the builder manifest are also elevated.
+  **Pass 2 — Hot spot reconciliation:** QA reads the builder's `## For QA — hot spots` section and reconciles: findings that appear in both are confirmed; hot spots QA cannot reproduce are flagged as unverified; findings QA made independently that the builder did not flag are elevated — these are the highest-signal findings.
 
   QA also: audits report completeness (deviations, sign-off, architect-owned docs untouched); confirms the extension packages cleanly with `vsce package`; assigns severity (`blocking` / `advisory` / `cleared`) to each finding.
 
@@ -233,19 +228,17 @@ Economy failure is never retried at the same tier — it signals the task needs 
   - **Abstractions:** no leaky abstractions introduced for the sake of speed
 
   Schema and constraint findings are blocking severity by default. Any structural finding not declared by the builder in hot spots is a high-signal independent finding.
-- **Isolation sweep:** confirm the chunk's tests did not write into the developer's real workspace or project memory store. Tests must use a temp workspace or an in-memory store. Any real-state write is a blocking finding.
-- **Mandatory 6-line verdict block** ends QA's turn:
+- **Isolation sweep:** confirm the chunk's tests did not write into the developer's real DeliveryOS memory store or real workspace. Tests must use a temp workspace or an in-memory store. Any real-state write is a blocking finding.
+- **Mandatory 4-line verdict block** ends QA's turn:
 
   ```text
   Chunk: NN
   QA report: <abs path>
   Builder report reviewed: <abs path> (v<K>)
   Verdict: approve | revise | escalate
-  Evidence manifest: <N rows — every done criterion covered>
-  QA-only findings (not in builder hot spots): <list or 'none'>
   ```
 
-  No narrative. The architect opens both files. A verdict block missing the evidence manifest line is invalid.
+  No narrative. The architect opens both files.
 
 ### Cycle 6 — Revision loop with depth cap (after the QA verdict)
 
@@ -267,8 +260,8 @@ When a builder or QA sub-agent runs the integration suite via the Bash tool, wri
 
 ```bash
 # DO: redirect to a file, then tail the file after the command returns.
-npm run test:integration > /tmp/<project>_chunk_NN_test.log 2>&1
-tail -120 /tmp/<project>_chunk_NN_test.log
+npm run test:integration > /tmp/deliveryos_chunk_NN_test.log 2>&1
+tail -120 /tmp/deliveryos_chunk_NN_test.log
 ```
 
 ```bash
@@ -314,8 +307,6 @@ What the architect does NOT do: write extension code, run the test suite, edit c
 | A chunk spec turns out wrong only when its dependents are built | BLOCKER + architect re-checks cohesion before re-fire |
 | Test writes into the developer's real workspace or memory store | Cycle 5 (isolation sweep) |
 | Architect-owned doc silently edited by a sub-agent | Cycle 5 (scope audit) |
-| Builder fabricates completion (claims criterion passes without executing it) | Cycle 2 (evidence manifest requires verbatim output) + Cycle 5 (QA independent manifest) + Step 7 architect spot-check |
-| QA confirms fabricated completion (anchors on builder prose, skips re-verification) | Cycle 5 (adversarial default — FAILED until proven) + Step 7 architect spot-check |
 
 **The process cannot catch:** the architect designing the wrong chunk (correct execution of an incorrect spec); a bug class none of the tests detect (tests prove the chunk spec is met, not that the spec is right); cross-chunk interactions that emerge only when several ship together. The cohesion validation in Phase A and a periodic review of `BUILD_STATUS.md` surface these, not the per-chunk cycles.
 
@@ -334,13 +325,16 @@ When something non-obvious is learned, the architect saves it as feedback and ad
 
 ## 12. Session management
 
-Sessions are managed by the config-driven `.claude` commands (`/session-setup`, `/start-fresh`, `/handover`).
+Sessions are managed by the config-driven `.claude` commands (`/session-setup`, `/start-fresh`, `/handover`), the same skills used on the AMI project.
 
-**Track configuration.** Track count and labels are project-specific. The config-driven `.claude` commands support any number of named tracks with separate handover docs. A common pattern for a build project is one planning track and one development track — for example, tagged `<PREFIX>:O<N>` (Docs) and `<PREFIX>:R<N>` (Development). Fill in the project prefix when running `/session-setup`. Separate handover docs keep planning narratives and build narratives from interleaving. The planning track leads, since it produces the chunk specs; the development track follows. Once the build is underway the two can run in either order, because the planning track is then mostly doc maintenance.
+**Two tracks.** DeliveryOS runs two tracks:
 
-A chunk-spec fix raised by a BLOCKER during a development session touches planning-track files but is made by the architect in-session; it does not require switching tracks.
+- **Track O (Docs).** Phase A planning (the four-prompt loop) plus all ongoing documentation: PRD revisions, architecture notes, ADRs, chunk-spec fixes. Handover doc: `docs/planning/PLANNING_STATUS.md`.
+- **Track R (Development).** Phase B, the chunk build cycle. Handover doc: `docs/build/BUILD_STATUS.md`.
 
-**One-time setup.** Run `/session-setup`: set the project prefix, configure tracks (planning + development at minimum), set handover paths. If the bug-list block is not yet relevant (greenfield project with no shipped product), leave it disabled.
+Sessions are tagged `DOS:O<N>` and `DOS:R<N>`. Separate handover docs keep planning narratives and build narratives from interleaving. Track O leads, since it produces the chunk specs; track R follows. Once the build is underway the two can run in either order, because O is then mostly doc maintenance. A chunk-spec fix raised by a BLOCKER during an R session touches O-track files but is made by the architect in-session; it does not require switching tracks.
+
+**One-time setup.** Install the command sources (`cp docs/commands/*.md .claude/commands/`) and run `/session-setup`: prefix `DOS`, two tracks (O = Docs, R = Development), handover paths as above. DeliveryOS is greenfield, so the bug-list block stays disabled until there is a shipped product.
 
 **Each session.** Open with `/start-fresh <track>` and wrap with `/handover <track>`. `/start-fresh` reads that track's handover doc, surfaces what is next, and enters plan mode. `/handover` rotates state, runs a consistency scan, and leaves a clean tree.
 
@@ -465,6 +459,6 @@ Economy failure is never retried at the same tier — it signals a capability mi
 ---
 
 **Created:** 2026-05-21.
-**Updated:** 2026-05-30 (v3 — B-016 evidence manifest and adversarial QA; project-agnostic generalization).
+**Updated:** 2026-05-27 (v2 — B-013, B-014, B-015).
 **Adapted from:** the AMI multi-agent build process (3-role canonical, 2026-04-29).
 **Phase A planning loop:** `docs/planning/claude-code-build-prompts.md`.

@@ -24,6 +24,7 @@ Add items here; use `/start-fresh P` to pick them up in a session.
 | B-013 | MABP — structural quality gate | 🔴 High | Agents prioritise completion over clean structure. Four targeted changes to the MABP cycle (invocation stance, QA structural sweep, blocking-default for structural hot spots, debt register) to push cleanliness upstream and reduce remediation. See § B-013 below. |
 | B-014 | MABP — prompt and process tightening | 🔴 High | Builder invocations are too long and create compliance theatre. Five process improvements: succinctness rule, pre-fire audit interpretation, QA independence, cross-chunk cohesion review, and iteration budget reform. See § B-014 below. |
 | B-015 | MABP — model-tier awareness and escalation protocol | 🔴 High | Architects default to premium tier for all work regardless of task complexity. The flat 3-attempt builder budget burns identical compute on every retry. Two changes: task-proportionate tier selection for architects; model-escalation ladder for builders (standard → standard → premium → human). Provider-agnostic tier language throughout. Supersedes B-014 Change 5. See § B-015 below. |
+| B-016 | MABP — evidence manifest and adversarial QA verification | 🔴 High | Builder agents can fabricate completion; QA confirms without re-running ground truth. Four targeted changes: builder evidence manifest, adversarial-default QA, architect spot-check of QA evidence, verdict gating on manifest coverage. See § B-016 below. |
 
 ---
 
@@ -793,3 +794,67 @@ Both B-003 and B-015 should use the same generic tier language. When B-003 is im
 **Implementation note:** B-015 is a document edit. It should be implemented in the same O-track session as B-013 and B-014, since all three edit `docs/MULTI_AGENT_BUILD_PROCESS.md` and the changes are interdependent.
 
 **Session tag when picked up:** Same O-track session as B-013 and B-014.
+
+---
+
+## § B-016 — MABP: evidence manifest and adversarial QA verification
+
+**Status:** Backlogged
+**Priority:** 🔴 High
+**Applies to:** `docs/MULTI_AGENT_BUILD_PROCESS.md`
+
+### The fabrication flaw
+
+Builder agents produce confident prose stating that work is done. QA agents read that prose and reason about whether it sounds plausible. Neither side is required to execute verification commands and show verbatim output. The result: a builder can fabricate completion; a QA agent anchored on the builder's confident narrative can confirm it. Tests that were never run appear as "passed." Functions that were never written appear as "implemented."
+
+The root cause: **both sides are reasoning about claims rather than producing ground-truth evidence.** Agent prose can lie. Tool output cannot.
+
+### Four targeted changes
+
+#### Change 1 — Builder evidence manifest (Cycle 2)
+
+Before closing the builder report, the builder must append an evidence manifest — one row per done-criterion item:
+
+| Artifact | Verification command | Output (first 3 lines) |
+| --- | --- | --- |
+| function X exported | `grep -r "export function X" src/` | `src/foo.ts:12: export function X` |
+| tests pass | `npm test 2>&1 \| tail -5` | `378 passing (2s)` |
+
+Verbatim output only — no paraphrase, no summary. Missing manifest = architect rejects without reviewing code. The manifest is not a narrative: it is a table of commands run and their exact outputs.
+
+#### Change 2 — QA adversarial default (Cycle 5, Pass 1)
+
+QA's default stance shifts from "let me verify this was done" to "**FAILED until evidence proves otherwise**." QA does not read the builder report in Pass 1. It runs every verification command independently and records verbatim output in its own evidence manifest (same table format as the builder manifest). The builder report is read only in Pass 2 for reconciliation.
+
+#### Change 3 — Architect spot-check (Section 6, Step 7)
+
+After QA returns and before the architect recommends a verdict, the architect re-runs 2–3 rows from the QA evidence manifest verbatim. If any spot-check fails, the QA verdict is rejected and QA re-fires with a note on which rows failed. The spot-check is a direct re-execution, not a review of QA's claims.
+
+#### Change 4 — Verdict gating
+
+The mandatory 4-line verdict block is extended to require evidence manifest coverage:
+
+```text
+Chunk: NN
+QA report: <abs path>
+Builder report reviewed: <abs path> (v<K>)
+Verdict: approve | revise | escalate
+Evidence manifest: <N rows — every done criterion covered>
+QA-only findings (not in builder hot spots): <list or 'none'>
+```
+
+A verdict block missing the evidence manifest line is invalid. The architect rejects it without reading the verdict.
+
+### Why this closes the fabrication loop
+
+The builder manifest prevents fabrication at source: the builder must run the commands and paste the output. If the output is fabricated, the architect's spot-check catches it — the architect re-runs the same command and gets a different result. If the builder genuinely ran the commands, the spot-check passes. QA's adversarial default means even a builder who produced a real manifest cannot influence QA's independent pass — QA starts from "FAILED" and builds to "passed" using its own command outputs, not the builder's.
+
+### Relationship to B-013 and B-014
+
+B-013 adds structural quality criteria (what to verify). B-014 adds process discipline (how to run the audit). B-016 adds evidence requirements (how to prove the verification happened). All three address different layers of the same root cause: agents optimising for the appearance of completion rather than completion itself.
+
+**Success signal:** A builder report has an evidence manifest table with verbatim command outputs. QA's report has its own independent manifest. The architect spot-checks 2–3 rows and records the results. The verdict block has 6 lines, not 4. A fabricated completion (test output pasted without running) fails the spot-check and triggers a QA re-fire.
+
+**Implementation note:** B-016 is a document edit. It should be implemented in the same O-track session that applies B-013/B-014/B-015 changes, since all four edit `docs/MULTI_AGENT_BUILD_PROCESS.md`.
+
+**Session tag when picked up:** Same O-track session as B-013, B-014, and B-015.
