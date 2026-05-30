@@ -221,7 +221,7 @@ A `session` memory row captures:
 
 ## § B-005 — AI-driven elicitation: business analysis integrated across the SDLC
 
-> **Reference to resolve before spec:** The elicitation prompt pattern here is similar to the **"grill me with docs"** function by Matt Peacock. Definition not yet available — to be added when the O-track spec session opens. Until then, treat this entry as directionally correct but potentially under-specified on the prompt mechanics.
+> **Reference:** The elicitation prompt pattern here is the **"grill me with docs"** / "grill me" skill pattern by Matt Pocock — see [`mattpocock/skills`](https://github.com/mattpocock/skills) on GitHub. The discovery interview specifically should evolve from a static 12-question template into a dynamic AI-driven interview: some seed questions to orient the agent, then the agent interrogates the user interactively rather than returning a batch prompt to copy-paste. The static template in `extension/src/discovery/promptBuilder.ts` is the current placeholder; this item replaces it. Resolve prompt mechanics by reading the mattpocock/skills source before the O-track spec session.
 
 **What:** The AI interrogates the human at every stage of the DOS workflow — not just the initial discovery interview — to extract requirements, resolve ambiguity, and fill gaps before they become delivery failures. This is structured business analysis (BA) embedded in the tool: the AI plays the analyst role, the human plays the domain expert, and the outputs populate DOS artifacts directly.
 
