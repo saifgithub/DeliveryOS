@@ -43,7 +43,7 @@ shasum -a 256 -c SHA256SUMS.txt
 Get-FileHash deliveryos-0.1.0.vsix -Algorithm SHA256
 ```
 
-Expected SHA-256 for `deliveryos-0.1.0.vsix`: `<sha256-to-be-filled-on-release>`
+Expected SHA-256 for `deliveryos-0.1.0.vsix`: `6e9704e75b2657e7b868fb8ed03273fc86feb98cd16be66055965b8f243953c8`
 
 The hash is also listed in `SHA256SUMS.txt`, attached to this release. DeliveryOS is sideloaded and not signed by a marketplace; verifying the hash confirms you have the artefact this workflow built.
 

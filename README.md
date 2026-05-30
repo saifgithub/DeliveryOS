@@ -135,7 +135,7 @@ Get-FileHash deliveryos-0.1.0.vsix -Algorithm SHA256
 # Compare the output against SHA256SUMS.txt from the release page.
 ```
 
-Expected hash for `deliveryos-0.1.0.vsix`: `<sha256-to-be-filled-on-release>`
+Expected hash for `deliveryos-0.1.0.vsix`: `6e9704e75b2657e7b868fb8ed03273fc86feb98cd16be66055965b8f243953c8`
 
 DeliveryOS is sideloaded, not signed by a marketplace. Verifying the hash confirms you have the same `.vsix` the [release workflow](.github/workflows/release.yml) built from this commit.
 
