@@ -1,6 +1,6 @@
 # Handover — Project Management (DOS:P)
 
-**Last updated:** 2026-05-30 (end of DOS:P5 — BACKLOG B-001..B-016 established; MABP v3 with evidence manifest, adversarial QA, and full project-agnostic generalization). Narrative in [`history/DOS_P0005.md`](history/DOS_P0005.md).
+**Last updated:** 2026-05-30 (end of DOS:P6 — SHA256 hash filled for v0.1.0 VSIX; dogfood run started (B-001/B-002 arc); b005–b008 logged; `.deliveryos/` project initialised). Narrative in [`history/DOS_P0006.md`](history/DOS_P0006.md).
 
 Read this file **first** when starting a new Project Management session (`/start-fresh P`). It carries current state + carry-overs only. Per-session narratives live in [`history/`](history/) — `/handover P` writes one file per wrap.
 
@@ -10,11 +10,11 @@ Read this file **first** when starting a new Project Management session (`/start
 
 | Field | Value |
 | --- | --- |
-| Commits on `main` | **125** (MABP archive move `f3d1ee1`) |
-| HEAD | `f3d1ee1 refactor(docs): move MABP archive files to docs/archive/` |
-| Tags | **`v0.0.1` + `v0.0.2`** (both on `origin`). Next tag: `v0.1.0` — manual step, after recording + screenshots. |
+| Commits on `main` | **130** (dogfood init `bc50a84`) |
+| HEAD | `bc50a84 feat(dogfood): initialise .deliveryos project — DeliveryOS dogfooding itself` |
+| Tags | **`v0.0.1` + `v0.0.2`** (both on `origin`). Next tag: `v0.1.0` — after screenshots + video recording + YouTube URL fill. |
 | Tests | **378 passing** (extension/ suite; held from CHUNK-14). `npm test` from `extension/` runs in ~3.8 s. |
-| Bugs (`docs/build/bugs.json`) | **4** — b001 + b004 pending_review on `main`; b002 + b003 open by user fiat. None block publishing. |
+| Bugs (`docs/build/bugs.json`) | **8** — b001 + b004 pending_review; b002 + b003 open by user fiat; b005–b008 dogfood findings (open). |
 | Open chunk | **None.** All 16 chunks done. |
 | Phase | **Phase 4 complete. All phases done (0–4).** Product built. Remaining = manual publication steps only. |
 | Days ahead of nominal | **~9 weeks** (BUILD-PLAN nominal CHUNK-16 end = Week 14, 2026-08-24; actual date 2026-05-26). |
@@ -100,6 +100,7 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 | DOS:P3 (2026-05-26) | CHUNK-13 + CHUNK-14 delivered in one session. Tests: 312 → 351 → 378. Phase 3 complete. |
 | DOS:P4 (2026-05-26) | CHUNK-15 + CHUNK-16 delivered in one session. Tests: 378 → 378 (held — no new unit tests). Phase 4 complete. All 16 chunks done. |
 | DOS:P5 (2026-05-30) | Process-improvement session: BACKLOG B-001..B-016 established; MABP v3 shipped (evidence manifest, adversarial QA, B-013..B-016, full generalization). No chunk delivery. |
+| DOS:P6 (2026-05-30) | Publication prep (SHA256 hash filled); dogfood arc started — B-002 strategy confirmed; b005–b008 logged; `.deliveryos/` initialised; discovery interview prompt visible. |
 
 ---
 
@@ -140,35 +141,36 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 | CHUNK-15 (Bug Triage demo skeleton + webview polish) | ✅ Done DOS:P4 — `787d936` |
 | CHUNK-16 (README + essay + release prep) | ✅ Done DOS:P4 — `e1cf862` |
 | All 16 chunks complete | ✅ 2026-05-26 |
+| SHA256 hash filled in README + RELEASE_NOTES | ✅ Done DOS:P6 — `8a8c2de` |
+| Dogfood project `.deliveryos/` initialised | ✅ Done DOS:P6 — `bc50a84` (raw idea entered, discovery prompt visible) |
 | Manual publication steps | 🔵 For user to execute (see below) |
+| B-002 dogfood arc | 🔵 In progress — discovery interview next |
 
 ### Manual steps remaining before v0.1.0 ships
 
-1. Record demo video following `docs/demo/recording-storyboard.md`
-2. Capture 6 screenshots into `docs/screenshots/` (spec: `docs/screenshots/README.md`)
-3. Upload video to YouTube → replace `https://youtu.be/PLACEHOLDER` in `README.md` + `RELEASE_NOTES.md`
+1. Capture 6 screenshots into `docs/screenshots/` (spec: `docs/screenshots/README.md`)
+2. Record demo video following `docs/demo/recording-storyboard.md`
+3. Upload video to YouTube → replace `https://youtu.be/PLACEHOLDER` in `README.md` (L7, L46) + `RELEASE_NOTES.md` (L52)
 4. Commit `demo.mp4` at repo root
-5. `git push origin main` (~67 commits ahead)
+5. `git push origin main` (~87 commits ahead after DOS:P6)
 6. `git tag -a v0.1.0 -m "DeliveryOS v0.1.0 — first public proof of work" && git push origin v0.1.0`
 7. Watch GitHub Action → verify release page
-8. Replace `<sha256-to-be-filled-on-release>` in `README.md` with real hash from `SHA256SUMS.txt`
+8. ~~Replace `<sha256-to-be-filled-on-release>`~~ — ✅ Done DOS:P6 (`6e9704e...`). Verify CI hash matches after release.
 
 ---
 
 ## § How to start the next session
 
-There are no more P-track chunk deliveries. If a follow-up session is needed (v0.2 planning, bug fixes after publication, stretch scope):
-
 ```text
 /start-fresh P
 ```
 
-Next session would be: **DOS:P6**.
+Next session: **DOS:P7**
 
 ### § Recent sessions (newest first)
 
+- [DOS:P6](history/DOS_P0006.md)
 - [DOS:P5](history/DOS_P0005.md)
 - [DOS:P4](history/DOS_P0004.md)
 - [DOS:P3](history/DOS_P0003.md)
 - [DOS:P2](history/DOS_P0002.md)
-- [DOS:P1](history/DOS_P0001.md)
