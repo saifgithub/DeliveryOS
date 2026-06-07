@@ -93,12 +93,12 @@
       "id": "b011",
       "title": "Approve PRD button is a dead end — no navigation or state write",
       "category": "dogfood",
-      "status": "in_progress",
+      "status": "pending_review",
       "steps": "Fill all 8 PRD sections. Click 'Approve PRD'. A toast appears: 'PRD approved — proceed to Requirements.' Nothing else happens — no DB flag written, no navigation to DEFINE, no sidebar update. User has no affordance to know what to do next. Discovered during DOS:P7 dogfood run.",
       "created_at": "2026-05-30",
       "assigned_branch": "claude/bug-fix-20260607-195709",
       "note": "Options: (1) write an approvedAt timestamp to the PRD row in memory.sqlite, update sidebar to show PRD as approved (checkmark), and show a prompt/button to open Requirements decomposition. (2) At minimum, make the toast actionable — add a 'Go to Requirements' link. The sidebar DEFINE > Requirements item should be the next natural click.",
-      "fixed_commit": null
+      "fixed_commit": "b38ad3d"
     },
     {
       "id": "b010",
