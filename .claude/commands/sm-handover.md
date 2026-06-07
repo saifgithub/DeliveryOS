@@ -1,14 +1,14 @@
 ---
-description: Generic multi-track handover protocol. Pass a track letter (e.g. /handover R or /handover M). Reads .claude/session-config.yml — project_prefix + per-track block (handover doc, history dir, memory file, etc.) — and runs the universal exit protocol: clean working tree, subagent-worktree cleanup, write the session narrative to history/, consistency scan, refresh current-state in HANDOVER, commit, structured report. Run when the user explicitly asks to wrap a session.
+description: Generic multi-track handover protocol. Pass a track letter (e.g. /sm-handover R or /sm-handover M). Reads .claude/session-config.yml — project_prefix + per-track block (handover doc, history dir, memory file, etc.) — and runs the universal exit protocol: clean working tree, subagent-worktree cleanup, write the session narrative to history/, consistency scan, refresh current-state in HANDOVER, commit, structured report. Run when the user explicitly asks to wrap a session.
 ---
 
-# /handover
+# /sm-handover
 
 The next session reads files at HEAD. Uncommitted edits are invisible
 to it. Stale text that contradicts a rule landed this session will
 mislead it. This skill is the **generic, config-driven, multi-track**
 version of that protocol — every project-specific detail lives in
-`.claude/session-config.yml`, produced by `/session-setup`.
+`.claude/session-config.yml`, produced by `/sm-session-setup`.
 
 ## When to trigger
 
@@ -31,28 +31,28 @@ test -f .claude/session-config.yml && echo OK || echo MISSING
 
 If MISSING, **stop and surface**:
 
-> No `.claude/session-config.yml` found. Run `/session-setup` first
+> No `.claude/session-config.yml` found. Run `/sm-session-setup` first
 > to bootstrap the per-project config, then re-run
-> `/handover`.
+> `/sm-handover`.
 
 Otherwise read the file once. Parse the invocation arguments:
 
 - A single non-flag token is a **track letter** (e.g. `R`, `M`).
 - The flag `--dry-run` puts the skill into dry-run mode (see the
   "Dry-run mode" section below).
-- Both can be present in either order: `/handover --dry-run R` or
-  `/handover R --dry-run` both mean "wrap track R in dry-run mode".
+- Both can be present in either order: `/sm-handover --dry-run R` or
+  `/sm-handover R --dry-run` both mean "wrap track R in dry-run mode".
 
 Then resolve the **active track** in this priority order:
 
-1. **Explicit track-letter argument** (e.g. `/handover R`,
-   `/handover M`): wins over everything. If the letter isn't
+1. **Explicit track-letter argument** (e.g. `/sm-handover R`,
+   `/sm-handover M`): wins over everything. If the letter isn't
    a key under `tracks:` in config, stop and surface: "Track <L>
-   isn't configured. Tracks: <list>. Run `/session-setup` to add it."
+   isn't configured. Tracks: <list>. Run `/sm-session-setup` to add it."
    If `.claude/active-track` exists and disagrees with the argument,
    surface a one-line warning ("active-track says R but you passed M
    — using M") and proceed.
-2. **`.claude/active-track` file** (set by `/start-fresh` at
+2. **`.claude/active-track` file** (set by `/sm-start-fresh` at
    session start). Read it:
    ```bash
    test -f .claude/active-track && cat .claude/active-track
@@ -63,7 +63,7 @@ Then resolve the **active track** in this priority order:
 4. **Multiple tracks, no signal**: don't guess. Ask via
    `AskUserQuestion` — list all configured tracks with their labels
    and let the user pick. The user probably skipped
-   `/start-fresh`; safest move is to confirm before
+   `/sm-start-fresh`; safest move is to confirm before
    clobbering a track's handover doc.
 5. Surface the resolved track in your first user-visible line: e.g.
    "Wrapping track R (Development)…"
@@ -77,8 +77,8 @@ track.
 
 ## Dry-run mode
 
-If invoked with `--dry-run` (e.g. `/handover --dry-run`,
-`/handover --dry-run R`), walk the full protocol but **skip every
+If invoked with `--dry-run` (e.g. `/sm-handover --dry-run`,
+`/sm-handover --dry-run R`), walk the full protocol but **skip every
 destructive or persistent operation**. Specifically:
 
 | Step | Normal run | Dry-run |
@@ -167,7 +167,7 @@ Sibling worktrees that pre-date this session and don't match
 this track in config.**
 
 Each session's "what just landed" narrative lives in its own file in
-`{T.history_dir}`. `/handover` *creates* the file; it doesn't *rotate*
+`{T.history_dir}`. `/sm-handover` *creates* the file; it doesn't *rotate*
 anything out of `{T.handover_path}` (which is now current-state only —
 see step 5).
 
@@ -202,7 +202,7 @@ parent dirs) and write a `README.md`:
 ```markdown
 # History — track {track} ({T.label})
 
-Per-session wrap narratives. Each file = one /handover invocation.
+Per-session wrap narratives. Each file = one /sm-handover invocation.
 Sorted chronologically by filename. Don't read unless you need
 historical context — current state lives in {T.handover_path}.
 ```
@@ -274,7 +274,7 @@ canonical shape:
 **Last updated:** YYYY-MM-DD (end of {prefix}:{track}<N> — <summary>)
 
 Read this file **first** when starting a new {T.label} session
-(`/start-fresh {track}`). Past session narratives live in
+(`/sm-start-fresh {track}`). Past session narratives live in
 [`{T.history_dir}`]({T.history_dir}) — see "Recent sessions" below.
 
 ---
@@ -293,7 +293,7 @@ Read this file **first** when starting a new {T.label} session
 
 ## How to start the next session
 
-`/start-fresh {track}` — session name to use: **{prefix}:{track}<N+1>**
+`/sm-start-fresh {track}` — session name to use: **{prefix}:{track}<N+1>**
 
 Recent sessions (newest first):
 - [{prefix}:{track}<N>]({T.history_dir}/{prefix}_{track}<padded N>.md)
@@ -391,13 +391,13 @@ If `git status` is dirty here → step 8 missed a path. Stage what's
 left and amend the wrap commit. Don't surface until clean.
 
 Then clear the active-track pointer so the next session has to be
-opened deliberately via `/start-fresh`:
+opened deliberately via `/sm-start-fresh`:
 
 ```bash
 rm -f .claude/active-track
 ```
 
-If `/handover` runs again later without a prior `/start-fresh`,
+If `/sm-handover` runs again later without a prior `/sm-start-fresh`,
 step 0 will fall through to the explicit "which track?" prompt
 rather than silently re-using this one.
 
@@ -439,7 +439,7 @@ Carry-overs flagged for next {T.label} session:
 - <bullet>
 
 Recommended next-session start command:
-  /start-fresh {track}      (session name {prefix}:{track}<N+1>)
+  /sm-start-fresh {track}      (session name {prefix}:{track}<N+1>)
 ```
 
 Rows for steps that were skipped because their config field was empty

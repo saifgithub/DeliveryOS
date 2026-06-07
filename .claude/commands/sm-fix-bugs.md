@@ -2,9 +2,9 @@
 description: Triage open bugs from docs/build/bugs.json and fix the easy ones, isolated to a fresh git worktree so the work cannot collide with build-cycle chunk work on main. Bug tracking is a simple JSON file — DeliveryOS is a solo build with no distributed testers.
 ---
 
-# /fix-bugs
+# /sm-fix-bugs
 
-> Command source. Copy this file to `.claude/commands/fix-bugs.md` for Claude Code to pick it up. It is kept here, version-controlled, so changes to the protocol are reviewable.
+> Command source. Copy this file to `.claude/commands/sm-sm-fix-bugs.md` for Claude Code to pick it up. It is kept here, version-controlled, so changes to the protocol are reviewable.
 
 Triage the open bugs in `docs/build/bugs.json` and fix the easy ones, isolated to a fresh git worktree so the work cannot collide with whatever chunk build is running on `main`.
 
@@ -42,7 +42,7 @@ Anyone who finds a bug (Saiful, or a QA sub-agent surfacing a non-blocking issue
 
 1. **Never edit on `main`.** Spawn a worktree and branch (step 1). All commits go there. Saiful merges to `main` after review.
 2. **Claim before fixing.** Set the bug's `status` to `in_progress` and `assigned_branch` to your branch in `docs/build/bugs.json`, and commit that change first. The committed claim is how a parallel session (rare, but cheap to guard against) sees the bug is taken. Only claim bugs that are currently `open`.
-3. **Bug budget per session: 3.** Fix at most 3 bugs in one worktree, then surface. Smaller batches mean trivial merges. If 3 is not enough, run `/fix-bugs` again: fresh worktree, fresh budget.
+3. **Bug budget per session: 3.** Fix at most 3 bugs in one worktree, then surface. Smaller batches mean trivial merges. If 3 is not enough, run `/sm-fix-bugs` again: fresh worktree, fresh budget.
 4. **Hands off these files** without an explicit `ok` from Saiful first:
    - `package.json` (contribution points and activation events; a wrong edit breaks the whole extension)
    - `src/extension.ts`, or whatever the activation entry point is
@@ -55,7 +55,7 @@ Anyone who finds a bug (Saiful, or a QA sub-agent surfacing a non-blocking issue
    A bug whose fix needs one of these is `medium` at least; surface a plan first.
 5. **Each fix is its own commit.** Message prefix: `fix(bug:<id>): <summary>`. Makes git blame point straight at the bug entry.
 6. **Never publish the extension.** No `vsce publish`, no release. Saiful decides when to ship.
-7. **Do not mark a bug `resolved`** in `bugs.json`. `resolved` is the post-merge confirmation status; only Saiful sets it after merging. `/fix-bugs` only ever sets `open` to `in_progress` (claim) to `pending_review` (committed).
+7. **Do not mark a bug `resolved`** in `bugs.json`. `resolved` is the post-merge confirmation status; only Saiful sets it after merging. `/sm-fix-bugs` only ever sets `open` to `in_progress` (claim) to `pending_review` (committed).
 
 ## Triage matrix
 
@@ -132,7 +132,7 @@ For each claimed bug:
 Print a structured summary for Saiful, one line per bug touched. State explicitly which bugs are `pending_review` (fix committed on the branch), which are `wont_fix` and why, which medium or large ones are surfacing for planning, and the branch plus worktree path for the merge.
 
 ```
-$ /fix-bugs — 2026-05-21 14:30 — claude/bug-fix-20260521-143000
+$ /sm-fix-bugs — 2026-05-21 14:30 — claude/bug-fix-20260521-143000
 
 Fixed (pending_review on claude/bug-fix-20260521-143000):
   b004  Sidebar icon missing after sideload into Cursor      [tiny]
@@ -156,7 +156,7 @@ To merge:
 - No `--no-verify` on commits. If a pre-commit hook fails, fix what it found.
 - No mass-fix sprees. 3 bugs max. Resist "while I am here" tidying of unrelated code.
 - No new files unless the bug explicitly demands them. Bug fixes edit existing files; new modules are chunk work.
-- No `vsce publish` and no release from `/fix-bugs`.
+- No `vsce publish` and no release from `/sm-fix-bugs`.
 - No marking bugs `resolved`. That is the merge-time flip; Saiful owns it.
 - No editing the architect-owned process docs or chunk specs from a bug-fix session.
 
@@ -165,7 +165,7 @@ To merge:
 If a session crashes, fills up, or is interrupted mid-fix:
 
 1. Any bug stuck at `status` of `in_progress` with your branch in `assigned_branch` is yours to release or resume.
-2. To release (so the next `/fix-bugs` run can pick it up): set `status` back to `open` and `assigned_branch` to `null`, commit.
+2. To release (so the next `/sm-fix-bugs` run can pick it up): set `status` back to `open` and `assigned_branch` to `null`, commit.
 3. To resume: keep the worktree, finish the fix, commit, set `pending_review`.
 
 ## Why this works

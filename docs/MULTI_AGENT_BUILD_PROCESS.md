@@ -48,7 +48,7 @@ The stakeholder expects to spend very little time. The process is designed so th
 
 Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`) and `docs/build/BUILD_STATUS.md` are the only durable state.
 
-**Cold-start exception.** If the architect session itself saturates, the stakeholder wraps it with `/handover` and opens the next with `/start-fresh`. The fresh architect resumes from `BUILD_STATUS.md` and `docs/build/NEXT_SESSION.md`.
+**Cold-start exception.** If the architect session itself saturates, the stakeholder wraps it with `/sm-handover` and opens the next with `/sm-start-fresh`. The fresh architect resumes from `BUILD_STATUS.md` and `docs/build/NEXT_SESSION.md`.
 
 ---
 
@@ -103,7 +103,7 @@ docs/build/
 
 | Role | Cumulative state | Per-session delta | Cold-start input |
 | --- | --- | --- | --- |
-| **Architect** | `docs/build/BUILD_STATUS.md` | session handover written by `/handover` | `BUILD_STATUS.md` + `NEXT_SESSION.md` |
+| **Architect** | `docs/build/BUILD_STATUS.md` | session handover written by `/sm-handover` | `BUILD_STATUS.md` + `NEXT_SESSION.md` |
 | **Builder / QA** | none, fresh per fire, no inter-session memory | the builder/QA report file is the per-chunk artifact | the invocation file is their only input |
 
 ---
@@ -127,7 +127,7 @@ docs/build/
 
 Stakeholder keyboard touchpoints in the cycle: just step 11. One verdict word triggers everything downstream.
 
-**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; `/handover` cleans up the `agent-*` worktrees.
+**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; `/sm-handover` cleans up the `agent-*` worktrees.
 
 ---
 
@@ -334,17 +334,17 @@ When something non-obvious is learned, the architect saves it as feedback and ad
 
 ## 12. Session management
 
-Sessions are managed by the config-driven `.claude` commands (`/session-setup`, `/start-fresh`, `/handover`).
+Sessions are managed by the config-driven `.claude` commands (`/sm-session-setup`, `/sm-start-fresh`, `/sm-handover`).
 
-**Track configuration.** Track count and labels are project-specific. The config-driven `.claude` commands support any number of named tracks with separate handover docs. A common pattern for a build project is one planning track and one development track — for example, tagged `<PREFIX>:O<N>` (Docs) and `<PREFIX>:R<N>` (Development). Fill in the project prefix when running `/session-setup`. Separate handover docs keep planning narratives and build narratives from interleaving. The planning track leads, since it produces the chunk specs; the development track follows. Once the build is underway the two can run in either order, because the planning track is then mostly doc maintenance.
+**Track configuration.** Track count and labels are project-specific. The config-driven `.claude` commands support any number of named tracks with separate handover docs. A common pattern for a build project is one planning track and one development track — for example, tagged `<PREFIX>:O<N>` (Docs) and `<PREFIX>:R<N>` (Development). Fill in the project prefix when running `/sm-session-setup`. Separate handover docs keep planning narratives and build narratives from interleaving. The planning track leads, since it produces the chunk specs; the development track follows. Once the build is underway the two can run in either order, because the planning track is then mostly doc maintenance.
 
 A chunk-spec fix raised by a BLOCKER during a development session touches planning-track files but is made by the architect in-session; it does not require switching tracks.
 
-**One-time setup.** Run `/session-setup`: set the project prefix, configure tracks (planning + development at minimum), set handover paths. If the bug-list block is not yet relevant (greenfield project with no shipped product), leave it disabled.
+**One-time setup.** Run `/sm-session-setup`: set the project prefix, configure tracks (planning + development at minimum), set handover paths. If the bug-list block is not yet relevant (greenfield project with no shipped product), leave it disabled.
 
-**Each session.** Open with `/start-fresh <track>` and wrap with `/handover <track>`. `/start-fresh` reads that track's handover doc, surfaces what is next, and enters plan mode. `/handover` rotates state, runs a consistency scan, and leaves a clean tree.
+**Each session.** Open with `/sm-start-fresh <track>` and wrap with `/sm-handover <track>`. `/sm-start-fresh` reads that track's handover doc, surfaces what is next, and enters plan mode. `/sm-handover` rotates state, runs a consistency scan, and leaves a clean tree.
 
-**When the architect saturates.** Wrap with `/handover <track>`, then `/start-fresh <track>` opens a fresh architect that resumes from the track's handover doc and `NEXT_SESSION.md`.
+**When the architect saturates.** Wrap with `/sm-handover <track>`, then `/sm-start-fresh <track>` opens a fresh architect that resumes from the track's handover doc and `NEXT_SESSION.md`.
 
 ---
 

@@ -1,6 +1,6 @@
 # History — track R (Development) — DeliveryOS
 
-Per-session wrap narratives. **Each file = one `/handover R` invocation.**
+Per-session wrap narratives. **Each file = one `/sm-handover R` invocation.**
 
 Filenames are `DOS_R<NNNN>.md` (four-digit zero-padded session number) so
 `ls history/` sorts chronologically.
@@ -25,7 +25,7 @@ prev: DOS:R<N-1>     # omit on the first session
 
 ## Convention
 
-- `/handover R` writes a new file per wrap. Never overwrites — if the same
+- `/sm-handover R` writes a new file per wrap. Never overwrites — if the same
   session is re-wrapped, the second file gets a `.1` suffix.
 - The "What just landed" section is no longer present in BUILD_STATUS.md.
 - Earlier sessions (if any) were split from the legacy `BUILD_HISTORY.md`

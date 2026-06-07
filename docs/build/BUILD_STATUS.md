@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-05-24 (end of DOS:R16 — CHUNK-11 complete · Phase 2 Week 9 closed · Phase 2 complete; file handoff + terminal integration + result watcher shipped end-to-end across Days 1–4; +48 tests, 292 total; 4 substantive commits). Narrative in [`history/DOS_R0016.md`](history/DOS_R0016.md).
 
-Read this file **first** when starting a new Development session (`/start-fresh R`).
+Read this file **first** when starting a new Development session (`/sm-start-fresh R`).
 
 ---
 
@@ -35,7 +35,7 @@ Read this file **first** when starting a new Development session (`/start-fresh 
 
 ## How to start the next session
 
-`/start-fresh R`
+`/sm-start-fresh R`
 
 Session name to use: **DOS:R17**
 

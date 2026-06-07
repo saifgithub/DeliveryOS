@@ -1,14 +1,14 @@
 ---
-description: Generic multi-track session-entry protocol. Pass a track letter (e.g. /start-fresh R or /start-fresh M). Reads .claude/session-config.yml — project_prefix + per-track block (handover doc, project plan, sanity checks, bug list) — and runs the universal bootstrap: start remote control, read HANDOVER + plan, run track-specific sanity checks, surface bugs, name the session, enter plan mode. Run as the FIRST thing in a new session.
+description: Generic multi-track session-entry protocol. Pass a track letter (e.g. /sm-start-fresh R or /sm-start-fresh M). Reads .claude/session-config.yml — project_prefix + per-track block (handover doc, project plan, sanity checks, bug list) — and runs the universal bootstrap: start remote control, read HANDOVER + plan, run track-specific sanity checks, surface bugs, name the session, enter plan mode. Run as the FIRST thing in a new session.
 ---
 
-# /start-fresh
+# /sm-start-fresh
 
 CLAUDE.md is already loaded by the harness — this skill picks up
 everything else a fresh session needs before doing any work. This is
 the **generic, config-driven, multi-track** version of the entry
 protocol — every project-specific detail lives in
-`.claude/session-config.yml`, produced by `/session-setup`.
+`.claude/session-config.yml`, produced by `/sm-session-setup`.
 
 ## Step 0 — Verify config + resolve the track
 
@@ -18,24 +18,24 @@ test -f .claude/session-config.yml && echo OK || echo MISSING
 
 If MISSING, **stop and surface**:
 
-> No `.claude/session-config.yml` found. Run `/session-setup` first
+> No `.claude/session-config.yml` found. Run `/sm-session-setup` first
 > to bootstrap the per-project config, then re-run
-> `/start-fresh`.
+> `/sm-start-fresh`.
 
 Otherwise read the file once. Then resolve the **active track** in
 this priority order:
 
-1. **Explicit argument** (e.g. `/start-fresh R`,
-   `/start-fresh M`): wins. If the letter isn't a key under
+1. **Explicit argument** (e.g. `/sm-start-fresh R`,
+   `/sm-start-fresh M`): wins. If the letter isn't a key under
    `tracks:` in config, stop and surface: "Track <L> isn't
-   configured. Tracks: <list>. Run `/session-setup` to add it."
+   configured. Tracks: <list>. Run `/sm-session-setup` to add it."
 2. **Single configured track**: if `tracks:` has exactly one entry,
    use it — no argument needed, no asking.
 3. **Multiple tracks, no argument**: ask via `AskUserQuestion` —
    list every configured track with its letter + label, let the user
    pick. Don't guess from commit history; an explicit pick at session
    start is cheap and prevents wrapping the wrong track later.
-4. **Persist the resolved track** so `/handover` knows which
+4. **Persist the resolved track** so `/sm-handover` knows which
    track this session belongs to without re-asking:
    ```bash
    echo "<track>" > .claude/active-track
@@ -95,7 +95,7 @@ You don't need to re-read the entire chronological narrative in
 enough.
 
 If `{T.handover_path}` doesn't exist yet (first session on this
-track), surface that and tell the user `/handover {track}`
+track), surface that and tell the user `/sm-handover {track}`
 will create it on first wrap. Continue with the rest of the steps;
 just expect step 5 to fall back to `{prefix}:{track}1`.
 
@@ -227,5 +227,5 @@ adjusts, and only THEN do any file edits start.
 
 If the user's first message in the session is a specific task ("fix
 this bug", "add this feature", "deploy what's on main"), just do the
-task. `/start-fresh` is for the "let's keep going on this
+task. `/sm-start-fresh` is for the "let's keep going on this
 track" opening, not every session.

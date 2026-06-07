@@ -1,5 +1,5 @@
-# session-config.yml — read by /handover + /start-fresh.
-# Re-run /session-setup to amend a field or add a track.
+# session-config.yml — read by /sm-handover + /sm-start-fresh.
+# Re-run /sm-session-setup to amend a field or add a track.
 
 project_prefix: "DOS"            # session tags become DOS:O<N> / DOS:R<N> / DOS:P<N>
 

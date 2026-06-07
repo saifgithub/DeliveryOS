@@ -1,6 +1,6 @@
 # History — track P (Project Management) — DeliveryOS
 
-Per-session wrap narratives. **Each file = one `/handover P` invocation.**
+Per-session wrap narratives. **Each file = one `/sm-handover P` invocation.**
 
 Filenames are `DOS_P<NNNN>.md` (four-digit zero-padded session number) so
 `ls history/` sorts chronologically.
@@ -25,7 +25,7 @@ prev: DOS:P<N-1>     # omit on the first session
 
 ## Convention
 
-- `/handover P` writes a new file per wrap. Never overwrites — if the same
+- `/sm-handover P` writes a new file per wrap. Never overwrites — if the same
   session is re-wrapped, the second file gets a `.1` suffix.
 - The "What just landed" section is no longer present in PM_STATUS.md.
 - Earlier sessions (if any) were split from the legacy `PM_HISTORY.md`

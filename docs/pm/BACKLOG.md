@@ -1,7 +1,7 @@
 # DeliveryOS — P-track Backlog
 
 Items the P-track owns or flags. Rough priority ordering within each status tier.
-Add items here; use `/start-fresh P` to pick them up in a session.
+Add items here; use `/sm-start-fresh P` to pick them up in a session.
 
 ---
 
@@ -173,7 +173,7 @@ The principle is: **use the lowest-cost model that can do the job at each tier.*
 
 ## § B-004 — Session continuity: handover and start-fresh as a DOS-native concept
 
-**What:** Make session lifecycle management a first-class feature inside DOS. When you close the extension and return hours or days later, DOS should know exactly where you left off — what was in progress, what decisions were made, what the carry-overs are — and offer a structured resume path. Mirrors the `/handover` + `/start-fresh` skill pattern used to build DOS itself, but implemented natively in the extension rather than as external Claude Code skills.
+**What:** Make session lifecycle management a first-class feature inside DOS. When you close the extension and return hours or days later, DOS should know exactly where you left off — what was in progress, what decisions were made, what the carry-overs are — and offer a structured resume path. Mirrors the `/sm-handover` + `/sm-start-fresh` skill pattern used to build DOS itself, but implemented natively in the extension rather than as external Claude Code skills.
 
 **Why:** The DOS build relied heavily on session continuity. Each session wrap produced a structured handover document (commit count, test state, carry-overs, next-session name); each session open consumed it and resumed coherently. Without this, AI-assisted delivery degrades over time: agents lose context, work gets duplicated, decisions get re-litigated. DOS already stores memory — it should use that memory to manage its own session state, not just project artifacts.
 

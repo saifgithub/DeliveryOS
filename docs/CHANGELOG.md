@@ -11,10 +11,10 @@ Added the build process, separate from the product spec.
 - Added `docs/planning/claude-code-build-prompts.md`: a four-prompt planning loop (break into chunks, expand, validate, iterate) for Claude Code, using subagents.
 - Added `docs/MULTI_AGENT_BUILD_PROCESS.md`: the 3-role, chunk-based, incremental build process, adapted from the AMI multi-agent build process for the VS Code extension stack (SQLite, no PostgreSQL).
 - Added the `docs/build/` Phase B working area (invocations, builder_reports, qa_invocations, qa_reports, fix_prompts, blockers).
-- Added `docs/commands/fix-bugs.md`: the DeliveryOS bug-fix command, adapted from the AMI version. Bug tracking is a version-controlled JSON file (`docs/build/bugs.json`) instead of a remote PostgreSQL `bug_reports` table, since DeliveryOS is a solo build with no distributed testers. Copy command sources from `docs/commands/` into `.claude/commands/` for Claude Code to use.
+- Added `docs/commands/sm-sm-fix-bugs.md`: the DeliveryOS bug-fix command, adapted from the AMI version. Bug tracking is a version-controlled JSON file (`docs/build/bugs.json`) instead of a remote PostgreSQL `bug_reports` table, since DeliveryOS is a solo build with no distributed testers. Copy command sources from `docs/commands/` into `.claude/commands/` for Claude Code to use.
 - Added `docs/build/bugs.json` (empty bug list).
 - Fixed `.gitignore`: the `build/` rule was root-anchored to `/build/` so the tracked `docs/build/` folder is not silently ignored; added `*.vsix` and `.claude/worktrees/` plus `.claude/active-track`.
-- Session model: two tracks, O (Docs, runs Phase A planning) and R (Development, runs Phase B build), wrapped by `/start-fresh` and `/handover`. Recorded in `MULTI_AGENT_BUILD_PROCESS.md` section 12.
+- Session model: two tracks, O (Docs, runs Phase A planning) and R (Development, runs Phase B build), wrapped by `/sm-start-fresh` and `/sm-handover`. Recorded in `MULTI_AGENT_BUILD_PROCESS.md` section 12.
 - Project promoted from `Eval/DeliveryOS` to the drive root at `/Volumes/Extreme Pro/DeliveryOS`, and initialised as a git repo (first commit on `main`).
 
 ## v0.3 (2026-05-20, delivery decisions added 2026-05-21)

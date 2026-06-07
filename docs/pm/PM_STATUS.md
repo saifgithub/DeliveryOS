@@ -2,7 +2,7 @@
 
 **Last updated:** 2026-05-30 (end of DOS:P6 — SHA256 hash filled for v0.1.0 VSIX; dogfood run started (B-001/B-002 arc); b005–b008 logged; `.deliveryos/` project initialised). Narrative in [`history/DOS_P0006.md`](history/DOS_P0006.md).
 
-Read this file **first** when starting a new Project Management session (`/start-fresh P`). It carries current state + carry-overs only. Per-session narratives live in [`history/`](history/) — `/handover P` writes one file per wrap.
+Read this file **first** when starting a new Project Management session (`/sm-start-fresh P`). It carries current state + carry-overs only. Per-session narratives live in [`history/`](history/) — `/sm-handover P` writes one file per wrap.
 
 ---
 
@@ -162,7 +162,7 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 ## § How to start the next session
 
 ```text
-/start-fresh P
+/sm-start-fresh P
 ```
 
 Next session: **DOS:P7**

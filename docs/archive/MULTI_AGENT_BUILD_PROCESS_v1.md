@@ -51,7 +51,7 @@ The stakeholder expects to spend very little time. The process is designed so th
 
 Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`) and `docs/build/BUILD_STATUS.md` are the only durable state.
 
-**Cold-start exception.** If the architect session itself saturates, the stakeholder wraps it with `/handover` and opens the next with `/start-fresh`. The fresh architect resumes from `BUILD_STATUS.md` and `docs/build/NEXT_SESSION.md`.
+**Cold-start exception.** If the architect session itself saturates, the stakeholder wraps it with `/sm-handover` and opens the next with `/sm-start-fresh`. The fresh architect resumes from `BUILD_STATUS.md` and `docs/build/NEXT_SESSION.md`.
 
 ---
 
@@ -106,7 +106,7 @@ docs/build/
 
 | Role | Cumulative state | Per-session delta | Cold-start input |
 | --- | --- | --- | --- |
-| **Architect** | `docs/build/BUILD_STATUS.md` | session handover written by `/handover` | `BUILD_STATUS.md` + `NEXT_SESSION.md` |
+| **Architect** | `docs/build/BUILD_STATUS.md` | session handover written by `/sm-handover` | `BUILD_STATUS.md` + `NEXT_SESSION.md` |
 | **Builder / QA** | none, fresh per fire, no inter-session memory | the builder/QA report file is the per-chunk artifact | the invocation file is their only input |
 
 ---
@@ -130,7 +130,7 @@ docs/build/
 
 Stakeholder keyboard touchpoints in the cycle: just step 11. One verdict word triggers everything downstream.
 
-**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; `/handover` cleans up the `agent-*` worktrees.
+**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; `/sm-handover` cleans up the `agent-*` worktrees.
 
 ---
 
@@ -294,7 +294,7 @@ When something non-obvious is learned, the architect saves it as feedback and ad
 
 ## 12. Session management
 
-Sessions are managed by the config-driven `.claude` commands (`/session-setup`, `/start-fresh`, `/handover`), the same skills used on the AMI project.
+Sessions are managed by the config-driven `.claude` commands (`/sm-session-setup`, `/sm-start-fresh`, `/sm-handover`), the same skills used on the AMI project.
 
 **Two tracks.** DeliveryOS runs two tracks:
 
@@ -303,11 +303,11 @@ Sessions are managed by the config-driven `.claude` commands (`/session-setup`, 
 
 Sessions are tagged `DOS:O<N>` and `DOS:R<N>`. Separate handover docs keep planning narratives and build narratives from interleaving. Track O leads, since it produces the chunk specs; track R follows. Once the build is underway the two can run in either order, because O is then mostly doc maintenance. A chunk-spec fix raised by a BLOCKER during an R session touches O-track files but is made by the architect in-session; it does not require switching tracks.
 
-**One-time setup.** Install the command sources (`cp docs/commands/*.md .claude/commands/`) and run `/session-setup`: prefix `DOS`, two tracks (O = Docs, R = Development), handover paths as above. DeliveryOS is greenfield, so the bug-list block stays disabled until there is a shipped product.
+**One-time setup.** Install the command sources (`cp docs/commands/*.md .claude/commands/`) and run `/sm-session-setup`: prefix `DOS`, two tracks (O = Docs, R = Development), handover paths as above. DeliveryOS is greenfield, so the bug-list block stays disabled until there is a shipped product.
 
-**Each session.** Open with `/start-fresh <track>` and wrap with `/handover <track>`. `/start-fresh` reads that track's handover doc, surfaces what is next, and enters plan mode. `/handover` rotates state, runs a consistency scan, and leaves a clean tree.
+**Each session.** Open with `/sm-start-fresh <track>` and wrap with `/sm-handover <track>`. `/sm-start-fresh` reads that track's handover doc, surfaces what is next, and enters plan mode. `/sm-handover` rotates state, runs a consistency scan, and leaves a clean tree.
 
-**When the architect saturates.** Wrap with `/handover <track>`, then `/start-fresh <track>` opens a fresh architect that resumes from the track's handover doc and `NEXT_SESSION.md`.
+**When the architect saturates.** Wrap with `/sm-handover <track>`, then `/sm-start-fresh <track>` opens a fresh architect that resumes from the track's handover doc and `NEXT_SESSION.md`.
 
 ---
 
