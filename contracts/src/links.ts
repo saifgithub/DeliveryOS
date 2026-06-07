@@ -14,6 +14,7 @@ export const LINK_KINDS = [
   'has-test-spec',
   'derived-from-verification',
   'releases',
+  'addresses',
 ] as const;
 
 export type LinkKind = (typeof LINK_KINDS)[number];

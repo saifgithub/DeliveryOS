@@ -7,6 +7,8 @@ import { STAGE_DEFS } from './stageDefinitions';
 import {
   ArtefactNode,
   BriefNode,
+  ChangeRequestItemNode,
+  ChangeRequestsGroupNode,
   ComposeBriefNode,
   DiffOutcomeNode,
   ExecuteRequirementNode,
@@ -139,6 +141,9 @@ export class StageTreeProvider
     if (element.kind === 'requirements-group') {
       return this.requirementsGroupChildren(element.prdId);
     }
+    if (element.kind === 'change-requests-group') {
+      return this.changeRequestsGroupChildren(element.prdId);
+    }
     if (element.kind === 'requirement-item') {
       return this.requirementItemChildren(element);
     }
@@ -228,13 +233,13 @@ export class StageTreeProvider
 
   private async defineChildren(
     projectId: string,
-  ): Promise<(ArtefactNode | RequirementsGroupNode)[]> {
+  ): Promise<(ArtefactNode | RequirementsGroupNode | ChangeRequestsGroupNode)[]> {
     const prd = await this.memoryStore?.loadPrdParent(projectId);
     const sectionCount = prd
       ? prd.sections.filter((s) => s.body.trim().length > 0).length
       : 0;
     const started = prd !== null && prd !== undefined;
-    const nodes: (ArtefactNode | RequirementsGroupNode)[] = [
+    const nodes: (ArtefactNode | RequirementsGroupNode | ChangeRequestsGroupNode)[] = [
       {
         kind: 'artefact',
         stageId: 'define',
@@ -261,8 +266,31 @@ export class StageTreeProvider
         iconId: items.length === 0 ? 'circle-outline' : 'checklist',
         hasItems: items.length > 0,
       });
+      const crs = await this.memoryStore.listChangeRequests(prd.prdId);
+      nodes.push({
+        kind: 'change-requests-group',
+        stageId: 'define',
+        prdId: prd.prdId,
+        displayName: 'Change Requests',
+        hasItems: crs.length > 0,
+        iconId: crs.length === 0 ? 'circle-outline' : 'git-pull-request',
+      });
     }
     return nodes;
+  }
+
+  private async changeRequestsGroupChildren(prdId: string): Promise<ChangeRequestItemNode[]> {
+    if (!this.memoryStore) return [];
+    const records = await this.memoryStore.listChangeRequests(prdId);
+    return records.map((r) => ({
+      kind: 'change-request-item' as const,
+      stageId: 'define' as const,
+      entryId: r.entryId,
+      crId: r.payload.id,
+      description: r.payload.description,
+      status: r.payload.status,
+      iconId: r.payload.status === 'applied' ? 'pass' : r.payload.status === 'prompted' ? 'loading~spin' : 'git-pull-request',
+    }));
   }
 
   private async requirementsGroupChildren(

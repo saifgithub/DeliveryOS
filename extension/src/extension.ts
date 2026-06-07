@@ -18,6 +18,7 @@ import {
   PersistedProjectRegistry,
 } from './projectRegistry';
 import { briefComposerSerializer } from './serializers/briefComposerSerializer';
+import { changeRequestPanelSerializer } from './serializers/changeRequestPanelSerializer';
 import { decomposePromptPanelSerializer } from './serializers/decomposePromptPanelSerializer';
 import { discoverPanelSerializer } from './serializers/discoverPanelSerializer';
 import { helloPanelSerializer } from './serializers/helloPanelSerializer';
@@ -30,6 +31,10 @@ import {
   BRIEF_COMPOSER_VIEW_TYPE,
   openBriefComposerPanel,
 } from './webview/briefComposerPanel';
+import {
+  CHANGE_REQUEST_VIEW_TYPE,
+  openChangeRequestPanel,
+} from './webview/changeRequestPanel';
 import { DECOMPOSE_VIEW_TYPE, openDecomposePromptPanel } from './webview/decomposePromptPanel';
 import { DISCOVER_VIEW_TYPE } from './webview/discoverPanel';
 import { HELLO_VIEW_TYPE } from './webview/helloPanel';
@@ -92,6 +97,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     });
     host.registerTestDesignerHandlers({ registry, memoryStore });
     host.registerBriefHandlers({ registry, memoryStore });
+    host.registerChangeRequestHandlers({
+      registry,
+      memoryStore,
+      openChangeRequestPanel: (args) => openChangeRequestPanel(context, host, args),
+    });
     if (workspaceFolder) {
       host.registerProfileHandlers({
         workspaceRoot: workspaceFolder.uri,
@@ -182,6 +192,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     registerOpenTestSpecFile(memoryStore),
     registerOpenBriefComposer(context, host),
     registerOpenBriefFile(memoryStore),
+    vscode.commands.registerCommand(
+      'deliveryos.changeRequest.open',
+      (args?: { crEntryId?: string }) => openChangeRequestPanel(context, host, args),
+    ),
     vscode.window.registerWebviewPanelSerializer(
       HELLO_VIEW_TYPE,
       helloPanelSerializer(context, host),
@@ -209,6 +223,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerWebviewPanelSerializer(
       BRIEF_COMPOSER_VIEW_TYPE,
       briefComposerSerializer(context, host),
+    ),
+    vscode.window.registerWebviewPanelSerializer(
+      CHANGE_REQUEST_VIEW_TYPE,
+      changeRequestPanelSerializer(context, host),
     ),
   );
 

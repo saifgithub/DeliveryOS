@@ -71,6 +71,14 @@ function payloadFor(type: MemoryType): unknown {
           { id: 's1', description: 'happy path', steps: [], expected: [] },
         ],
       };
+    case 'change-request':
+      return {
+        kind: 'change-request',
+        id: 'CR-001',
+        description: 'Add constraint: must support offline mode',
+        status: 'logged',
+        prdSnapshotSections: [],
+      };
   }
 }
 
@@ -281,6 +289,7 @@ describe('memory module', () => {
       assert.deepEqual(
         [...LINK_KINDS].sort(),
         [
+          'addresses',
           'derived-from-verification',
           'derives-from',
           'evaluates',

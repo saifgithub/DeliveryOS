@@ -18,6 +18,7 @@ export const MEMORY_TYPES = [
   'verification',
   'release',
   'test-spec',
+  'change-request',
 ] as const;
 
 export type MemoryType = (typeof MEMORY_TYPES)[number];
@@ -194,7 +195,8 @@ export type MemoryEntry =
   | MemoryEntryBase<'result', ResultPayload>
   | MemoryEntryBase<'verification', VerificationPayload>
   | MemoryEntryBase<'release', ReleasePayload>
-  | MemoryEntryBase<'test-spec', TestSpecPayload>;
+  | MemoryEntryBase<'test-spec', TestSpecPayload>
+  | MemoryEntryBase<'change-request', import('./changeRequest').ChangeRequestPayload>;
 
 export type MemoryEntryOfType<T extends MemoryType> = Extract<MemoryEntry, { type: T }>;
 
@@ -210,3 +212,4 @@ export type ResultMemory = MemoryEntryOfType<'result'>;
 export type VerificationMemory = MemoryEntryOfType<'verification'>;
 export type ReleaseMemory = MemoryEntryOfType<'release'>;
 export type TestSpecMemory = MemoryEntryOfType<'test-spec'>;
+export type ChangeRequestMemory = MemoryEntryOfType<'change-request'>;

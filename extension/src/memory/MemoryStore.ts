@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import {
+  type ChangeRequestPayload,
   type DecomposedRequirement,
   type DraftPrd,
   type ExecutionPayload,
@@ -97,6 +98,13 @@ export interface StoredRequirementItemPayload {
 export interface RequirementItemRecord {
   readonly entryId: string;
   readonly payload: StoredRequirementItemPayload;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+export interface ChangeRequestRecord {
+  readonly entryId: string;
+  readonly payload: ChangeRequestPayload;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
@@ -702,6 +710,121 @@ export class MemoryStore {
     this._onDidChangeMemory.fire({ kind: 'update', entryId, entryType: row.type });
   }
 
+  // --- Change Request CRUD -----------------------------------------------
+
+  /** Create a new CR entry in status 'logged', linked derives-from the PRD. */
+  async createChangeRequest(
+    prdId: string,
+    description: string,
+    prdSnapshotSections: readonly PrdSection[],
+  ): Promise<ChangeRequestRecord> {
+    const nextNum = await this.nextCrIdNumber();
+    const crId = formatCrId(nextNum);
+    const payload: ChangeRequestPayload = {
+      kind: 'change-request',
+      id: crId,
+      description,
+      status: 'logged',
+      prdSnapshotSections,
+    };
+    const entry = await this.create<'change-request'>({
+      type: 'change-request',
+      title: `${crId} — ${description.slice(0, 80)}`,
+      payload: payload as unknown as MemoryPayloadOfType<'change-request'>,
+      body: description,
+    });
+    await this.link(entry.id, prdId, 'derives-from');
+    return {
+      entryId: entry.id,
+      payload,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    };
+  }
+
+  /** List all CR entries that derive from the given PRD. */
+  async listChangeRequests(prdId: string): Promise<ChangeRequestRecord[]> {
+    const stmt = this.host.db.prepare(
+      `SELECT e.id, e.payload_json, e.created_at, e.updated_at
+         FROM memory_entries e
+         JOIN memory_links l ON l.from_id = e.id
+        WHERE e.type = 'change-request'
+          AND l.to_id = ?
+          AND l.kind = 'derives-from'
+        ORDER BY json_extract(e.payload_json, '$.id') ASC`,
+    );
+    try {
+      stmt.bind([prdId]);
+      const out: ChangeRequestRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as {
+          id: string;
+          payload_json: string;
+          created_at: number;
+          updated_at: number;
+        };
+        const payload = JSON.parse(row.payload_json) as ChangeRequestPayload;
+        out.push({
+          entryId: row.id,
+          payload,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      }
+      return out;
+    } finally {
+      stmt.free();
+    }
+  }
+
+  /** Load a single CR by its SQL entry id. Returns null if not found. */
+  async loadChangeRequest(entryId: string): Promise<ChangeRequestRecord | null> {
+    const row = this.selectRowById(entryId);
+    if (!row || row.type !== 'change-request') return null;
+    const payload = JSON.parse(row.payload_json) as ChangeRequestPayload;
+    return {
+      entryId: row.id,
+      payload,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /** Patch a CR entry. `kind` and `id` (CR-NNN) are preserved. */
+  async updateChangeRequest(
+    entryId: string,
+    patch: Partial<Omit<ChangeRequestPayload, 'kind' | 'id'>>,
+  ): Promise<ChangeRequestRecord> {
+    const row = this.selectRowById(entryId);
+    if (!row) throw new MemoryStoreError('not-found', `No change-request ${entryId}`);
+    const stored = JSON.parse(row.payload_json) as ChangeRequestPayload;
+    if (stored.kind !== 'change-request') {
+      throw new MemoryStoreError(
+        'type-immutable',
+        `Entry ${entryId} is not a change-request (kind=${String(stored.kind)})`,
+      );
+    }
+    const next: ChangeRequestPayload = { ...stored, ...patch };
+    await this.update<'change-request'>(entryId, {
+      payload: next as unknown as Partial<MemoryPayloadOfType<'change-request'>>,
+    });
+    const fresh = this.selectRowById(entryId);
+    if (!fresh) throw new MemoryStoreError('not-found', `Entry ${entryId} vanished mid-update`);
+    return {
+      entryId: fresh.id,
+      payload: next,
+      createdAt: fresh.created_at,
+      updatedAt: fresh.updated_at,
+    };
+  }
+
+  /** Write `addresses` links from a CR to each affected requirement entry. */
+  async linkCrToRequirements(crEntryId: string, requirementEntryIds: readonly string[]): Promise<void> {
+    for (const reqId of requirementEntryIds) {
+      await this.link(crEntryId, reqId, 'addresses');
+    }
+  }
+
   // --- Test-spec CRUD (CHUNK-08) ----------------------------------------
 
   /**
@@ -1078,6 +1201,30 @@ export class MemoryStore {
     }
   }
 
+  /** Scan the store for the highest CR-NNN already assigned. Returns next number to use. */
+  private async nextCrIdNumber(): Promise<number> {
+    const stmt = this.host.db.prepare(
+      `SELECT json_extract(payload_json, '$.id') AS crid
+         FROM memory_entries
+        WHERE type = 'change-request'`,
+    );
+    try {
+      stmt.bind([]);
+      let max = 0;
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as { crid: string | null };
+        const match = (row.crid ?? '').match(/^CR-(\d+)$/);
+        if (match) {
+          const n = Number(match[1]);
+          if (Number.isFinite(n) && n > max) max = n;
+        }
+      }
+      return max + 1;
+    } finally {
+      stmt.free();
+    }
+  }
+
   /** Scan the store for the highest REQ-NNN already assigned. Returns next number to use. */
   private async nextRequirementIdNumber(): Promise<number> {
     const stmt = this.host.db.prepare(
@@ -1146,6 +1293,11 @@ function rowToEntry(row: MemoryEntryRow, body: string): MemoryEntry {
 function formatReqId(n: number): string {
   if (n >= 1000) return `REQ-${String(n)}`;
   return `REQ-${String(n).padStart(3, '0')}`;
+}
+
+function formatCrId(n: number): string {
+  if (n >= 1000) return `CR-${String(n)}`;
+  return `CR-${String(n).padStart(3, '0')}`;
 }
 
 function formatTestSpecId(requirementUserId: string): string {

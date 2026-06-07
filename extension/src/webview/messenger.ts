@@ -36,6 +36,12 @@ import {
   PrdPasteDraft,
   PrdReviseSectionPrompt,
   PrdSaveSection,
+  ChangeRequestBootstrap,
+  ChangeRequestGeneratePrompt,
+  ChangeRequestList,
+  ChangeRequestLoad,
+  ChangeRequestPasteApply,
+  type ChangeRequest,
   RequirementsChanged,
   RequirementsDelete,
   RequirementsFilter,
@@ -102,6 +108,9 @@ import type {
 import { buildGenerateDraftPrompt, buildReviseSectionPrompt } from '../prd/promptBuilder';
 import { parsePrdMarkdown, renderPrdMarkdown } from '../prd/sectionSchema';
 import type { IProjectRegistry } from '../projectRegistry';
+import { buildChangeRequestPrompt } from '../requirements/changeRequestPrompt';
+import { parseChangeRequest } from '../requirements/changeRequestParser';
+import type { ChangeRequestRecord } from '../memory/MemoryStore';
 import { buildDecomposePrompt } from '../requirements/decompositionPrompt';
 import { parseDecomposed } from '../requirements/parser';
 import {
@@ -136,6 +145,7 @@ import type { TestSpecMemory, RequirementMemory } from '@deliveryos/contracts';
 import { buildTestDesignerPrompt } from '../specialists/testDesigner/promptBuilder';
 import { parseTestDesignerResult } from '../specialists/testDesigner/resultParser';
 import { consumePendingBriefRequest } from './briefComposerPanel';
+import { consumePendingCrEntryId } from './changeRequestPanel';
 import { consumePendingDiscoverMode } from './discoverPanel';
 import { consumePendingTestDesignerRequirement } from './testDesignerPanel';
 
@@ -184,6 +194,13 @@ export interface HandoffDeps {
   readonly globalState: vscode.Memento;
   /** CHUNK-12: called when result.md is observed, to trigger capture pipeline. */
   readonly onResultMdReady?: (event: ResultWatchEvent) => void;
+}
+
+export interface ChangeRequestDeps {
+  readonly registry: IProjectRegistry;
+  readonly memoryStore: MemoryStore;
+  /** Callback the host injects so handlers can open the CR panel. */
+  readonly openChangeRequestPanel: (args?: { crEntryId?: string }) => Promise<void>;
 }
 
 const LAST_USED_PROFILE_KEY = 'deliveryos.profiles.lastUsed';
@@ -1237,6 +1254,128 @@ export class HostMessenger {
 
   broadcastDiscoverMode(mode: DiscoverMode): void {
     this.messenger.sendNotification(DiscoverSetMode, BROADCAST, { mode });
+  }
+
+  registerChangeRequestHandlers(deps: ChangeRequestDeps): void {
+    const { registry, memoryStore, openChangeRequestPanel } = deps;
+
+    const toChangeRequest = (record: ChangeRequestRecord): ChangeRequest => {
+      const cr: ChangeRequest = {
+        entryId: record.entryId,
+        id: record.payload.id,
+        description: record.payload.description,
+        status: record.payload.status,
+        createdAt: record.createdAt,
+      };
+      if (record.payload.appliedAt !== undefined) (cr as { appliedAt?: number }).appliedAt = record.payload.appliedAt;
+      if (record.payload.addedRequirementIds !== undefined) (cr as { addedRequirementIds?: readonly string[] }).addedRequirementIds = record.payload.addedRequirementIds;
+      if (record.payload.editedRequirementIds !== undefined) (cr as { editedRequirementIds?: readonly string[] }).editedRequirementIds = record.payload.editedRequirementIds;
+      if (record.payload.deletedRequirementUserIds !== undefined) (cr as { deletedRequirementUserIds?: readonly string[] }).deletedRequirementUserIds = record.payload.deletedRequirementUserIds;
+      return cr;
+    };
+
+    this.messenger.onRequest(ChangeRequestBootstrap, async () => {
+      const crEntryId = consumePendingCrEntryId();
+      return { ok: true as const, crEntryId };
+    });
+
+    this.messenger.onRequest(ChangeRequestLoad, async (params) => {
+      const record = await memoryStore.loadChangeRequest(params.entryId);
+      if (!record) {
+        return { ok: false as const, reason: `No change-request entry ${params.entryId}` };
+      }
+      return { ok: true as const, changeRequest: toChangeRequest(record) };
+    });
+
+    this.messenger.onRequest(ChangeRequestList, async (_params) => {
+      const active = registry.getActive();
+      if (!active) return { ok: false as const, reason: 'no-project' };
+      const prd = await memoryStore.loadPrdParent(active.id);
+      if (!prd) return { ok: false as const, reason: 'no-prd' };
+      const records = await memoryStore.listChangeRequests(prd.prdId);
+      return { ok: true as const, changeRequests: records.map(toChangeRequest) };
+    });
+
+    this.messenger.onRequest(ChangeRequestGeneratePrompt, async (params) => {
+      const active = registry.getActive();
+      if (!active) return { ok: false as const, reason: 'No active project.' };
+      const prd = await memoryStore.loadPrdParent(active.id);
+      if (!prd) return { ok: false as const, reason: 'No PRD on file for this project.' };
+      const reqRecords = await memoryStore.listRequirementItems(prd.prdId);
+      const requirements = reqRecords.map((r) => ({
+        id: r.payload.id,
+        title: r.payload.title,
+        category: r.payload.category,
+        priority: r.payload.priority,
+        sourcePrdSection: r.payload.sourcePrdSection,
+      }));
+      const cr = await memoryStore.createChangeRequest(prd.prdId, params.description, prd.sections);
+      const prdMarkdownBody = renderPrdMarkdown({ projectTitle: prd.projectTitle, sections: prd.sections });
+      const prompt = buildChangeRequestPrompt({ prd, requirements, crDescription: params.description, prdMarkdownBody });
+      await vscode.env.clipboard.writeText(prompt);
+      const bytesCopied = new TextEncoder().encode(prompt).length;
+      await memoryStore.updateChangeRequest(cr.entryId, { status: 'prompted' });
+      await openChangeRequestPanel({ crEntryId: cr.entryId });
+      return { ok: true as const, crEntryId: cr.entryId, bytesCopied };
+    });
+
+    this.messenger.onRequest(ChangeRequestPasteApply, async (params) => {
+      const active = registry.getActive();
+      if (!active) return { ok: false as const, reason: 'No active project.', raw: params.text };
+      const prd = await memoryStore.loadPrdParent(active.id);
+      if (!prd) return { ok: false as const, reason: 'No PRD on file for this project.', raw: params.text };
+
+      const parsed = parseChangeRequest(params.text);
+      if (!parsed.ok) {
+        return { ok: false as const, reason: parsed.reason, raw: parsed.raw };
+      }
+
+      const reqRecords = await memoryStore.listRequirementItems(prd.prdId);
+      const idToEntryId = new Map<string, string>(reqRecords.map((r) => [r.payload.id, r.entryId]));
+
+      const addedIds = await memoryStore.createRequirementItems(prd.prdId, parsed.added);
+
+      const editedIds: string[] = [];
+      for (const edit of parsed.edited) {
+        const entryId = idToEntryId.get(edit.id);
+        if (!entryId) continue;
+        await memoryStore.updateRequirementItem(entryId, edit.patch);
+        editedIds.push(entryId);
+      }
+
+      const deletedUserIds: string[] = [];
+      for (const del of parsed.deleted) {
+        const entryId = idToEntryId.get(del.id);
+        if (!entryId) continue;
+        await memoryStore.deleteRequirementItem(entryId);
+        deletedUserIds.push(del.id);
+      }
+
+      const allAffected = [...addedIds, ...editedIds];
+      await memoryStore.linkCrToRequirements(params.crEntryId, allAffected);
+      await memoryStore.updateChangeRequest(params.crEntryId, {
+        status: 'applied',
+        appliedAt: Date.now(),
+        addedRequirementIds: addedIds,
+        editedRequirementIds: editedIds,
+        deletedRequirementUserIds: deletedUserIds,
+      });
+
+      if (addedIds.length > 0) {
+        this.messenger.sendNotification(RequirementsChanged, BROADCAST, { source: 'create', ids: addedIds });
+      }
+      if (editedIds.length > 0) {
+        this.messenger.sendNotification(RequirementsChanged, BROADCAST, { source: 'update', ids: editedIds });
+      }
+
+      return {
+        ok: true as const,
+        added: addedIds.length,
+        edited: editedIds.length,
+        deleted: deletedUserIds.length,
+        warnings: parsed.warnings,
+      };
+    });
   }
 
   attachPanel(panel: vscode.WebviewPanel): void {

@@ -25,6 +25,7 @@ export default defineConfig({
         'result-paste': resolve(__dirname, 'src/panels/result/index-paste.html'),
         'diff-results': resolve(__dirname, 'src/panels/diff-results/index.html'),
         'verification': resolve(__dirname, 'src/panels/verification/index.html'),
+        'change-request': resolve(__dirname, 'src/panels/change-request/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',

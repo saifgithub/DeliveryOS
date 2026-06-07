@@ -150,6 +150,25 @@ export interface ReleaseEvidenceNode {
   readonly iconId: string;
 }
 
+export interface ChangeRequestsGroupNode {
+  readonly kind: 'change-requests-group';
+  readonly stageId: 'define';
+  readonly prdId: string;
+  readonly displayName: string;
+  readonly hasItems: boolean;
+  readonly iconId: string;
+}
+
+export interface ChangeRequestItemNode {
+  readonly kind: 'change-request-item';
+  readonly stageId: 'define';
+  readonly entryId: string;
+  readonly crId: string;
+  readonly description: string;
+  readonly status: import('@deliveryos/contracts').ChangeRequestStatus;
+  readonly iconId: string;
+}
+
 export type StageTreeNode =
   | StageNode
   | ArtefactNode
@@ -165,7 +184,9 @@ export type StageTreeNode =
   | VerificationsGroupNode
   | VerificationEntryNode
   | ReleaseEvidenceGroupNode
-  | ReleaseEvidenceNode;
+  | ReleaseEvidenceNode
+  | ChangeRequestsGroupNode
+  | ChangeRequestItemNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -413,6 +434,43 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
         command: 'deliveryos.release.openDocument',
         title: 'Open Release Evidence',
         arguments: [{ releaseEntryId: node.releaseEntryId }],
+      };
+      return item;
+    }
+    case 'change-requests-group': {
+      const item = new vscode.TreeItem(
+        node.displayName,
+        node.hasItems
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.changeRequests.group';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      if (!node.hasItems) {
+        item.tooltip = 'Click to log a change request against this PRD.';
+        item.command = {
+          command: 'deliveryos.changeRequest.open',
+          title: 'Log Change Request',
+        };
+      } else {
+        item.tooltip = `${node.displayName} — click an entry to view or apply it.`;
+      }
+      return item;
+    }
+    case 'change-request-item': {
+      const statusLabel = node.status === 'applied' ? '✓' : node.status === 'prompted' ? '…' : '●';
+      const item = new vscode.TreeItem(
+        truncate(`${node.crId} — ${node.description}`, 60),
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.changeRequest.item';
+      item.description = `${statusLabel} ${node.status}`;
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `${node.crId} (${node.status}): ${node.description}`;
+      item.command = {
+        command: 'deliveryos.changeRequest.open',
+        title: 'Open Change Request',
+        arguments: [{ crEntryId: node.entryId }],
       };
       return item;
     }

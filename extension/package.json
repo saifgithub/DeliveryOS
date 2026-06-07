@@ -115,6 +115,11 @@
         "category": "DeliveryOS"
       },
       {
+        "command": "deliveryos.changeRequest.open",
+        "title": "DeliveryOS: Log Change Request",
+        "category": "DeliveryOS"
+      },
+      {
         "command": "deliveryos.requirements.runTestDesigner",
         "title": "DeliveryOS: Run Test Designer",
         "category": "DeliveryOS"
