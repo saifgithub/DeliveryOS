@@ -17,7 +17,7 @@ function ApprovePrdButton({ prd, onToast }: { prd: DraftPrd; onToast: (msg: stri
   const handleApprove = async () => {
     onToast('PRD approved — opening Requirements decomposition…');
     try {
-      await messenger.sendRequest(RequirementsOpenDecomposePanel, HOST_EXTENSION, {});
+      await messenger.sendRequest(RequirementsOpenDecomposePanel, HOST_EXTENSION, { projectId: prd.projectId });
     } catch (err) {
       console.error('ApprovePrdButton: failed to open decompose panel', err);
     }
