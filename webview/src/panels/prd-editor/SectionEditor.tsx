@@ -26,6 +26,7 @@ export function SectionEditor({
 }: Props) {
   const [body, setBody] = useState(section.body);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [isDirty, setIsDirty] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestBody = useRef(body);
@@ -47,6 +48,7 @@ export function SectionEditor({
 
   const doSave = async (b: string) => {
     setSaveState('saving');
+    setIsDirty(false);
     try {
       await messenger.sendRequest(PrdSaveSection, HOST_EXTENSION, {
         prdId,
@@ -55,11 +57,12 @@ export function SectionEditor({
       });
       onSaved({ ...section, body: b });
       setSaveState('saved');
-      setTimeout(() => setSaveState('idle'), 1500);
+      setTimeout(() => setSaveState('idle'), 2500);
     } catch (err) {
       console.error('SectionEditor: saveSection failed', err);
       onToast(`Failed to save ${section.title}.`);
       setSaveState('idle');
+      setIsDirty(true);
     }
   };
 
@@ -67,8 +70,14 @@ export function SectionEditor({
     setBody(e.target.value);
     autosizeTextarea(e.target);
     setSaveState('idle');
+    setIsDirty(true);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => doSave(latestBody.current), DEBOUNCE_MS);
+  };
+
+  const handleManualSave = () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    void doSave(latestBody.current);
   };
 
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0;
@@ -85,7 +94,15 @@ export function SectionEditor({
             <span className="text-xs text-dos-muted">Saving…</span>
           )}
           {saveState === 'saved' && (
-            <span className="text-xs text-dos-muted">Saved</span>
+            <span className="text-xs text-dos-success font-medium">✓ Saved</span>
+          )}
+          {isDirty && saveState === 'idle' && (
+            <button
+              onClick={handleManualSave}
+              className="px-2.5 py-1 rounded text-xs bg-dos-accent text-white font-medium hover:brightness-110 active:brightness-95 transition-all"
+            >
+              Save
+            </button>
           )}
         </div>
       </div>

@@ -107,7 +107,7 @@ export function DiscoveryAnswersInput({ questions, existingDiscovery, onSaved }:
   const pasteIsLarge = rawPaste.length > LARGE_THRESHOLD;
 
   return (
-    <section className="max-w-2xl space-y-6">
+    <section className="space-y-6">
       <div>
         <h2 className="text-base font-semibold text-vscode-fg mb-1">Paste answers here</h2>
         <p className="text-xs text-dos-muted mb-2">

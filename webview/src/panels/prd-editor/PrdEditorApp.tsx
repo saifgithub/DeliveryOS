@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import * as Toast from '@radix-ui/react-toast';
 import { HOST_EXTENSION } from 'vscode-messenger-common';
-import { PrdLoad, type DraftPrd, type PrdParseReport } from '@deliveryos/contracts';
+import { PrdLoad, RequirementsOpenDecomposePanel, type DraftPrd, type PrdParseReport } from '@deliveryos/contracts';
 import { messenger } from '../../shared/messenger';
 import { PrdGenerationPrompt } from './PrdGenerationPrompt';
 import { SectionEditor } from './SectionEditor';
@@ -14,12 +14,21 @@ function ApprovePrdButton({ prd, onToast }: { prd: DraftPrd; onToast: (msg: stri
     ? undefined
     : `Fill in ${emptySections.length} empty section${emptySections.length === 1 ? '' : 's'} before approving: ${emptySections.map((s) => s.title).join(', ')}`;
 
+  const handleApprove = async () => {
+    onToast('PRD approved — opening Requirements decomposition…');
+    try {
+      await messenger.sendRequest(RequirementsOpenDecomposePanel, HOST_EXTENSION, { projectId: prd.projectId });
+    } catch (err) {
+      console.error('ApprovePrdButton: failed to open decompose panel', err);
+    }
+  };
+
   return (
     <div className="pt-4 border-t border-vscode-border">
       <div className="group relative inline-block">
         <button
           disabled={!allFilled}
-          onClick={() => onToast('PRD approved — proceed to Requirements.')}
+          onClick={() => void handleApprove()}
           title={tooltip}
           className="px-5 py-2.5 rounded-md bg-dos-accent text-white text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 active:brightness-95 transition-all shadow-sm"
         >

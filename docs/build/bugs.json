@@ -82,45 +82,45 @@
       "id": "b012",
       "title": "Requirements tree item does nothing when clicked — decompose panel not reachable from sidebar",
       "category": "dogfood",
-      "status": "open",
+      "status": "pending_review",
       "steps": "In the sidebar, expand DEFINE. Click 'Requirements (not started)'. Nothing happens — no panel opens, no prompt. The decompose panel exists ('DeliveryOS: Decompose PRD into Requirements' in command palette) but has no sidebar affordance. User has no way to discover this without already knowing the command name. Discovered during DOS:P7 dogfood run.",
       "created_at": "2026-05-30",
-      "assigned_branch": null,
-      "note": "Fix: when Requirements group has no items, set CollapsibleState.None and add commandId: 'deliveryos.requirements.decompose' so clicking it opens the decompose panel. Also add a tooltip: 'Click to decompose your PRD into requirements.'",
-      "fixed_commit": null
+      "assigned_branch": "main",
+      "note": "Fixed outside sm-fix-bugs worktree flow during DOS:P7 — code fix shipped in 81c286f; bugs.json status updated retroactively in DOS:P8.",
+      "fixed_commit": "81c286f"
     },
     {
       "id": "b011",
       "title": "Approve PRD button is a dead end — no navigation or state write",
       "category": "dogfood",
-      "status": "open",
+      "status": "pending_review",
       "steps": "Fill all 8 PRD sections. Click 'Approve PRD'. A toast appears: 'PRD approved — proceed to Requirements.' Nothing else happens — no DB flag written, no navigation to DEFINE, no sidebar update. User has no affordance to know what to do next. Discovered during DOS:P7 dogfood run.",
       "created_at": "2026-05-30",
-      "assigned_branch": null,
+      "assigned_branch": "claude/bug-fix-20260607-195709",
       "note": "Options: (1) write an approvedAt timestamp to the PRD row in memory.sqlite, update sidebar to show PRD as approved (checkmark), and show a prompt/button to open Requirements decomposition. (2) At minimum, make the toast actionable — add a 'Go to Requirements' link. The sidebar DEFINE > Requirements item should be the next natural click.",
-      "fixed_commit": null
+      "fixed_commit": "b38ad3d"
     },
     {
       "id": "b010",
       "title": "PRD section editors auto-save with no explicit Save button — non-obvious to users",
       "category": "dogfood",
-      "status": "open",
+      "status": "pending_review",
       "steps": "Open the PRD Editor panel (DEFINE → Draft PRD). The section textareas are editable and auto-save 500ms after typing stops, but there is no visible Save button. Users assume the fields are read-only and look for a Save action. The 'Saved' indicator appears briefly in the section header but is easy to miss. Discovered during DOS:P7 dogfood run.",
       "created_at": "2026-05-30",
-      "assigned_branch": null,
+      "assigned_branch": "claude/bug-fix-20260607-195709",
       "note": "Options: (1) add a visible 'Save' button that triggers the same debounced save and shows state inline, or (2) make the auto-save indicator more prominent / persistent until user moves away. Auto-save is correct behaviour; the UX gap is discoverability.",
-      "fixed_commit": null
+      "fixed_commit": "65e5804"
     },
     {
       "id": "b009",
       "title": "Answers tab — answer text boxes constrained width, not full panel width",
       "category": "dogfood",
-      "status": "open",
+      "status": "pending_review",
       "steps": "Open the Discover panel, Answers tab, after saving discovery answers. Each answer box has a constrained width rather than spanning the full available width of the panel. Discovered during DOS:P7 dogfood run (B-002 discovery answers pasted).",
       "created_at": "2026-05-30",
-      "assigned_branch": null,
+      "assigned_branch": "claude/bug-fix-20260607-195709",
       "note": "Answer boxes should use 100% / dynamic width to fill the panel. CSS fix — likely missing width: 100% or box-sizing: border-box on the answer input/textarea elements.",
-      "fixed_commit": null
+      "fixed_commit": "6f6f55c"
     },
     {
       "id": "b008",
