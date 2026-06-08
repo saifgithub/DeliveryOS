@@ -1,6 +1,6 @@
 # Handover — Project Management (DOS:P)
 
-**Last updated:** 2026-06-07 (end of DOS:P7 — B-002 discovery interview complete; 3 UI fixes shipped (b010 fix, b011 fix, b012 fix); 90 commits pushed to GitHub; second project dogfooded). Narrative in [`history/DOS_P0007.md`](history/DOS_P0007.md).
+**Last updated:** 2026-06-09 (end of DOS:P8 — CR feature shipped (`6f31434`); b009/b010/b011 fixed and merged). Narrative in [`history/DOS_P0008.md`](history/DOS_P0008.md).
 
 Read this file **first** when starting a new Project Management session (`/sm-start-fresh P`). It carries current state + carry-overs only. Per-session narratives live in [`history/`](history/) — `/sm-handover P` writes one file per wrap.
 
@@ -10,16 +10,16 @@ Read this file **first** when starting a new Project Management session (`/sm-st
 
 | Field | Value |
 | --- | --- |
-| Commits on `main` | **136** (HEAD `b6946b8`) |
-| HEAD | `b6946b8 chore(dogfood): save new project memory state from DOS:P7 dogfood run` |
+| Commits on `main` | **147** (HEAD `6f31434`) |
+| HEAD | `6f31434 feat(change-request): add CR feature — log, prompt, apply requirement deltas` |
 | Tags | **`v0.0.1` + `v0.0.2`** (both on `origin`). Next tag: `v0.1.0` — after screenshots + video recording + YouTube URL fill. |
-| Tests | **378 passing** (extension/ suite; held from CHUNK-14). `npm test` from `extension/` runs in ~3.8 s. |
-| Bugs (`docs/build/bugs.json`) | **12** — b001 + b004 pending_review; b002 + b003 open by fiat; b005–b011 dogfood findings (b012 fixed `81c286f`). |
+| Tests | **379 passing** (extension/ suite). `npm test` from `extension/` runs in ~3.8 s. |
+| Bugs (`docs/build/bugs.json`) | **12** — b001 + b004 + b009 + b010 + b011 + b012 pending_review; b002 + b003 open by fiat; b005–b008 open (dogfood findings). |
 | Open chunk | **None.** All 16 chunks done. |
 | Phase | **Phase 4 complete. All phases done (0–4).** Product built. Remaining = manual publication steps + B-002 dogfood arc. |
 | Days ahead of nominal | **~9 weeks** (BUILD-PLAN nominal CHUNK-16 end = Week 14, 2026-08-24). |
 | Worktree residue | None |
-| Origin | ✅ **in sync** — all commits pushed to `origin/main` (DOS:P7). |
+| Origin | ⚠️ **1 commit ahead** — `6f31434` (CR feature) not yet pushed to `origin/main`. |
 | Last R wrap | DOS:R16 — `bf34d80` (CHUNK-11 complete; Phase 2 closed; 2026-05-24). CHUNK-12..16 shipped via P-track orchestration. |
 | Last O wrap | DOS:O5 — standalone PRD coherence + completeness audit (2026-05-21). |
 | Session model | `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12. |
@@ -103,6 +103,7 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 | DOS:P5 (2026-05-30) | Process-improvement session: BACKLOG B-001..B-016 established; MABP v3 shipped (evidence manifest, adversarial QA, B-013..B-016, full generalization). No chunk delivery. |
 | DOS:P6 (2026-05-30) | Publication prep (SHA256 hash filled); dogfood arc started — B-002 strategy confirmed; b005–b008 logged; `.deliveryos/` initialised; discovery interview prompt visible. |
 | DOS:P7 (2026-06-07) | B-002 discovery interview run (all 12 answers saved); 3 UI fixes (Re-import draft, Requirements tree, blank-screen regression); b009–b012 logged; 90 commits pushed to GitHub; second project dogfooded. |
+| DOS:P8 (2026-06-09) | CR feature shipped (19 files, +1257 lines): `change-request` entry type, CR-NNN IDs, `addresses` link kind, all 7 layers (contracts → parser → prompt → MemoryStore → messenger → tree → panel). b009/b010/b011 fixes merged; b012 pending_review. 379 tests. 147 commits (1 ahead of origin). |
 
 ---
 
@@ -150,8 +151,11 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 | fix(tree): Requirements opens decompose panel | ✅ Done DOS:P7 — `81c286f` |
 | All commits pushed to GitHub | ✅ Done DOS:P7 — `origin/main` in sync |
 | Manual publication steps | 🔵 For user to execute (see below) |
-| B-002 dogfood arc — PRD + requirements | 🔵 In progress — PRD sections entered, needs approve + decompose |
-| b009 / b010 / b011 (CSS + UX bugs) | 🔵 Open — good candidates for `/sm-fix-bugs` |
+| B-002 dogfood arc — PRD + requirements | 🔵 In progress — PRD sections entered, needs approve + decompose + CR dogfood |
+| b009 / b010 / b011 / b012 (CSS + UX bugs) | ✅ Done DOS:P8 — `142cf7a` (pending merge review) |
+| Change Request (CR) feature | ✅ Done DOS:P8 — `6f31434` (all 7 layers) |
+| Push `6f31434` to origin | 🔵 User action — 1 commit ahead |
+| Merge pending_review bugs (b001, b004, b009–b012) | 🔵 User action — flip to resolved after merge |
 
 ### Manual steps remaining before v0.1.0 ships
 
@@ -172,12 +176,12 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 /sm-start-fresh P
 ```
 
-Next session: **DOS:P8**
+Next session: **DOS:P9**
 
 ### § Recent sessions (newest first)
 
+- [DOS:P8](history/DOS_P0008.md)
 - [DOS:P7](history/DOS_P0007.md)
 - [DOS:P6](history/DOS_P0006.md)
 - [DOS:P5](history/DOS_P0005.md)
 - [DOS:P4](history/DOS_P0004.md)
-- [DOS:P3](history/DOS_P0003.md)
