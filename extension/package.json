@@ -95,6 +95,12 @@
         "category": "DeliveryOS"
       },
       {
+        "command": "deliveryos.reverse.run",
+        "title": "DeliveryOS: Reverse — Derive PRD from Codebase",
+        "category": "DeliveryOS",
+        "icon": "$(search)"
+      },
+      {
         "command": "deliveryos.prd.generate",
         "title": "DeliveryOS: Generate PRD Draft Prompt",
         "category": "DeliveryOS"
