@@ -7,6 +7,8 @@ import { STAGE_DEFS } from './stageDefinitions';
 import {
   ArtefactNode,
   BriefNode,
+  BugItemNode,
+  BugsGroupNode,
   ChangeRequestItemNode,
   ChangeRequestsGroupNode,
   ComposeBriefNode,
@@ -143,6 +145,12 @@ export class StageTreeProvider
     }
     if (element.kind === 'change-requests-group') {
       return this.changeRequestsGroupChildren(element.prdId);
+    }
+    if (element.kind === 'stage' && element.stageId === 'iterate') {
+      return this.iterateChildren(active.id);
+    }
+    if (element.kind === 'bugs-group') {
+      return this.bugsGroupChildren(element.projectId);
     }
     if (element.kind === 'requirement-item') {
       return this.requirementItemChildren(element);
@@ -290,6 +298,38 @@ export class StageTreeProvider
       description: r.payload.description,
       status: r.payload.status,
       iconId: r.payload.status === 'applied' ? 'pass' : r.payload.status === 'prompted' ? 'loading~spin' : 'git-pull-request',
+    }));
+  }
+
+  // --- ITERATE stage (post-build loop) ---------------------------------
+
+  private async iterateChildren(projectId: string): Promise<BugsGroupNode[]> {
+    if (!this.memoryStore) return [];
+    const bugs = await this.memoryStore.listBugs(projectId);
+    return [
+      {
+        kind: 'bugs-group',
+        stageId: 'iterate',
+        projectId,
+        displayName: 'Bugs',
+        hasItems: bugs.length > 0,
+        iconId: bugs.length === 0 ? 'circle-outline' : 'bug',
+      },
+    ];
+  }
+
+  private async bugsGroupChildren(projectId: string): Promise<BugItemNode[]> {
+    if (!this.memoryStore) return [];
+    const records = await this.memoryStore.listBugs(projectId);
+    return records.map((r) => ({
+      kind: 'bug-item' as const,
+      stageId: 'iterate' as const,
+      entryId: r.entryId,
+      bugId: r.payload.id,
+      description: r.payload.description,
+      severity: r.payload.severity,
+      status: r.payload.status,
+      iconId: bugStatusIcon(r.payload.status),
     }));
   }
 
@@ -491,4 +531,19 @@ export class StageTreeProvider
 function snippet(text: string): string {
   const collapsed = text.replace(/\s+/g, ' ').trim();
   return collapsed.length > 60 ? `${collapsed.slice(0, 57)}…` : collapsed;
+}
+
+function bugStatusIcon(status: string): string {
+  switch (status) {
+    case 'verified':
+      return 'pass';
+    case 'fixed':
+      return 'wrench';
+    case 'assigned':
+      return 'loading~spin';
+    case 'deferred':
+      return 'circle-slash';
+    default:
+      return 'bug';
+  }
 }
