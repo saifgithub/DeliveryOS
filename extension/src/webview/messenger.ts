@@ -30,6 +30,10 @@ import {
   DiscoverSaveRawIdea,
   DiscoverSetMode,
   DiscoverStateChanged,
+  InterviewGeneratePrompt,
+  InterviewParseResponse,
+  InterviewSaveRound,
+  InterviewMarkSufficient,
   Hello,
   PrdGenerateDraftPrompt,
   PrdLoad,
@@ -83,6 +87,8 @@ import {
   type ProfilePreviewResult,
   type SuggestedUpdateWire,
   type IntentPayload,
+  type InterviewRecord,
+  type InterviewRound,
   type PrdSection,
   type RawIdea,
   type Requirement,
@@ -94,6 +100,8 @@ import {
 } from '@deliveryos/contracts';
 import { parseAnswers } from '../discovery/answersParser';
 import { buildDiscoveryPrompt } from '../discovery/promptBuilder';
+import { buildInterviewPrompt } from '../discovery/interviewPromptBuilder';
+import { parseInterviewResponse } from '../discovery/interviewParser';
 import { DISCOVERY_QUESTIONS_MVP } from '../discovery/questionLibrary';
 import { assembleDraft } from '../brief/briefBuilder';
 import { nextBriefId } from '../brief/briefIds';
@@ -383,6 +391,79 @@ export class HostMessenger {
     this.messenger.onNotification(DiscoverSetMode, () => {
       // Webview-originated tab switches are panel-local; no host state to
       // mutate here. Future restore-after-reload flows may read this.
+    });
+
+    // --- Interview handlers (DOS:P12) ----------------------------------------
+
+    this.messenger.onRequest(InterviewGeneratePrompt, async () => {
+      const intent = await readActiveIntent();
+      const existingInterview = intent.payload.interview ?? null;
+      const priorRounds = existingInterview?.rounds ?? [];
+      const nextQuestionNumber = priorRounds.reduce(
+        (acc, r) => acc + r.questions.length,
+        1,
+      );
+      const round = priorRounds.length + 1;
+      const prompt = buildInterviewPrompt({
+        projectTitle: intent.title,
+        rawIdea: intent.payload.rawIdea.text,
+        questions: DISCOVERY_QUESTIONS_MVP,
+        priorRounds,
+        nextQuestionNumber,
+      });
+      return { prompt, round, generatedAt: Date.now() };
+    });
+
+    this.messenger.onRequest(InterviewParseResponse, async (params) => {
+      const existingInterview = (await readActiveIntent()).payload.interview ?? null;
+      const priorRounds = existingInterview?.rounds ?? [];
+      const nextQuestionNumber = priorRounds.reduce(
+        (acc, r) => acc + r.questions.length,
+        1,
+      );
+      return parseInterviewResponse(params.rawPaste, nextQuestionNumber);
+    });
+
+    this.messenger.onRequest(InterviewSaveRound, async (params) => {
+      const intent = await readActiveIntent();
+      const existingInterview = intent.payload.interview ?? null;
+      const priorRounds: readonly InterviewRound[] = existingInterview?.rounds ?? [];
+      const roundNumber = priorRounds.length + 1;
+      const newRound: InterviewRound = {
+        round: roundNumber,
+        rawPaste: params.rawPaste,
+        parsedAt: Date.now(),
+        questions: params.questions,
+      };
+      const interview: InterviewRecord = {
+        rounds: [...priorRounds, newRound],
+        status: 'in_progress',
+        declaredSufficientAt: existingInterview?.declaredSufficientAt ?? null,
+        sufficiencySource: existingInterview?.sufficiencySource ?? null,
+      };
+      const updated = await memoryStore.update<'intent'>(intent.id, {
+        payload: { interview } as Partial<IntentPayload>,
+      });
+      const savedInterview = updated.payload.interview ?? interview;
+      broadcastStateChange(updated.payload.rawIdea, updated.payload.discovery, savedInterview);
+      return { interview: savedInterview };
+    });
+
+    this.messenger.onRequest(InterviewMarkSufficient, async (params) => {
+      const intent = await readActiveIntent();
+      const existingInterview = intent.payload.interview ?? null;
+      const interview: InterviewRecord = {
+        rounds: existingInterview?.rounds ?? [],
+        status: 'sufficient',
+        declaredSufficientAt: Date.now(),
+        sufficiencySource: params.source,
+      };
+      const updated = await memoryStore.update<'intent'>(intent.id, {
+        payload: { interview } as Partial<IntentPayload>,
+      });
+      const savedInterview = updated.payload.interview ?? interview;
+      broadcastStateChange(updated.payload.rawIdea, updated.payload.discovery, savedInterview);
+      return { interview: savedInterview };
     });
   }
 
