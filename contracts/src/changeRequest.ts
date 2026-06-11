@@ -3,7 +3,9 @@ import type { PrdSection } from './prd';
 
 // --- Domain types ---
 
-export type ChangeRequestStatus = 'logged' | 'prompted' | 'applied';
+// logged → prompted → applied (requirement deltas in) → verified (the change
+// was built, captured, and passed verification — terminal).
+export type ChangeRequestStatus = 'logged' | 'prompted' | 'applied' | 'verified';
 
 export interface ChangeRequest {
   readonly entryId: string;
