@@ -8,9 +8,10 @@ import {
   DiscoverStateChanged,
   type DiscoverMode,
 } from '@deliveryos/contracts';
-import type { RawIdea, DiscoveryRecord, DiscoveryQuestion } from '@deliveryos/contracts';
+import type { RawIdea, DiscoveryRecord, DiscoveryQuestion, InterviewRecord } from '@deliveryos/contracts';
 import { messenger } from '../../shared/messenger';
 import { RawIdeaInput } from './RawIdeaInput';
+import { InterviewTab } from './InterviewTab';
 import { DiscoveryPromptPreview } from './DiscoveryPromptPreview';
 import { DiscoveryAnswersInput } from './DiscoveryAnswersInput';
 import { DiscoverySummary } from './DiscoverySummary';
@@ -19,6 +20,7 @@ export interface DiscoverState {
   projectTitle: string;
   rawIdea: RawIdea | null;
   discovery: DiscoveryRecord | null;
+  interview: InterviewRecord | null;
   questions: readonly DiscoveryQuestion[];
   mode: DiscoverMode;
 }
@@ -41,6 +43,7 @@ export function DiscoverApp() {
           projectTitle: res.projectTitle,
           rawIdea: res.rawIdea ?? null,
           discovery: res.discovery ?? null,
+          interview: res.interview ?? null,
           questions: res.questions,
           mode: res.mode,
         });
@@ -61,6 +64,7 @@ export function DiscoverApp() {
               ...prev,
               rawIdea: params.rawIdea ?? prev.rawIdea,
               discovery: params.discovery ?? prev.discovery,
+              interview: params.interview ?? prev.interview,
             }
           : prev,
       );
@@ -76,7 +80,12 @@ export function DiscoverApp() {
   };
 
   const hasRawIdea = Boolean(state?.rawIdea?.text);
-  const hasPrompt = promptGeneratedThisSession || state?.discovery !== null;
+  // Interview tab unlocked once raw idea is saved
+  const hasInterviewAccess = hasRawIdea;
+  // Interview sufficient (or skipped) — unlocks Prompt tab
+  const isInterviewSufficient = state?.interview?.status === 'sufficient';
+  // Prompt tab unlocked only when interview is sufficient
+  const hasPromptAccess = isInterviewSufficient || promptGeneratedThisSession;
   const hasAnswers = (state?.discovery?.answers.length ?? 0) > 0;
 
   if (noProject) {
@@ -114,8 +123,9 @@ export function DiscoverApp() {
         >
           <Tabs.List className="flex border-b border-vscode-border px-6 gap-1 shrink-0">
             <TabTrigger value="rawIdea" label="Raw Idea" />
-            <TabTrigger value="prompt" label="Prompt" disabled={!hasRawIdea} />
-            <TabTrigger value="answers" label="Answers" disabled={!hasPrompt} />
+            <TabTrigger value="interview" label="Interview" disabled={!hasInterviewAccess} />
+            <TabTrigger value="prompt" label="Prompt" disabled={!hasPromptAccess} />
+            <TabTrigger value="answers" label="Answers" disabled={!hasPromptAccess} />
             <TabTrigger value="summary" label="Summary" disabled={!hasAnswers} />
           </Tabs.List>
 
@@ -128,6 +138,13 @@ export function DiscoverApp() {
                   setState((prev) => prev ? { ...prev, rawIdea } : prev);
                   showToast('Raw idea saved.');
                 }}
+              />
+            </Tabs.Content>
+
+            <Tabs.Content value="interview" className="p-6 outline-none">
+              <InterviewTab
+                interview={state.interview}
+                rawIdeaText={state.rawIdea?.text ?? ''}
               />
             </Tabs.Content>
 
