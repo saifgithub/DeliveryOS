@@ -57,6 +57,7 @@ htmlcov/
 # Generated artefacts (project-specific PRD outputs, context packages, etc.)
 generated/
 .deliveryos-cache/
+.deliveryos-reverse/
 
 # Claude Code session state (worktrees and the active-track pointer)
 .claude/worktrees/

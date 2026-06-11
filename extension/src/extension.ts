@@ -8,6 +8,7 @@ import { registerOpenPrdEditor } from './commands/openPrdEditor';
 import { registerOpenRequirements } from './commands/openRequirements';
 import { registerOpenTestDesigner } from './commands/openTestDesigner';
 import { registerOpenTestSpecFile } from './commands/openTestSpecFile';
+import { registerOpenReverse } from './commands/openReverse';
 import { registerProjectCreate } from './commands/projectCreate';
 import { registerStagesRefresh } from './commands/stagesRefresh';
 import { CONTEXT_KEYS } from './contextKeys';
@@ -47,6 +48,8 @@ import { openPasteFallbackPanel } from './panels/result/resultHost';
 import { registerDiffOpenForResultCommand } from './panels/diff-results/diffResultsCommand';
 import { registerRecomputeDiffCommand } from './diff/recompute';
 import { openVerificationPanel } from './panels/verification/verificationHost';
+import { ReverseWatcher } from './reverse/reverseWatcher';
+import { captureReversePrd } from './reverse/reverseCapture';
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   console.log('DeliveryOS activated');
@@ -118,6 +121,43 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           void captureFromHandoff(event, capturedMemoryStore, capturedWorkspaceFolder),
       });
       context.subscriptions.push(handoffDisposable);
+
+      // DOS:P10: reverse path (code → docs). The watcher detects the PRD the
+      // agent writes to `.deliveryos-reverse/prd.md`, parses + stores it, then
+      // converges onto the existing forward pipeline (decompose → requirements).
+      const reverseWatcher = new ReverseWatcher(capturedWorkspaceFolder);
+      const reverseWatcherSub = reverseWatcher.onPrd(async (event) => {
+        try {
+          const result = await captureReversePrd({
+            contentBytes: event.contentBytes,
+            memoryStore: capturedMemoryStore,
+            registry,
+          });
+          stageTreeProvider.refresh();
+          const pick = await vscode.window.showInformationMessage(
+            `DeliveryOS Reverse: PRD captured (${result.sectionsFound}/8 sections). ` +
+              'Open the PRD editor to review, then Decompose into requirements.',
+            'Open PRD editor',
+          );
+          if (pick === 'Open PRD editor') {
+            await vscode.commands.executeCommand('deliveryos.prd.open');
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          void vscode.window.showErrorMessage(
+            `DeliveryOS reverse capture failed: ${message}`,
+          );
+        }
+      });
+      context.subscriptions.push(
+        reverseWatcher,
+        reverseWatcherSub,
+        registerOpenReverse({
+          registry,
+          memoryStore: capturedMemoryStore,
+          workspace: capturedWorkspaceFolder,
+        }),
+      );
     }
   }
 
