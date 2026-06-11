@@ -79,6 +79,14 @@ function payloadFor(type: MemoryType): unknown {
         status: 'logged',
         prdSnapshotSections: [],
       };
+    case 'bug':
+      return {
+        kind: 'bug',
+        id: 'BUG-001',
+        description: 'Login fails for mixed-case emails',
+        severity: 'high',
+        status: 'open',
+      };
   }
 }
 

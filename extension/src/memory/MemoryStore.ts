@@ -8,6 +8,8 @@
 
 import * as vscode from 'vscode';
 import {
+  type BugPayload,
+  type BugSeverity,
   type ChangeRequestPayload,
   type DecomposedRequirement,
   type DraftPrd,
@@ -105,6 +107,13 @@ export interface RequirementItemRecord {
 export interface ChangeRequestRecord {
   readonly entryId: string;
   readonly payload: ChangeRequestPayload;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+export interface BugRecord {
+  readonly entryId: string;
+  readonly payload: BugPayload;
   readonly createdAt: number;
   readonly updatedAt: number;
 }
@@ -825,6 +834,136 @@ export class MemoryStore {
     }
   }
 
+  // --- Bug CRUD (post-build iteration loop) ------------------------------
+
+  /**
+   * Create a new bug entry in status 'open', linked `derives-from` the project
+   * (PRD intent). If `targetRequirementId` is given, also writes an `addresses`
+   * link to the violated requirement.
+   */
+  async createBug(
+    projectId: string,
+    input: {
+      readonly description: string;
+      readonly severity: BugSeverity;
+      readonly area?: string;
+      readonly discoveredIn?: string;
+      readonly targetRequirementId?: string;
+      readonly notes?: string;
+    },
+  ): Promise<BugRecord> {
+    const nextNum = await this.nextBugIdNumber();
+    const bugId = formatBugId(nextNum);
+    const payload: BugPayload = {
+      kind: 'bug',
+      id: bugId,
+      description: input.description,
+      severity: input.severity,
+      status: 'open',
+      ...(input.area ? { area: input.area } : {}),
+      ...(input.discoveredIn ? { discoveredIn: input.discoveredIn } : {}),
+      ...(input.targetRequirementId ? { targetRequirementId: input.targetRequirementId } : {}),
+      ...(input.notes ? { notes: input.notes } : {}),
+    };
+    const entry = await this.create<'bug'>({
+      type: 'bug',
+      title: `${bugId} — ${input.description.slice(0, 80)}`,
+      payload: payload as unknown as MemoryPayloadOfType<'bug'>,
+      body: input.description,
+    });
+    await this.link(entry.id, projectId, 'derives-from');
+    if (input.targetRequirementId) {
+      await this.link(entry.id, input.targetRequirementId, 'addresses');
+    }
+    return {
+      entryId: entry.id,
+      payload,
+      createdAt: entry.createdAt,
+      updatedAt: entry.updatedAt,
+    };
+  }
+
+  /** List all bug entries that derive from the given project (PRD intent). */
+  async listBugs(projectId: string): Promise<BugRecord[]> {
+    const stmt = this.host.db.prepare(
+      `SELECT e.id, e.payload_json, e.created_at, e.updated_at
+         FROM memory_entries e
+         JOIN memory_links l ON l.from_id = e.id
+        WHERE e.type = 'bug'
+          AND l.to_id = ?
+          AND l.kind = 'derives-from'
+        ORDER BY json_extract(e.payload_json, '$.id') ASC`,
+    );
+    try {
+      stmt.bind([projectId]);
+      const out: BugRecord[] = [];
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as {
+          id: string;
+          payload_json: string;
+          created_at: number;
+          updated_at: number;
+        };
+        const payload = JSON.parse(row.payload_json) as BugPayload;
+        out.push({
+          entryId: row.id,
+          payload,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      }
+      return out;
+    } finally {
+      stmt.free();
+    }
+  }
+
+  /** Load a single bug by its SQL entry id. Returns null if not found. */
+  async loadBug(entryId: string): Promise<BugRecord | null> {
+    const row = this.selectRowById(entryId);
+    if (!row || row.type !== 'bug') return null;
+    const payload = JSON.parse(row.payload_json) as BugPayload;
+    return {
+      entryId: row.id,
+      payload,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /** Patch a bug entry. `kind` and `id` (BUG-NNN) are preserved. */
+  async updateBug(
+    entryId: string,
+    patch: Partial<Omit<BugPayload, 'kind' | 'id'>>,
+  ): Promise<BugRecord> {
+    const row = this.selectRowById(entryId);
+    if (!row) throw new MemoryStoreError('not-found', `No bug ${entryId}`);
+    const stored = JSON.parse(row.payload_json) as BugPayload;
+    if (stored.kind !== 'bug') {
+      throw new MemoryStoreError(
+        'type-immutable',
+        `Entry ${entryId} is not a bug (kind=${String(stored.kind)})`,
+      );
+    }
+    const next: BugPayload = { ...stored, ...patch };
+    await this.update<'bug'>(entryId, {
+      payload: next as unknown as Partial<MemoryPayloadOfType<'bug'>>,
+    });
+    const fresh = this.selectRowById(entryId);
+    if (!fresh) throw new MemoryStoreError('not-found', `Entry ${entryId} vanished mid-update`);
+    return {
+      entryId: fresh.id,
+      payload: next,
+      createdAt: fresh.created_at,
+      updatedAt: fresh.updated_at,
+    };
+  }
+
+  /** Write an `addresses` link from a bug to the requirement it violates. */
+  async linkBugToRequirement(bugEntryId: string, requirementEntryId: string): Promise<void> {
+    await this.link(bugEntryId, requirementEntryId, 'addresses');
+  }
+
   // --- Test-spec CRUD (CHUNK-08) ----------------------------------------
 
   /**
@@ -1225,6 +1364,30 @@ export class MemoryStore {
     }
   }
 
+  /** Scan the store for the highest BUG-NNN already assigned. Returns next number to use. */
+  private async nextBugIdNumber(): Promise<number> {
+    const stmt = this.host.db.prepare(
+      `SELECT json_extract(payload_json, '$.id') AS bugid
+         FROM memory_entries
+        WHERE type = 'bug'`,
+    );
+    try {
+      stmt.bind([]);
+      let max = 0;
+      while (stmt.step()) {
+        const row = stmt.getAsObject() as unknown as { bugid: string | null };
+        const match = (row.bugid ?? '').match(/^BUG-(\d+)$/);
+        if (match) {
+          const n = Number(match[1]);
+          if (Number.isFinite(n) && n > max) max = n;
+        }
+      }
+      return max + 1;
+    } finally {
+      stmt.free();
+    }
+  }
+
   /** Scan the store for the highest REQ-NNN already assigned. Returns next number to use. */
   private async nextRequirementIdNumber(): Promise<number> {
     const stmt = this.host.db.prepare(
@@ -1298,6 +1461,11 @@ function formatReqId(n: number): string {
 function formatCrId(n: number): string {
   if (n >= 1000) return `CR-${String(n)}`;
   return `CR-${String(n).padStart(3, '0')}`;
+}
+
+function formatBugId(n: number): string {
+  if (n >= 1000) return `BUG-${String(n)}`;
+  return `BUG-${String(n).padStart(3, '0')}`;
 }
 
 function formatTestSpecId(requirementUserId: string): string {
