@@ -5,10 +5,36 @@ import { nonce as makeNonce } from './nonce';
 interface ViteManifestEntry {
   file: string;
   css?: string[];
+  imports?: string[];
   isEntry?: boolean;
 }
 
 type ViteManifest = Record<string, ViteManifestEntry>;
+
+/**
+ * Collect every CSS file an entry depends on, walking the import graph.
+ *
+ * Vite attaches a chunk's CSS to the manifest record of whichever chunk
+ * `import`s the stylesheet. Tailwind is imported once from a shared module, so
+ * its CSS lands on that shared chunk (`_tailwind-*.js`) — NOT on the per-panel
+ * entry. Linking only `entryRecord.css` therefore ships every panel unstyled.
+ * Resolve CSS transitively through `imports` instead.
+ */
+function collectCss(
+  manifest: ViteManifest,
+  key: string,
+  seen: Set<string> = new Set(),
+): string[] {
+  if (seen.has(key)) return [];
+  seen.add(key);
+  const record = manifest[key];
+  if (!record) return [];
+  const css = [...(record.css ?? [])];
+  for (const imported of record.imports ?? []) {
+    css.push(...collectCss(manifest, imported, seen));
+  }
+  return css;
+}
 
 let cachedManifest: ViteManifest | undefined;
 
@@ -55,7 +81,8 @@ export async function renderPanelHtml(
   const scriptUri = webview.asWebviewUri(
     vscode.Uri.joinPath(distRoot, entryRecord.file),
   );
-  const cssUris = (entryRecord.css ?? []).map((href) =>
+  const cssHrefs = [...new Set(collectCss(manifest, entryKey))];
+  const cssUris = cssHrefs.map((href) =>
     webview.asWebviewUri(vscode.Uri.joinPath(distRoot, href)),
   );
 

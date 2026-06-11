@@ -15,6 +15,17 @@ const MANIFEST_FIXTURE = {
     css: ['assets/hello-abc.css'],
     isEntry: true,
   },
+  // Mirrors the real build: the panel entry carries NO css of its own; the
+  // Tailwind stylesheet lives on a shared chunk reached via `imports`.
+  'src/panels/discover/index.html': {
+    file: 'assets/discover-xyz.js',
+    imports: ['_tailwind-shared.js'],
+    isEntry: true,
+  },
+  '_tailwind-shared.js': {
+    file: 'assets/tailwind-shared.js',
+    css: ['assets/tailwind-deadbeef.css'],
+  },
 };
 
 describe('renderPanelHtml()', () => {
@@ -69,6 +80,27 @@ describe('renderPanelHtml()', () => {
     );
     assert.match(html, /default-src 'none'/);
     assert.match(html, /img-src vscode-cdn\.net https: data:/);
+  });
+
+  it('links CSS reached transitively through imports (Tailwind shared chunk)', async () => {
+    const webview = __makeStubWebview({
+      cspSource: 'vscode-cdn.net',
+      asWebviewUri: (u) => Uri.file(`webview:${u.fsPath}`),
+    });
+
+    const html = await renderPanelHtml({
+      webview,
+      extensionUri,
+      entry: 'discover',
+      title: 'DeliveryOS: Discover',
+    });
+
+    // The entry has no own css, but the imported shared chunk's stylesheet
+    // must still be linked — otherwise the panel renders unstyled.
+    assert.match(
+      html,
+      /<link rel="stylesheet" href="[^"]*tailwind-deadbeef\.css[^"]*" \/>/,
+    );
   });
 
   it('produces a different nonce on each invocation', async () => {

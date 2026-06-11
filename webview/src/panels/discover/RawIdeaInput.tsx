@@ -84,7 +84,7 @@ export function RawIdeaInput({ projectTitle, rawIdea, onSaved }: Props) {
   const savedAt = rawIdea?.capturedAt ? new Date(rawIdea.capturedAt).toLocaleString() : null;
 
   return (
-    <section className="max-w-2xl space-y-5">
+    <section className="max-w-3xl space-y-5">
       <div>
         <h2 className="text-base font-semibold text-vscode-fg mb-1">Project name</h2>
         <input
@@ -112,7 +112,7 @@ export function RawIdeaInput({ projectTitle, rawIdea, onSaved }: Props) {
           onChange={handleChange}
           onBlur={handleBlur}
           placeholder="e.g. I want a bug triage assistant"
-          style={{ minHeight: '10rem', overflowY: 'auto' }}
+          style={{ minHeight: '18rem', overflowY: 'auto' }}
           className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-none font-[var(--vscode-editor-font-family)]"
         />
       </div>
