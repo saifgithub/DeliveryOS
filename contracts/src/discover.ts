@@ -1,7 +1,7 @@
 import type { RequestType, NotificationType } from 'vscode-messenger-common';
-import type { RawIdea, DiscoveryRecord, DiscoveryAnswer } from './memory';
+import type { RawIdea, DiscoveryRecord, DiscoveryAnswer, InterviewRecord, InterviewQuestion } from './memory';
 
-export type DiscoverMode = 'rawIdea' | 'prompt' | 'answers' | 'summary';
+export type DiscoverMode = 'rawIdea' | 'interview' | 'prompt' | 'answers' | 'summary';
 
 export interface DiscoveryQuestion {
   readonly id: string;
@@ -41,6 +41,7 @@ export interface DiscoverGetInitialStateResult {
   readonly projectTitle: string;
   readonly rawIdea: RawIdea | null;
   readonly discovery: DiscoveryRecord | null;
+  readonly interview: InterviewRecord | null;
   readonly questions: readonly DiscoveryQuestion[];
   readonly mode: DiscoverMode;
 }
@@ -98,6 +99,59 @@ export interface DiscoverSetModeParams {
 export interface DiscoverStateChangedParams {
   readonly rawIdea: RawIdea | null;
   readonly discovery: DiscoveryRecord | null;
+  readonly interview: InterviewRecord | null;
+}
+
+// --- Interview message contracts (DOS:P12) ---------------------------------
+
+export interface InterviewGeneratePromptParams {
+  readonly _empty?: never;
+}
+
+export interface InterviewGeneratePromptResult {
+  readonly prompt: string;
+  readonly round: number;
+  readonly generatedAt: number;
+}
+
+export interface InterviewParseResponseParams {
+  readonly rawPaste: string;
+}
+
+/** Verdict result from parser. */
+export interface InterviewParseVerdictResult {
+  readonly kind: 'sufficient';
+  readonly rationale: string;
+}
+
+/** Questions result from parser. */
+export interface InterviewParseQuestionsResult {
+  readonly kind: 'questions';
+  readonly questions: readonly InterviewQuestion[];
+  readonly unmatchedText: string;
+}
+
+export type InterviewParseResponseResult =
+  | InterviewParseVerdictResult
+  | InterviewParseQuestionsResult;
+
+export interface InterviewSaveRoundParams {
+  readonly rawPaste: string;
+  /** Questions with userAnswer filled in. */
+  readonly questions: readonly InterviewQuestion[];
+}
+
+export interface InterviewSaveRoundResult {
+  readonly interview: InterviewRecord;
+}
+
+export interface InterviewMarkSufficientParams {
+  readonly source: 'ai' | 'user';
+  readonly rationale?: string;
+}
+
+export interface InterviewMarkSufficientResult {
+  readonly interview: InterviewRecord;
 }
 
 export const DiscoverGetInitialState: RequestType<
@@ -137,3 +191,23 @@ export const DiscoverSetMode: NotificationType<DiscoverSetModeParams> = {
 export const DiscoverStateChanged: NotificationType<DiscoverStateChangedParams> = {
   method: 'discover/stateChanged',
 };
+
+export const InterviewGeneratePrompt: RequestType<
+  InterviewGeneratePromptParams,
+  InterviewGeneratePromptResult
+> = { method: 'discover/interview/generatePrompt' };
+
+export const InterviewParseResponse: RequestType<
+  InterviewParseResponseParams,
+  InterviewParseResponseResult
+> = { method: 'discover/interview/parseResponse' };
+
+export const InterviewSaveRound: RequestType<
+  InterviewSaveRoundParams,
+  InterviewSaveRoundResult
+> = { method: 'discover/interview/saveRound' };
+
+export const InterviewMarkSufficient: RequestType<
+  InterviewMarkSufficientParams,
+  InterviewMarkSufficientResult
+> = { method: 'discover/interview/markSufficient' };

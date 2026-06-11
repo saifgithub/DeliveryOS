@@ -58,9 +58,35 @@ export interface DiscoveryRecord {
   readonly unmatchedText?: string;
 }
 
+// --- Interview types (DOS:P12) -------------------------------------------
+
+export interface InterviewQuestion {
+  readonly id: string; // 'I1', 'I2', ... global across rounds
+  readonly topicRef?: string; // optional 'Q1'..'Q12'
+  readonly question: string;
+  readonly recommendedAnswer: string;
+  readonly userAnswer: string | null;
+}
+
+export interface InterviewRound {
+  readonly round: number;
+  readonly rawPaste: string;
+  readonly parsedAt: number;
+  readonly questions: readonly InterviewQuestion[];
+}
+
+export interface InterviewRecord {
+  readonly rounds: readonly InterviewRound[];
+  readonly status: 'in_progress' | 'sufficient';
+  readonly declaredSufficientAt: number | null;
+  readonly sufficiencySource: 'ai' | 'user' | null;
+}
+
 export interface IntentPayload {
   readonly rawIdea: RawIdea;
   readonly discovery: DiscoveryRecord | null;
+  /** Interview record. Treat missing (undefined) as null for backward compat. */
+  readonly interview?: InterviewRecord | null;
   readonly problemStatement?: string;
   readonly userGoals?: readonly string[];
   readonly nonGoals?: readonly string[];
