@@ -1,6 +1,6 @@
 # Handover — Project Management (DOS:P)
 
-**Last updated:** 2026-06-11 (end of DOS:P10 — reverse path (code → docs) built + green in an isolated worktree on `feat/code-to-docs`, NOT merged; 3 commits pushed to `origin`). Narrative in [`history/DOS_P0010.md`](history/DOS_P0010.md).
+**Last updated:** 2026-06-11 (end of DOS:P11 — reverse path **merged**; post-build **iteration loop** shipped (bug type + DEFECT_LIST + shared back-half + ITERATE stage); all-panels-unstyled CSS bug fixed; `deliveryos-0.1.0.vsix` installed locally). Narrative in [`history/DOS_P0011.md`](history/DOS_P0011.md).
 
 Read this file **first** when starting a new Project Management session (`/sm-start-fresh P`). It carries current state + carry-overs only. Per-session narratives live in [`history/`](history/) — `/sm-handover P` writes one file per wrap.
 
@@ -10,17 +10,18 @@ Read this file **first** when starting a new Project Management session (`/sm-st
 
 | Field | Value |
 | --- | --- |
-| Commits on `main` | **150** (HEAD = DOS:P10 wrap; was 149 `0a42978` pre-wrap) |
-| HEAD | `chore(handover): wrap DOS:P10` |
-| Feature branch | **`feat/code-to-docs` @ `8ec28ed`** in worktree `../DeliveryOS-rpath` — reverse path (code → docs); built + green; **NOT merged** to `main`. |
-| Tags | **`v0.0.1` + `v0.0.2`** (both on `origin`). Next tag: `v0.1.0` — after screenshots + video recording + YouTube URL fill. |
-| Tests | **379 passing** on `main`; **390** on `feat/code-to-docs` (+11 reverse-path). `npm test` from `extension/`. |
+| Commits on `main` | **159** (HEAD `6fa4b70` pre-wrap; this wrap commit makes 160) |
+| HEAD | `fix(webview): link CSS reached through imports — all panels were unstyled` |
+| Feature branch | **None.** `feat/code-to-docs` merged (`80688c7`) + `feat/iteration-loop` merged (`a55e94c`); both branches deleted. |
+| Tags | **`v0.0.1` + `v0.0.2`** + rollback tags `pre-rpath-merge` + `pre-iterate-merge` (all on `origin`). Next tag: `v0.1.0` — after screenshots + video recording + YouTube URL fill. |
+| Tests | **413 passing** on `main`. `npm test` from `extension/`. |
 | Bugs (`docs/build/bugs.json`) | **12** — b001 + b004 + b009 + b010 + b011 + b012 pending_review; b002 + b003 open by fiat; b005–b008 open (dogfood findings). |
 | Open chunk | **None.** All 16 chunks done. |
-| Phase | **Phase 4 complete. All phases done (0–4).** Product built. Remaining = manual publication steps + B-002 dogfood arc. |
+| Phase | **Phase 4 complete. All phases done (0–4).** Product built + post-build iteration loop shipped (DOS:P11). Remaining = manual publication steps + B-002 dogfood arc. |
 | Days ahead of nominal | **~9 weeks** (BUILD-PLAN nominal CHUNK-16 end = Week 14, 2026-08-24). |
-| Worktree residue | `../DeliveryOS-rpath` (`feat/code-to-docs`) — **intentional** feature worktree (not `agent-*` residue); remove after merge. |
-| Origin | ✅ In sync at `0a42978` (3 commits pushed DOS:P10). The DOS:P10 wrap commit is +1 ahead until next push. |
+| Worktree residue | **None.** Both feature worktrees removed (DOS:P11). |
+| Origin | ✅ In sync at `6fa4b70` (everything pushed during DOS:P11, incl. both rollback tags). |
+| Local install | `deliveryos-0.1.0.vsix` packaged + installed into VS Code (DOS:P11) — reload window to activate. Package version 0.1.0 is ahead of the official tag. |
 | Last R wrap | DOS:R16 — `bf34d80` (CHUNK-11 complete; Phase 2 closed; 2026-05-24). CHUNK-12..16 shipped via P-track orchestration. |
 | Last O wrap | DOS:O5 — standalone PRD coherence + completeness audit (2026-05-21). |
 | Session model | `docs/MULTI_AGENT_BUILD_PROCESS.md` § 12. |
@@ -53,10 +54,10 @@ Track P owns **schedule + cadence management** for the DeliveryOS build. Concret
 
 | Field | Value |
 | --- | --- |
-| Today | 2026-06-09 |
+| Today | 2026-06-11 |
 | BUILD-PLAN nominal start | 2026-05-25 (Week 1) |
 | BUILD-PLAN demo target | 2026-08-24 (Week 14) |
-| Calendar days to target | **90** (≈ 12.9 weeks) |
+| Calendar days to target | **74** (≈ 10.6 weeks) |
 | BUILD-PLAN week shipped through | end of Week 14 (CHUNK-16 ✅) |
 | Days ahead of nominal | **~9 weeks** |
 
@@ -106,7 +107,8 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 | DOS:P7 (2026-06-07) | B-002 discovery interview run (all 12 answers saved); 3 UI fixes (Re-import draft, Requirements tree, blank-screen regression); b009–b012 logged; 90 commits pushed to GitHub; second project dogfooded. |
 | DOS:P8 (2026-06-09) | CR feature shipped (19 files, +1257 lines): `change-request` entry type, CR-NNN IDs, `addresses` link kind, all 7 layers (contracts → parser → prompt → MemoryStore → messenger → tree → panel). b009/b010/b011 fixes merged; b012 pending_review. 379 tests. 147 commits (1 ahead of origin). |
 | DOS:P9 (2026-06-09) | B-002 dogfood arc deepens: `sm-mabp-plan` + `sm-mabp-run` global skills created (prefix `sm-` established as naming convention); edgenta_OKR (OKR.AI — KPI scorecard for MEEM) Phase A complete (9 chunk specs, READY.md, initial commit `5fc1990`); MABP build started — chunks 01 (scaffold) + 02 (auth-rbac) + 03 (excel-bootstrap) done + approved. No DeliveryOS code commits. 148 commits (2 ahead of origin). |
-| DOS:P10 (2026-06-11) | Pushed 3 commits to `origin` (push carry-over closed). Established the parallel-build worktree workflow; built the **reverse path (code → docs)** in isolation on `feat/code-to-docs` (`8ec28ed`) — agent-handoff deep-read mirroring the handoff machinery, PRD as the convergence point, command-driven MVP. 379 → 390 tests; build + typecheck green. NOT merged. No `main` code commits. |
+| DOS:P10 (2026-06-11) | Pushed 3 commits to `origin` (push carry-over closed). Established the parallel-build worktree workflow; built the **reverse path (code → docs)** in isolation on `feat/code-to-docs` (`8ec28ed`) — agent-handoff deep-read mirroring the handoff machinery, PRD as the convergence point, command-driven MVP. 379 → 390 tests; build + typecheck green. NOT merged (at the time). No `main` code commits. |
+| DOS:P11 (2026-06-11) | Reverse path **merged** (`80688c7`; F5 gate skipped by user). **Post-build iteration loop** built in worktree + merged (`a55e94c`): `bug` memory type (BUG-NNN), aggregate DEFECT_LIST/CHANGE_REQUESTS views, shared back-half (`driveChange.ts`), CR → `verified`, Bug panel, ITERATE stage — formalizes the edgenta_OKR ad-hoc workflow. **All-panels-unstyled CSS bug** found via user screenshot + fixed (`6fa4b70`). 379 → 413 tests; 150 → 159 commits; `deliveryos-0.1.0.vsix` installed locally. |
 
 ---
 
@@ -158,8 +160,13 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 | b009 / b010 / b011 / b012 (CSS + UX bugs) | ✅ Done DOS:P8 — `142cf7a` (pending merge review) |
 | Change Request (CR) feature | ✅ Done DOS:P8 — `6f31434` (all 7 layers) |
 | Push `origin/main` | ✅ Done DOS:P10 — 3 commits pushed (`142cf7a..0a42978`); origin in sync |
-| Reverse path (code → docs) | 🟡 Built + green on `feat/code-to-docs` (`8ec28ed`, worktree `../DeliveryOS-rpath`); 390 tests. **NOT merged** — needs live verify → merge. |
-| Verify reverse path live → merge to `main` | 🔵 Next — F5 dev host on DOS repo → `deliveryos.reverse.run` → PRD lands → Decompose; then `git tag pre-rpath-merge` + merge (or PR) + `git worktree remove`. |
+| Reverse path (code → docs) | ✅ Merged DOS:P11 — `80688c7` (tag `pre-rpath-merge`). ⚠️ F5 live run still pending (gate skipped by user). |
+| Post-build iteration loop (Bug + CR → shared back-half) | ✅ Done DOS:P11 — `a55e94c` (tag `pre-iterate-merge`); L1–L5, 413 tests. |
+| All-panels-unstyled CSS fix | ✅ Done DOS:P11 — `6fa4b70` (htmlFactory walks vite import graph). |
+| `deliveryos-0.1.0.vsix` packaged + installed | ✅ Done DOS:P11 — local VS Code install; reload window to activate. |
+| Live F5 pass (reverse run + Bug/ITERATE + restyled UI) | 🔵 Next — one dev-host session covers all three unverified merges. |
+| Copy-paste → terminal-handoff modernization (front stages) | 🔵 Roadmap — user finds clipboard loop "very 1990s"; reuse EXECUTE-stage handoff machinery for Discovery/PRD/Decompose/CR prompts. Discussed DOS:P11, not built. |
+| Dogfood iteration loop on a real edgenta_OKR defect | 🔵 Optional next — log a DEF as BUG-NNN, drive to `verified`. |
 | Reverse-path webview panel | 🔵 Optional follow-up — MVP is command-driven (no panel). |
 | Merge pending_review bugs (b001, b004, b009–b012) | 🔵 User action — flip to resolved after merge |
 | `sm-mabp-plan` skill | ✅ Done DOS:P9 — `~/.claude/skills/sm-mabp-plan/` |
@@ -186,12 +193,12 @@ Done: **16 / 16**. Remaining: **0**. **All phases complete.**
 /sm-start-fresh P
 ```
 
-Next session: **DOS:P11**
+Next session: **DOS:P12**
 
 ### § Recent sessions (newest first)
 
+- [DOS:P11](history/DOS_P0011.md)
 - [DOS:P10](history/DOS_P0010.md)
 - [DOS:P9](history/DOS_P0009.md)
 - [DOS:P8](history/DOS_P0008.md)
 - [DOS:P7](history/DOS_P0007.md)
-- [DOS:P6](history/DOS_P0006.md)
