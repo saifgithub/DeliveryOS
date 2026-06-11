@@ -5,7 +5,7 @@
 // to 8 hex chars — ~4 billion collision space per project is fine.
 
 import { randomUUID } from 'node:crypto';
-import type { MemoryType } from '@deliveryos/contracts';
+import { MEMORY_TYPES, type MemoryType } from '@deliveryos/contracts';
 
 const SHORT_UUID_LEN = 8;
 
@@ -15,7 +15,15 @@ export function generateMemoryId(type: MemoryType): string {
 }
 
 export function parseMemoryIdType(id: string): MemoryType | null {
-  const dash = id.indexOf('-');
-  if (dash <= 0) return null;
-  return id.slice(0, dash) as MemoryType;
+  // Some types contain dashes ('change-request', 'test-spec'), so a naive
+  // split on the first dash mis-parses them (e.g. 'change-request-ab12' →
+  // 'change'), which trips the update() type-guard. Resolve against the known
+  // type vocabulary instead, preferring the longest matching prefix.
+  let best: MemoryType | null = null;
+  for (const type of MEMORY_TYPES) {
+    if (id.startsWith(`${type}-`) && id.length > type.length + 1) {
+      if (!best || type.length > best.length) best = type;
+    }
+  }
+  return best;
 }

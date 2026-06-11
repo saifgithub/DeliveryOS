@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { DiscoverMode, RequirementPriority } from '@deliveryos/contracts';
 import { STAGE_DEFS } from './stageDefinitions';
 
-export type StageId = 'discover' | 'define' | 'execute' | 'verify';
+export type StageId = 'discover' | 'define' | 'execute' | 'verify' | 'iterate';
 
 export interface StageNode {
   readonly kind: 'stage';
@@ -169,6 +169,26 @@ export interface ChangeRequestItemNode {
   readonly iconId: string;
 }
 
+export interface BugsGroupNode {
+  readonly kind: 'bugs-group';
+  readonly stageId: 'iterate';
+  readonly projectId: string;
+  readonly displayName: string;
+  readonly hasItems: boolean;
+  readonly iconId: string;
+}
+
+export interface BugItemNode {
+  readonly kind: 'bug-item';
+  readonly stageId: 'iterate';
+  readonly entryId: string;
+  readonly bugId: string;
+  readonly description: string;
+  readonly severity: import('@deliveryos/contracts').BugSeverity;
+  readonly status: import('@deliveryos/contracts').BugStatus;
+  readonly iconId: string;
+}
+
 export type StageTreeNode =
   | StageNode
   | ArtefactNode
@@ -186,7 +206,9 @@ export type StageTreeNode =
   | ReleaseEvidenceGroupNode
   | ReleaseEvidenceNode
   | ChangeRequestsGroupNode
-  | ChangeRequestItemNode;
+  | ChangeRequestItemNode
+  | BugsGroupNode
+  | BugItemNode;
 
 export function stageDefToNode(def: (typeof STAGE_DEFS)[number]): StageNode {
   return {
@@ -471,6 +493,44 @@ export function toTreeItem(node: StageTreeNode): vscode.TreeItem {
         command: 'deliveryos.changeRequest.open',
         title: 'Open Change Request',
         arguments: [{ crEntryId: node.entryId }],
+      };
+      return item;
+    }
+    case 'bugs-group': {
+      const item = new vscode.TreeItem(
+        node.displayName,
+        node.hasItems
+          ? vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.bugs.group';
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      if (!node.hasItems) {
+        item.tooltip = 'Click to log a bug against this project.';
+        item.command = {
+          command: 'deliveryos.bug.open',
+          title: 'Log Bug',
+        };
+      } else {
+        item.tooltip = `${node.displayName} — click an entry to view or update it.`;
+      }
+      return item;
+    }
+    case 'bug-item': {
+      const statusLabel =
+        node.status === 'verified' ? '✓' : node.status === 'fixed' ? '✱' : node.status === 'assigned' ? '…' : node.status === 'deferred' ? '⏸' : '●';
+      const item = new vscode.TreeItem(
+        truncate(`${node.bugId} — ${node.description}`, 60),
+        vscode.TreeItemCollapsibleState.None,
+      );
+      item.contextValue = 'deliveryos.bug.item';
+      item.description = `${statusLabel} ${node.severity}/${node.status}`;
+      item.iconPath = new vscode.ThemeIcon(node.iconId);
+      item.tooltip = `${node.bugId} (${node.severity}, ${node.status}): ${node.description}`;
+      item.command = {
+        command: 'deliveryos.bug.open',
+        title: 'Open Bug',
+        arguments: [{ bugEntryId: node.entryId }],
       };
       return item;
     }

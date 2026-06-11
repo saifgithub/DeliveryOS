@@ -6,7 +6,7 @@
 
 export { LINK_KINDS, type LinkKind, type MemoryLink } from './links';
 
-// --- 9 canonical memory types (§ 5.1) -------------------------------------
+// --- 11 canonical memory types (§ 5.1) ------------------------------------
 
 export const MEMORY_TYPES = [
   'intent',
@@ -19,6 +19,7 @@ export const MEMORY_TYPES = [
   'release',
   'test-spec',
   'change-request',
+  'bug',
 ] as const;
 
 export type MemoryType = (typeof MEMORY_TYPES)[number];
@@ -196,7 +197,8 @@ export type MemoryEntry =
   | MemoryEntryBase<'verification', VerificationPayload>
   | MemoryEntryBase<'release', ReleasePayload>
   | MemoryEntryBase<'test-spec', TestSpecPayload>
-  | MemoryEntryBase<'change-request', import('./changeRequest').ChangeRequestPayload>;
+  | MemoryEntryBase<'change-request', import('./changeRequest').ChangeRequestPayload>
+  | MemoryEntryBase<'bug', import('./bug').BugPayload>;
 
 export type MemoryEntryOfType<T extends MemoryType> = Extract<MemoryEntry, { type: T }>;
 
@@ -213,3 +215,4 @@ export type VerificationMemory = MemoryEntryOfType<'verification'>;
 export type ReleaseMemory = MemoryEntryOfType<'release'>;
 export type TestSpecMemory = MemoryEntryOfType<'test-spec'>;
 export type ChangeRequestMemory = MemoryEntryOfType<'change-request'>;
+export type BugMemory = MemoryEntryOfType<'bug'>;

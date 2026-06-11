@@ -32,4 +32,10 @@ export const STAGE_DEFS: ReadonlyArray<StageDefinition> = Object.freeze([
     description: 'Verify → memory update → release evidence',
     iconId: 'verified',
   },
+  {
+    id: 'iterate',
+    displayName: 'ITERATE',
+    description: 'Post-build loop → log bugs → fix → verify',
+    iconId: 'sync',
+  },
 ]);

@@ -14,3 +14,4 @@ export * from './diff';
 export * from './verification';
 export * from './release';
 export * from './changeRequest';
+export * from './bug';

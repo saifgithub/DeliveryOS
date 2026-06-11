@@ -20,6 +20,7 @@ import {
 } from './projectRegistry';
 import { briefComposerSerializer } from './serializers/briefComposerSerializer';
 import { changeRequestPanelSerializer } from './serializers/changeRequestPanelSerializer';
+import { bugPanelSerializer } from './serializers/bugPanelSerializer';
 import { decomposePromptPanelSerializer } from './serializers/decomposePromptPanelSerializer';
 import { discoverPanelSerializer } from './serializers/discoverPanelSerializer';
 import { helloPanelSerializer } from './serializers/helloPanelSerializer';
@@ -36,6 +37,7 @@ import {
   CHANGE_REQUEST_VIEW_TYPE,
   openChangeRequestPanel,
 } from './webview/changeRequestPanel';
+import { BUG_VIEW_TYPE, openBugPanel } from './webview/bugPanel';
 import { DECOMPOSE_VIEW_TYPE, openDecomposePromptPanel } from './webview/decomposePromptPanel';
 import { DISCOVER_VIEW_TYPE } from './webview/discoverPanel';
 import { HELLO_VIEW_TYPE } from './webview/helloPanel';
@@ -104,6 +106,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       registry,
       memoryStore,
       openChangeRequestPanel: (args) => openChangeRequestPanel(context, host, args),
+    });
+    host.registerBugHandlers({
+      registry,
+      memoryStore,
+      ...(workspaceFolder ? { workspace: workspaceFolder.uri } : {}),
     });
     if (workspaceFolder) {
       host.registerProfileHandlers({
@@ -236,6 +243,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       'deliveryos.changeRequest.open',
       (args?: { crEntryId?: string }) => openChangeRequestPanel(context, host, args),
     ),
+    vscode.commands.registerCommand(
+      'deliveryos.bug.open',
+      (args?: { bugEntryId?: string }) => openBugPanel(context, host, args),
+    ),
     vscode.window.registerWebviewPanelSerializer(
       HELLO_VIEW_TYPE,
       helloPanelSerializer(context, host),
@@ -267,6 +278,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.window.registerWebviewPanelSerializer(
       CHANGE_REQUEST_VIEW_TYPE,
       changeRequestPanelSerializer(context, host),
+    ),
+    vscode.window.registerWebviewPanelSerializer(
+      BUG_VIEW_TYPE,
+      bugPanelSerializer(context, host),
     ),
   );
 
