@@ -271,10 +271,12 @@ export class HostMessenger {
     const broadcastStateChange = (
       rawIdea: RawIdea | null,
       discovery: DiscoveryRecord | null,
+      interview: import('@deliveryos/contracts').InterviewRecord | null,
     ): void => {
       this.messenger.sendNotification(DiscoverStateChanged, BROADCAST, {
         rawIdea,
         discovery,
+        interview,
       });
     };
 
@@ -288,6 +290,7 @@ export class HostMessenger {
             projectTitle: '',
             rawIdea: null,
             discovery: null,
+            interview: null,
             questions: DISCOVERY_QUESTIONS_MVP,
             mode,
           };
@@ -298,6 +301,7 @@ export class HostMessenger {
             projectTitle: active.name,
             rawIdea: null,
             discovery: null,
+            interview: null,
             questions: DISCOVERY_QUESTIONS_MVP,
             mode,
           };
@@ -306,6 +310,7 @@ export class HostMessenger {
           projectTitle: entry.title,
           rawIdea: entry.payload.rawIdea,
           discovery: entry.payload.discovery,
+          interview: entry.payload.interview ?? null,
           questions: DISCOVERY_QUESTIONS_MVP,
           mode,
         };
@@ -322,7 +327,7 @@ export class HostMessenger {
         payload: { rawIdea } as Partial<IntentPayload>,
         body: params.body,
       });
-      broadcastStateChange(updated.payload.rawIdea, updated.payload.discovery);
+      broadcastStateChange(updated.payload.rawIdea, updated.payload.discovery, updated.payload.interview ?? null);
       return { rawIdea: updated.payload.rawIdea };
     });
 
@@ -371,7 +376,7 @@ export class HostMessenger {
       const updated = await memoryStore.update<'intent'>(intent.id, {
         payload: { discovery } as Partial<IntentPayload>,
       });
-      broadcastStateChange(updated.payload.rawIdea, updated.payload.discovery);
+      broadcastStateChange(updated.payload.rawIdea, updated.payload.discovery, updated.payload.interview ?? null);
       return { discovery: updated.payload.discovery as DiscoveryRecord };
     });
 
