@@ -126,6 +126,11 @@
         "category": "DeliveryOS"
       },
       {
+        "command": "deliveryos.bug.open",
+        "title": "DeliveryOS: Log Bug",
+        "category": "DeliveryOS"
+      },
+      {
         "command": "deliveryos.requirements.runTestDesigner",
         "title": "DeliveryOS: Run Test Designer",
         "category": "DeliveryOS"

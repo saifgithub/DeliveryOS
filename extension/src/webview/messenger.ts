@@ -42,6 +42,12 @@ import {
   ChangeRequestLoad,
   ChangeRequestPasteApply,
   type ChangeRequest,
+  BugBootstrap,
+  BugList,
+  BugLoad,
+  BugLog,
+  BugUpdate,
+  type Bug,
   RequirementsChanged,
   RequirementsDelete,
   RequirementsFilter,
@@ -110,7 +116,8 @@ import { parsePrdMarkdown, renderPrdMarkdown } from '../prd/sectionSchema';
 import type { IProjectRegistry } from '../projectRegistry';
 import { buildChangeRequestPrompt } from '../requirements/changeRequestPrompt';
 import { parseChangeRequest } from '../requirements/changeRequestParser';
-import type { ChangeRequestRecord } from '../memory/MemoryStore';
+import type { ChangeRequestRecord, BugRecord } from '../memory/MemoryStore';
+import { regenerateDefectList } from '../iteration/defectListWriter';
 import { buildDecomposePrompt } from '../requirements/decompositionPrompt';
 import { parseDecomposed } from '../requirements/parser';
 import {
@@ -146,6 +153,7 @@ import { buildTestDesignerPrompt } from '../specialists/testDesigner/promptBuild
 import { parseTestDesignerResult } from '../specialists/testDesigner/resultParser';
 import { consumePendingBriefRequest } from './briefComposerPanel';
 import { consumePendingCrEntryId } from './changeRequestPanel';
+import { consumePendingBugEntryId } from './bugPanel';
 import { consumePendingDiscoverMode } from './discoverPanel';
 import { consumePendingTestDesignerRequirement } from './testDesignerPanel';
 
@@ -201,6 +209,17 @@ export interface ChangeRequestDeps {
   readonly memoryStore: MemoryStore;
   /** Callback the host injects so handlers can open the CR panel. */
   readonly openChangeRequestPanel: (args?: { crEntryId?: string }) => Promise<void>;
+}
+
+export interface BugDeps {
+  readonly registry: IProjectRegistry;
+  readonly memoryStore: MemoryStore;
+  /**
+   * Workspace root used to regenerate `.deliveryos/DEFECT_LIST.md` after every
+   * bug mutation. Absent in the in-memory fallback (no workspace open), in
+   * which case the aggregate markdown is simply not written.
+   */
+  readonly workspace?: vscode.Uri;
 }
 
 const LAST_USED_PROFILE_KEY = 'deliveryos.profiles.lastUsed';
@@ -1375,6 +1394,103 @@ export class HostMessenger {
         deleted: deletedUserIds.length,
         warnings: parsed.warnings,
       };
+    });
+  }
+
+  registerBugHandlers(deps: BugDeps): void {
+    const { registry, memoryStore, workspace } = deps;
+
+    const toBug = (record: BugRecord): Bug => {
+      const bug: Bug = {
+        entryId: record.entryId,
+        id: record.payload.id,
+        description: record.payload.description,
+        severity: record.payload.severity,
+        status: record.payload.status,
+        createdAt: record.createdAt,
+      };
+      if (record.payload.area !== undefined) (bug as { area?: string }).area = record.payload.area;
+      if (record.payload.discoveredIn !== undefined) (bug as { discoveredIn?: string }).discoveredIn = record.payload.discoveredIn;
+      if (record.payload.targetRequirementId !== undefined) (bug as { targetRequirementId?: string }).targetRequirementId = record.payload.targetRequirementId;
+      if (record.payload.fixResultId !== undefined) (bug as { fixResultId?: string }).fixResultId = record.payload.fixResultId;
+      if (record.payload.assignedAt !== undefined) (bug as { assignedAt?: number }).assignedAt = record.payload.assignedAt;
+      if (record.payload.fixedAt !== undefined) (bug as { fixedAt?: number }).fixedAt = record.payload.fixedAt;
+      if (record.payload.verifiedAt !== undefined) (bug as { verifiedAt?: number }).verifiedAt = record.payload.verifiedAt;
+      if (record.payload.deferredReason !== undefined) (bug as { deferredReason?: string }).deferredReason = record.payload.deferredReason;
+      if (record.payload.notes !== undefined) (bug as { notes?: string }).notes = record.payload.notes;
+      return bug;
+    };
+
+    // Resolve the active project (intent) id — the same id bugs derive from.
+    const activeProjectId = (): string | null => registry.getActive()?.id ?? null;
+
+    // Keep `.deliveryos/DEFECT_LIST.md` current after every mutation.
+    const regenerate = async (projectId: string): Promise<void> => {
+      if (!workspace) return;
+      await regenerateDefectList(workspace, memoryStore, projectId);
+    };
+
+    this.messenger.onRequest(BugBootstrap, async () => {
+      // Bug entry id is consumed for parity with CR; the panel lists bugs.
+      consumePendingBugEntryId();
+      return { ok: true as const, projectId: activeProjectId() };
+    });
+
+    this.messenger.onRequest(BugList, async (params) => {
+      const projectId = params.projectId || activeProjectId();
+      if (!projectId) return { ok: false as const, reason: 'no-project' };
+      const records = await memoryStore.listBugs(projectId);
+      return { ok: true as const, bugs: records.map(toBug) };
+    });
+
+    this.messenger.onRequest(BugLoad, async (params) => {
+      const record = await memoryStore.loadBug(params.entryId);
+      if (!record) return { ok: false as const, reason: `No bug entry ${params.entryId}` };
+      return { ok: true as const, bug: toBug(record) };
+    });
+
+    this.messenger.onRequest(BugLog, async (params) => {
+      const projectId = activeProjectId();
+      if (!projectId) return { ok: false as const, reason: 'No active project.' };
+      if (!params.description.trim()) {
+        return { ok: false as const, reason: 'Bug description is required.' };
+      }
+      const record = await memoryStore.createBug(projectId, {
+        description: params.description,
+        severity: params.severity,
+        ...(params.area ? { area: params.area } : {}),
+        ...(params.discoveredIn ? { discoveredIn: params.discoveredIn } : {}),
+        ...(params.targetRequirementId ? { targetRequirementId: params.targetRequirementId } : {}),
+        ...(params.notes ? { notes: params.notes } : {}),
+      });
+      await regenerate(projectId);
+      return { ok: true as const, bugEntryId: record.entryId, bugId: record.payload.id };
+    });
+
+    this.messenger.onRequest(BugUpdate, async (params) => {
+      const existing = await memoryStore.loadBug(params.entryId);
+      if (!existing) return { ok: false as const, reason: `No bug entry ${params.entryId}` };
+      const patch: Partial<{
+        status: Bug['status'];
+        severity: Bug['severity'];
+        area: string;
+        targetRequirementId: string;
+        deferredReason: string;
+        notes: string;
+      }> = {};
+      if (params.status !== undefined) patch.status = params.status;
+      if (params.severity !== undefined) patch.severity = params.severity;
+      if (params.area !== undefined) patch.area = params.area;
+      if (params.targetRequirementId !== undefined) patch.targetRequirementId = params.targetRequirementId;
+      if (params.deferredReason !== undefined) patch.deferredReason = params.deferredReason;
+      if (params.notes !== undefined) patch.notes = params.notes;
+      const record = await memoryStore.updateBug(params.entryId, patch);
+      if (params.targetRequirementId) {
+        await memoryStore.linkBugToRequirement(params.entryId, params.targetRequirementId);
+      }
+      const projectId = activeProjectId();
+      if (projectId) await regenerate(projectId);
+      return { ok: true as const, bug: toBug(record) };
     });
   }
 

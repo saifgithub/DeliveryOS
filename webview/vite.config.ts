@@ -26,6 +26,7 @@ export default defineConfig({
         'diff-results': resolve(__dirname, 'src/panels/diff-results/index.html'),
         'verification': resolve(__dirname, 'src/panels/verification/index.html'),
         'change-request': resolve(__dirname, 'src/panels/change-request/index.html'),
+        bug: resolve(__dirname, 'src/panels/bug/index.html'),
       },
       output: {
         entryFileNames: 'assets/[name]-[hash].js',
