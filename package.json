@@ -13,8 +13,9 @@
     "build:contracts": "npm -w @deliveryos/contracts run build",
     "build:webview": "npm -w @deliveryos/webview run build",
     "build:extension": "npm -w deliveryos run build",
-    "clean": "rimraf 'extension/dist' 'extension/*.vsix' 'contracts/dist' 'webview/dist'",
-    "package": "npm run build && npm -w deliveryos run package"
+    "clean": "rimraf 'extension/dist' 'extension/*.vsix' 'contracts/dist' 'webview/dist' 'contracts/tsconfig.tsbuildinfo'",
+    "package": "npm run build && npm -w deliveryos run package",
+    "gate": "node scripts/gate.mjs"
   },
   "devDependencies": {
     "rimraf": "^5.0.0",

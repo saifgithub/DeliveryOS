@@ -1,0 +1,39 @@
+name: Gate
+
+# Non-agentic build gate (MABP §16 self-build instance). Runs the deliverable
+# end to end from a clean state and blocks merge on red. The exit code is the
+# verdict — no agent narrates it green. Make this a required check in branch
+# protection so a red gate cannot merge.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run gate (clean -> build -> typecheck -> test -> package)
+        run: npm run gate
+
+      - name: Upload gate result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-result
+          path: docs/build/gate/last-run.json
+          if-no-files-found: ignore

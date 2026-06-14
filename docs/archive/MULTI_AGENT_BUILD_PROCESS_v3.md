@@ -1,6 +1,6 @@
 # Multi-Agent Build Process
 
-> **Updated:** 2026-06-14 (v4) — Section 16: autonomous, independently-authored acceptance gates (verification by mechanism over fabricable evidence; QA-authored executable checks; verifier triangulation; minimized human dependency). Previous version archived at `docs/archive/MULTI_AGENT_BUILD_PROCESS_v3.md`.
+> **Updated:** 2026-05-30 (v3) — evidence manifest and adversarial QA (B-016); project-agnostic generalization. Previous version archived at `docs/MULTI_AGENT_BUILD_PROCESS_v2.md`.
 
 How an AI-assisted project ships code through coordinated agents.
 
@@ -34,7 +34,7 @@ A single human can think hard about direction, or type out 800 lines of TypeScri
 
 Trade-off: agents will sometimes get things wrong. The process has multiple verification cycles to catch that before it ships. The cycle cost is much less than the stakeholder typing the code.
 
-The stakeholder expects to spend very little time. With §16's autonomous acceptance gate, a convergent chunk needs **no** per-chunk touchpoint; a human is pulled in only on divergence, escalation, or a sampled audit (§16.4).
+The stakeholder expects to spend very little time. The process is designed so the stakeholder has exactly one keyboard touchpoint per chunk: the verdict.
 
 ---
 
@@ -42,8 +42,8 @@ The stakeholder expects to spend very little time. With §16's autonomous accept
 
 | Role | Who | Does | Doesn't |
 | --- | --- | --- | --- |
-| **Stakeholder** | Human stakeholder | Authors/approves intent (the spec), adjudicates flagged divergences and escalations, runs the sample audit (§16.4) | Per-chunk go/no-go on convergent chunks (auto-advances), draft invocations, dispatch toil, write code, run tests |
-| **Architect** | sustained session — tier selected per task (see § 15) | Picks the next chunk from `BUILD_STATUS.md`; selects starting tier for the session and each sub-agent; runs and **interprets** the pre-fire factual audit; writes minimum-necessary builder and QA invocations (under 80 lines each) with a design quality stance; spawns sub-agents via the Agent tool; reads the gate result and verifier convergence (§16.4); approves or rejects structural trade-offs and registers approved shortcuts as `Structural debt:` in `BUILD_STATUS.md`; runs a cross-chunk cohesion review every four to five chunks; auto-syncs `BUILD_STATUS.md` on convergent green and runs the sample audit; curates memory | Write extension code, run the test suite, edit code files, share state with sub-agents |
+| **Stakeholder** | Human stakeholder | Sets direction, approves trade-offs, final go/no-go authority, BLOCKER triage when the architect escalates | Draft invocations, dispatch toil, write code, run tests |
+| **Architect** | sustained session — tier selected per task (see § 15) | Picks the next chunk from `BUILD_STATUS.md`; selects starting tier for the session and each sub-agent; runs and **interprets** the pre-fire factual audit; writes minimum-necessary builder and QA invocations (under 80 lines each) with a design quality stance; spawns sub-agents via the Agent tool; reads both reports side by side; approves or rejects structural trade-offs and registers approved shortcuts as `Structural debt:` in `BUILD_STATUS.md`; runs a cross-chunk cohesion review every four to five chunks; recommends a verdict; syncs `BUILD_STATUS.md` on approve; curates memory | Write extension code, run the test suite, edit code files, share state with sub-agents |
 | **Builder / QA** | fresh sub-agent per chunk fire (Agent tool, `subagent_type: general-purpose`) | Re-runs the pre-fire audit (pastes output verbatim), writes TypeScript code and tests, runs the unit suite and the extension smoke in one session, files a report; OR writes a BLOCKER file and exits if any ambiguity surfaces | Use `AskUserQuestion` (sub-agents do not have it), share memory across fires, edit architect-owned docs, refactor outside the chunk scope |
 
 Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`) and `docs/build/BUILD_STATUS.md` are the only durable state.
@@ -67,7 +67,7 @@ Architect (sustained Claude Code session)
     └── QA (sub-agent, fresh per chunk)
 ```
 
-Stakeholder keyboard touchpoints per chunk: ~0 on a convergent chunk (auto-advance, §16.4); a human is pulled in only on divergence, escalation, or a sampled audit. Everything else, audit, dispatch, report review, invocation drafting, code, tests, status sync, is the architect or its sub-agents.
+Stakeholder keyboard touchpoints per chunk: 1 (the verdict at step 11 of the build cycle). Everything else, audit, dispatch, report review, invocation drafting, code, tests, status sync, is the architect or its sub-agents.
 
 ---
 
@@ -115,18 +115,17 @@ docs/build/
 3. **Architect** runs the pre-fire factual audit (VS Code API checks, file existence checks, prior-chunk-output checks, chunk-spec line-reference verification) and **interprets** each result: one sentence per check stating what was expected, what was found, and whether it represents drift requiring action. Pasting output without interpretation is not a completed audit. Spec drift means the architect fixes the chunk spec, then re-runs the audit.
 4. **Architect** writes the builder invocation inline following four rules: (1) **Under 80 lines** — do not paste the chunk spec verbatim; instead pre-resolve the three to five key design decisions, state scope constraints, and direct the builder to read the spec file. (2) **Open with a design quality stance**: "Build clean first. If the clean structure and the fast structure diverge, build the clean one. Structural shortcuts must be declared as blocking hot spots with the clean version described." (3) **Done criteria as a numbered checklist**, 10 lines maximum. (4) **State the builder's starting tier** (Economy / Standard / Premium — see § 15) and the escalation ladder that applies.
 5. **Architect** spawns the builder via the Agent tool (`subagent_type: general-purpose`, prompt = step 4 output).
-6. **Builder** re-runs the pre-fire audit (pastes output verbatim) → writes TypeScript code and tests in `src/test/chunk-NN-<slug>.test.ts` → runs the unit suite AND the extension smoke in one session → iterates on builder-owned errors (3-attempt budget) OR writes a BLOCKER file and exits (any unresolved ambiguity, contradiction, or missing dependency) → writes `builder_reports/chunk_NN_<slug>.md` with `## For QA — hot spots` filled before closing. The builder's own tests support its dev loop; the **binding acceptance checks are authored independently by the verifier (§16.2–16.3), and the builder cannot edit them** — the builder makes them pass.
-7. **Architect** reads the builder report. BLOCKER means resolve the spec issue and return to step 1 for a re-fire. Clean means continue. After QA returns (step 10), the architect's spot-check derives its rows from the **chunk spec** — not the builder or QA manifest; the implementer must not set the menu the auditor orders from — and re-runs them independently as a sample (§16.4). If any spot-check fails, the verdict is rejected and the chunk re-fires with a note on which rows failed.
+6. **Builder** re-runs the pre-fire audit (pastes output verbatim) → writes TypeScript code and tests in `src/test/chunk-NN-<slug>.test.ts` → runs the unit suite AND the extension smoke in one session → iterates on builder-owned errors (3-attempt budget) OR writes a BLOCKER file and exits (any unresolved ambiguity, contradiction, or missing dependency) → writes `builder_reports/chunk_NN_<slug>.md` with `## For QA — hot spots` filled before closing.
+7. **Architect** reads the builder report. BLOCKER means resolve the spec issue and return to step 1 for a re-fire. Clean means continue. After QA returns (step 10), before recommending a verdict, the architect spot-checks 2–3 rows from the QA evidence manifest by re-running those commands independently. If any spot-check fails, the QA verdict is rejected and QA re-fires with a note on which rows failed.
 8. **Architect** writes the QA invocation inline (hot-spots preamble with severity + primary-source verification commands + spot-check directives such as "break the impl, confirm the test fails, revert").
 9. **Architect** spawns QA via the Agent tool (`subagent_type: general-purpose`, prompt = step 8 output).
-10. **QA** re-runs every "done" criterion against primary sources (actual editor behaviour, not just exit codes), audits test quality, audits report completeness, reproduces each hot spot, writes `qa_reports/chunk_NN_<slug>_qa.md`, and ends with the mandatory verdict block (§8 Cycle 5).
-11. **Verdict — auto-advancing (§16.4).** The non-agentic gate runs the verifiers' acceptance checks against the impl. The outcome decides, not a narrative:
-    - **Auto-advance** (verifiers converged AND gate green) → architect syncs `BUILD_STATUS.md` (chunk status flip, chunk N entry appended with builder report path, verifier checks + gate result, key facts, next-chunk pointer refreshed) and confirms the chunk's commit landed. **No human approval required.**
-    - **Divergence** (a verifier check fails the impl, or verifiers disagree → spec ambiguity) → architect drafts `fix_prompts/chunk_NN_<slug>_v<K>.md` (60 lines or fewer) and loops back to step 1, or files a spec BLOCKER. No status sync; chunk N is still in flight.
+10. **QA** re-runs every "done" criterion against primary sources (actual editor behaviour, not just exit codes), audits test quality, audits report completeness, reproduces each hot spot, writes `qa_reports/chunk_NN_<slug>_qa.md`, and ends with the mandatory 4-line verdict block.
+11. **Architect** reads both reports side by side and recommends a verdict to the **stakeholder**, who decides:
+    - **Approve** → architect syncs `BUILD_STATUS.md` (chunk status flip, chunk N entry appended with builder report path, QA report path, verdict, key facts, next-chunk pointer refreshed) and confirms the chunk's commit landed. The stakeholder's "approve" word is the sync command.
+    - **Revise** → architect drafts `fix_prompts/chunk_NN_<slug>_v<K>.md` (60 lines or fewer); loop back to step 1 with the fix prompt as the new spec. No status sync, chunk N is still in flight.
     - **Escalate** → architect uses `AskUserQuestion` to surface options: keep iterating / redesign the chunk / re-plan / park.
-    - **Sample audit** → a random fraction of auto-advanced chunks gets a human spot-check — the scaling backstop against verifiers converging on a shared wrong reading.
 
-Human touchpoints in the cycle: ~0 on a convergent chunk (auto-advance); a human is pulled in only on divergence, escalation, or a sampled audit (§16.4).
+Stakeholder keyboard touchpoints in the cycle: just step 11. One verdict word triggers everything downstream.
 
 **Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; `/sm-handover` cleans up the `agent-*` worktrees.
 
@@ -219,9 +218,7 @@ Economy failure is never retried at the same tier — it signals the task needs 
 
 - **Fires as a separate sub-agent, fresh session, after the builder report is closed.**
 - **Catches:** narrative mismatch, builders can paste stale output, paraphrase, or omit failures.
-- **Rule:** QA is the **independent verifier (§16)**. It works in passes in this order and **may not read the builder's code, tests, or report until Pass 0 is filed** — blindness extended to the authoring step (§16.3 G1):
-
-  **Pass 0 — Author the acceptance checks (blind, §16.2–16.3):** from the spec + the delivery-surface contract alone, QA writes one executable check per criterion (exit 0/1, bound to a delivery surface, asserting observable output not internals). These are the binding gate; the builder cannot edit them. If the spec does not permit writing a check without reading the impl, QA STOPs and files a BLOCKER — the spec is not ready (G3). Under triangulation (§16.4), ≥2 verifiers do this independently.
+- **Rule:** QA works in two passes in this order:
 
   **Pass 1 — Independent verification (before reading the builder's hot spots):** QA's default stance is **FAILED until evidence proves otherwise**. QA does not read the builder report in Pass 1. QA reproduces every "done" criterion against primary sources (actual editor behaviour, the actual installed extension, not just exit codes). QA spot-checks test quality (temporarily break the implementation, confirm the test fails, revert). QA runs the structural quality sweep (see below). QA records its own findings in its own evidence manifest (same table format as the builder manifest — one row per criterion, verbatim command output).
 
@@ -237,23 +234,22 @@ Economy failure is never retried at the same tier — it signals the task needs 
 
   Schema and constraint findings are blocking severity by default. Any structural finding not declared by the builder in hot spots is a high-signal independent finding.
 - **Isolation sweep:** confirm the chunk's tests did not write into the developer's real workspace or project memory store. Tests must use a temp workspace or an in-memory store. Any real-state write is a blocking finding.
-- **Mandatory verdict block** ends QA's turn:
+- **Mandatory 6-line verdict block** ends QA's turn:
 
   ```text
   Chunk: NN
   QA report: <abs path>
-  Acceptance checks authored (Pass 0): <N — one per criterion, paths>
-  Gate: green | red   ·   Convergence: converged | divergent vs <verifier id> | n/a (single verifier)
-  Verdict: auto-advance | divergence | escalate   (gate + convergence decide, not narrative)
   Builder report reviewed: <abs path> (v<K>)
-  Independent findings (not in builder hot spots): <list or 'none'>
+  Verdict: approve | revise | escalate
+  Evidence manifest: <N rows — every done criterion covered>
+  QA-only findings (not in builder hot spots): <list or 'none'>
   ```
 
-  No narrative. The architect opens both files. A verdict block missing the Gate or Acceptance-checks line is invalid.
+  No narrative. The architect opens both files. A verdict block missing the evidence manifest line is invalid.
 
 ### Cycle 6 — Revision loop with depth cap (after the QA verdict)
 
-- **Fires when the verdict is `divergence` (revise) or `escalate`.**
+- **Fires when the verdict is `revise` or `escalate`.**
 - **Catches:** patches-without-thinking, multiple iterations accumulating without anyone noticing the chunk spec is wrong.
 - **Rule:** the architect writes `fix_prompts/chunk_NN_<slug>_v<K>.md` (60 lines or fewer). Every revision report re-runs ALL of the chunk's criteria (a regression gate). At `_v4`, the architect stops and escalates to the stakeholder via `AskUserQuestion`: keep iterating / redesign the chunk / re-plan / park.
 
@@ -290,10 +286,10 @@ The architect is the only sustained-context AI session. Its responsibilities per
 
 - **Chunk selection and pre-read.** Picks the next chunk in dependency order from `BUILD_STATUS.md` and `READY.md`. Re-reads the chunk spec plus its cited PRD sections and the builder reports of dependency chunks.
 - **Pre-fire audit ownership.** Before drafting an invocation, the architect runs the audit against real state (VS Code API surface, file system, line refs, prior-chunk outputs). Drift means the architect edits the chunk spec to match reality, then re-audits. The builder still runs the audit again in their session; two passes are cheaper than one wrong premise.
-- **Invocation drafting.** Builder invocations are written inline: under 80 lines, no chunk spec verbatim paste (direct the builder to read the spec file), design quality stance in the opening paragraph, key design decisions pre-resolved, done criteria as a numbered checklist (10 lines max), starting tier and escalation ladder stated. QA (verifier) invocations carry the **§16.3 verifier gates (G1–G4) verbatim** and the Pass-0 blind-authoring directive, plus the structural quality sweep; under triangulation the architect fires ≥2 verifiers with diversified lens/tier (§16.4).
+- **Invocation drafting.** Builder invocations are written inline: under 80 lines, no chunk spec verbatim paste (direct the builder to read the spec file), design quality stance in the opening paragraph, key design decisions pre-resolved, done criteria as a numbered checklist (10 lines max), starting tier and escalation ladder stated. QA invocations: hot-spots preamble with severity + primary-source verification commands + structural quality sweep directive.
 - **Sub-agent orchestration.** Spawns builder and QA via `Agent(subagent_type: general-purpose, ...)`. Reads the report file directly when the sub-agent returns; the chat summary is not authoritative.
 - **BLOCKER resolution.** Reads `blockers/chunk_NN_*.md`, edits the chunk spec or pre-reads, re-checks cohesion with neighbouring chunks if the interface changed, re-fires.
-- **Verdict and sync (auto-advancing, §16.4).** The gate + verifier convergence decide, not the architect's recommendation. On auto-advance the architect immediately syncs `BUILD_STATUS.md` and confirms the commit landed — no human approval solicited. Divergence loops to a fix prompt or BLOCKER; escalation goes to the stakeholder via `AskUserQuestion`. The architect also runs the **sample audit** on a random fraction of auto-advanced chunks (the backstop against correlated verifier error).
+- **Verdict and sync.** Recommends a verdict to the stakeholder. On approve, the architect immediately syncs `BUILD_STATUS.md` and confirms the chunk's commit landed.
 - **Cross-chunk cohesion review.** Every four to five chunks, before firing the next builder, the architect greps for the three most common patterns introduced in recent chunks (naming conventions, error-handling shapes, data-access patterns) and confirms they are consistent. If drift is found, a targeted fix prompt is raised before continuing. The review is logged in `BUILD_STATUS.md` as a `Cohesion check:` entry.
 - **Structural debt register.** The architect is the only agent who can approve a structural shortcut. When approving a chunk whose hot spots include a structural shortcut, the `BUILD_STATUS.md` entry for that chunk must include a `Structural debt:` field: what was cut, what the clean version looks like, and which future chunk should address it. Debt not registered does not exist as far as future architects are concerned.
 - **Tier selection.** The architect selects the session tier and each sub-agent's starting tier based on task complexity (see § 15). The default for routine build sessions is Standard. Economy is for mechanical tasks only. Premium is for design work, BLOCKER resolution, and the Advisor role.
@@ -318,13 +314,10 @@ What the architect does NOT do: write extension code, run the test suite, edit c
 | A chunk spec turns out wrong only when its dependents are built | BLOCKER + architect re-checks cohesion before re-fire |
 | Test writes into the developer's real workspace or memory store | Cycle 5 (isolation sweep) |
 | Architect-owned doc silently edited by a sub-agent | Cycle 5 (scope audit) |
-| Builder fabricates completion (claims criterion passes without executing it) | §16 independently-authored executable checks the builder cannot edit + non-agentic gate (exit code, not narration); Cycle 2 manifest + Cycle 5 + Step 7 sampling |
-| QA confirms fabricated completion (anchors on builder prose, skips re-verification) | §16.3 blind authoring (G1) + §16.4 triangulation; Cycle 5 adversarial default — FAILED until proven |
-| Builder authors a weak/trivial check that passes by construction (self-approval via the test) | §16.2 the pass condition is authored by an independent verifier, not the implementer; §16.3 G2 (surfaces, not internals) |
-| An agent issues a confident verdict from a partial view of reality | Non-agentic gate (mechanical exit code) + §16.4 verifier triangulation + human sample audit |
-| Verifiers converge on a shared wrong reading (correlated error) | §16.4 verifier diversity (lens/tier) + random human sample audit of auto-advanced chunks |
+| Builder fabricates completion (claims criterion passes without executing it) | Cycle 2 (evidence manifest requires verbatim output) + Cycle 5 (QA independent manifest) + Step 7 architect spot-check |
+| QA confirms fabricated completion (anchors on builder prose, skips re-verification) | Cycle 5 (adversarial default — FAILED until proven) + Step 7 architect spot-check |
 
-**The process cannot catch:** the architect designing the wrong chunk (correct execution of an incorrect spec); a bug class none of the tests detect (tests prove the chunk spec is met, not that the spec is right); cross-chunk interactions that emerge only when several ship together. The cohesion validation in Phase A and a periodic review of `BUILD_STATUS.md` surface these, not the per-chunk cycles. §16.4 narrows the residual — verifier-vs-verifier divergence surfaces spec ambiguity for free, and the sample audit catches a fraction of shared-wrong-reading cases — but cannot close it: a spec that is confidently wrong, read the same wrong way by every verifier, still ships. That irreducible "is the intent right?" judgement is the human floor (§16.4).
+**The process cannot catch:** the architect designing the wrong chunk (correct execution of an incorrect spec); a bug class none of the tests detect (tests prove the chunk spec is met, not that the spec is right); cross-chunk interactions that emerge only when several ship together. The cohesion validation in Phase A and a periodic review of `BUILD_STATUS.md` surface these, not the per-chunk cycles.
 
 ---
 
@@ -375,10 +368,10 @@ Stakeholder triggers (the architect interprets them):
 # → architect drafts the invocation, runs the audit, spawns the builder via the Agent tool,
 #   reads back builder_reports/chunk_03_<slug>.md
 
-# Dispatch verifiers (≥2, blind — they author the acceptance checks, §16.3)
+# Dispatch QA (after the builder report lands)
 "QA chunk 3"
-# → architect drafts verifier invocations (G1–G4 + Pass-0 authoring) with diversified
-#   lens/tier, spawns them, runs the gate, reads back qa_reports/chunk_03_<slug>_qa.md
+# → architect drafts the QA invocation with hot-spots and severity, spawns QA,
+#   reads back qa_reports/chunk_03_<slug>_qa.md
 
 # Dispatch a revision (assumes fix_prompts/chunk_03_<slug>_v2.md exists)
 "chunk 3 v2"
@@ -388,9 +381,10 @@ Stakeholder triggers (the architect interprets them):
 "read again"
 # → architect re-reads the active chunk spec + PRD + BUILD_STATUS.md end to end
 
-# Sign off — usually automatic: convergent verifiers + green gate auto-advance (§16.4),
-#   architect syncs BUILD_STATUS.md and confirms the commit with no human word.
-# "approve" is only needed to override a divergence- or sample-flagged chunk.
+# Sign off (after both reports land)
+"approve"
+# → architect syncs BUILD_STATUS.md (chunk status flip + chunk entry + next-chunk pointer)
+#   and confirms the chunk commit landed
 
 # Ask for a revision
 "revise"
@@ -470,67 +464,7 @@ Economy failure is never retried at the same tier — it signals a capability mi
 
 ---
 
-## 16. Definition of done and autonomous acceptance gates
-
-> **Normative. Overrides the generic examples earlier where they conflict.** The cycles in §8 are prose an agent reads and is asked to honour — a _fabricable_ layer. Section 16 moves verification onto un-fabricable ground: executable checks, authored by someone other than the implementer, run by a non-agentic gate. The blocks below are paste-ready — they go into invocations verbatim.
-
-**Why (one paragraph; the rest is rules).** The three nested defences — evidence manifest (Cycle 2), adversarial QA (Cycle 5), architect spot-check (Step 7) — can fail at once because they are the same mechanism three times: an LLM reading fabricable text and asked to be sceptical. The manifest is just text; `npm test → 447 passing` costs the same to fabricate as to earn. So "done" cannot mean "the offline tests the builder wrote passed." It means the deliverable runs end to end at realistic inputs across every delivery surface, proven by an **independently authored** executable check read by a machine, not narrated by an agent.
-
-### 16.1 Definition of done (NOT done until ALL hold)
-
-1. It RUNS end to end at realistic inputs, not at one lucky fixture.
-2. Every **delivery surface** (16.5) is EXECUTED and its observable output captured — not assumed.
-3. Every acceptance criterion is met, OR its deviation is recorded and approved. No silent substitution of a simpler mechanism.
-4. For each criterion there exists an **executable acceptance check** (exit 0/1) **authored by an independent verifier, not the implementer**, that the implementer cannot edit.
-5. The non-agentic gate is green (all checks pass) and, where ≥2 verifiers authored checks, they converged (16.4).
-6. Zero BLOCKER, zero MAJOR on the deliverable.
-
-### 16.2 The acceptance-check contract (generic, per delivery)
-
-Surfaces are not known in advance, so the gate is not a script written once — it is a contract every delivery satisfies _during the work_:
-
-- Each acceptance criterion → one executable check that **exits 0 on pass, non-zero on fail**, bound to a named delivery surface.
-- Checks are **authored from the spec by an independent verifier** (the implementer makes them pass; the implementer never writes them) and live where the implementer cannot edit them.
-- A **non-agentic runner** (CI / a gate script) executes the checks and emits an exit code + per-check results. Green means "the independently-authored checks pass" — necessary, never sufficient for "correct."
-- The one residual that stays human — _do the checks faithfully encode intent?_ — is concentrated onto a reviewable artifact (the checks) and onto divergences (16.4), not diffused across a chain of trust.
-
-### 16.3 Verifier gates — paste verbatim into every verifier invocation
-
-```text
-You author executable acceptance checks from the spec. You are NOT the implementer.
-G1 BLIND. Author from the spec + the delivery-surface contract ONLY. Do not read the
-   implementer's code or tests until your checks are written and filed.
-G2 SURFACES, NOT INTERNALS. Assert the observable output of each delivery surface (response
-   envelope; persisted artifact reloaded; rendered/activation behaviour). Never private structure.
-G3 TESTABLE-FROM-SPEC. Every external symbol you call is a verified anchor (name, file:line,
-   signature). If the spec does not let you write the check without reading the impl, STOP and
-   file a BLOCKER — the spec is not ready.
-G4 DIVERGENCE IS SIGNAL. A check that fails the impl, or a disagreement with another verifier,
-   is a finding to surface — never relaxed to make it pass.
-```
-
-### 16.4 Triangulation and auto-advance (minimise human dependency)
-
-- **N independent verifiers** (default 2–3) author checks from the spec, blind to the impl and to each other; diversify lens/tier to decorrelate. The gate runs the union against the impl.
-- **Auto-advance:** verifiers converge AND the gate is green → the chunk proceeds with **no human approval**.
-- **Escalate only divergence:** a verifier check fails the impl (verifier-vs-builder), or verifiers disagree on expected behaviour (verifier-vs-verifier → spec ambiguity).
-- **Human floor (cannot reach zero):** author/approve the intent spec; adjudicate flagged divergences and BLOCKERs; run a random **sample audit** of auto-advanced chunks — the scaling backstop against verifiers converging on a shared wrong reading (correlated error). Per-chunk human approval drops from 1 to ~0.
-
-### 16.5 Delivery surfaces (this stack)
-
-| Abstract surface | DeliveryOS instantiation |
-| --- | --- |
-| Command / host handler | messenger host handler (`extension/src/webview/messenger.ts`), exercised via `@vscode/test-electron` |
-| UI view | webview panel behaviour, Vitest + Testing Library |
-| Persisted artifact | `memory_entries` write-then-reload round trip (temp / in-memory store) |
-| Activation | extension activates without throwing (`@vscode/test-electron`) |
-| Package | `vsce package` produces a loadable VSIX |
-
-A project on a different stack copies this table and fills its own column; the gates (16.1–16.4) do not change.
-
----
-
 **Created:** 2026-05-21.
-**Updated:** 2026-06-14 (v4 — autonomous, independently-authored acceptance gates; verification by mechanism over fabricable evidence; verifier triangulation; minimised human dependency). Prior: 2026-05-30 (v3 — B-016 evidence manifest and adversarial QA; project-agnostic generalization).
+**Updated:** 2026-05-30 (v3 — B-016 evidence manifest and adversarial QA; project-agnostic generalization).
 **Adapted from:** the AMI multi-agent build process (3-role canonical, 2026-04-29).
 **Phase A planning loop:** `docs/planning/claude-code-build-prompts.md`.

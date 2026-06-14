@@ -66,3 +66,6 @@ generated/
 # Generated copies for .vsix packaging (root LICENSE + README are canonical)
 /extension/LICENSE
 /extension/readme.md
+
+# Gate runtime artifact (the dir is tracked via .gitkeep; the result file is per-run)
+docs/build/gate/last-run.json
