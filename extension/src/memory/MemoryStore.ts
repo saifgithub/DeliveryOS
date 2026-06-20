@@ -8,6 +8,7 @@
 
 import * as vscode from 'vscode';
 import {
+  MEMORY_TYPES,
   type BugPayload,
   type BugSeverity,
   type ChangeRequestPayload,
@@ -42,11 +43,15 @@ import { generateMemoryId, parseMemoryIdType } from './ids';
 import {
   bodyPath,
   deleteBody,
+  parseBodyFile,
+  parseLinksFile,
   readBody,
   renderFrontmatter,
   writeBody,
+  type ParsedBodyFile,
 } from './markdown';
 import { runMigrations } from './migrations';
+import { memoryBodyDir, memoryLinksPath } from './paths';
 import { SqlJsHost } from './sqlJsHost';
 import type { MemoryEntryRow } from './types';
 
@@ -201,6 +206,22 @@ export interface BriefRecord {
   readonly updatedAt: number;
 }
 
+/** A single entry as exported for the markdown projection. */
+export interface ProjectionEntry {
+  readonly id: string;
+  readonly type: MemoryType;
+  readonly title: string;
+  readonly payload: unknown;
+  readonly createdAt: number;
+  readonly updatedAt: number;
+}
+
+/** The whole store, flattened for the markdown projection. */
+export interface ProjectionSnapshot {
+  readonly entries: readonly ProjectionEntry[];
+  readonly links: readonly MemoryLink[];
+}
+
 export class MemoryStore {
   private readonly _onDidChangeMemory = new vscode.EventEmitter<MemoryChangeEvent>();
   readonly onDidChangeMemory: vscode.Event<MemoryChangeEvent> = this._onDidChangeMemory.event;
@@ -258,6 +279,8 @@ export class MemoryStore {
       type: input.type,
       title: input.title,
       createdAt: now,
+      updatedAt: now,
+      payload: input.payload,
     }) + body;
     const uri = bodyPath(this.workspaceUri, input.type, id);
 
@@ -322,19 +345,23 @@ export class MemoryStore {
       : JSON.parse(row.payload_json);
 
     const uri = bodyPath(this.workspaceUri, row.type, row.id);
-    const writingBody = patch.body !== undefined;
-    const fullBody = writingBody
-      ? renderFrontmatter({
-          id: row.id,
-          type: row.type,
-          title: nextTitle,
-          createdAt: row.created_at,
-        }) + patch.body
-      : null;
 
-    // Snapshot the existing body file (if we're rewriting it) so we can
-    // restore on rollback. Cheap — these files are small.
-    const previousBody = writingBody ? await readBody(uri) : null;
+    // Always rewrite the body file: its frontmatter carries the lossless
+    // payload + updated_at, so a payload-only patch (e.g. a status change with
+    // no new body text) must still refresh the file. Preserve the existing
+    // prose body when the caller doesn't supply one.
+    const previousBody = await readBody(uri);
+    const existingBodyText = stripFrontmatter(previousBody ?? '');
+    const nextBodyText = patch.body ?? existingBodyText;
+    const fullBody =
+      renderFrontmatter({
+        id: row.id,
+        type: row.type,
+        title: nextTitle,
+        createdAt: row.created_at,
+        updatedAt: now,
+        payload: nextPayload,
+      }) + nextBodyText;
 
     this.host.db.exec('BEGIN');
     try {
@@ -342,14 +369,14 @@ export class MemoryStore {
         `UPDATE memory_entries SET title = ?, payload_json = ?, updated_at = ? WHERE id = ?`,
         [nextTitle, JSON.stringify(nextPayload), now, id],
       );
-      if (writingBody && fullBody !== null) {
-        await writeBody(uri, fullBody);
-      }
+      await writeBody(uri, fullBody);
       this.host.db.exec('COMMIT');
     } catch (err) {
       this.host.db.exec('ROLLBACK');
-      if (writingBody && previousBody !== null) {
+      if (previousBody !== null) {
         await writeBody(uri, previousBody);
+      } else {
+        await deleteBody(uri);
       }
       throw err;
     }
@@ -1411,6 +1438,148 @@ export class MemoryStore {
     } finally {
       stmt.free();
     }
+  }
+
+  // --- Projection (grep-able markdown mirror) ---------------------------
+
+  /**
+   * Read the entire store — every entry (with parsed payload) and every link.
+   * Powers the markdown projection in `projection.ts`: the read-only,
+   * driver-free interface the AI and other harnesses use instead of opening
+   * the SQLite file. Bodies are not included; they already live on disk.
+   */
+  async exportAll(): Promise<ProjectionSnapshot> {
+    const entries: ProjectionEntry[] = [];
+    const eStmt = this.host.db.prepare(
+      `SELECT id, type, title, payload_json, created_at, updated_at
+         FROM memory_entries
+        ORDER BY type ASC, created_at ASC`,
+    );
+    try {
+      while (eStmt.step()) {
+        const row = eStmt.getAsObject() as unknown as MemoryEntryRow;
+        entries.push({
+          id: row.id,
+          type: row.type,
+          title: row.title,
+          payload: JSON.parse(row.payload_json) as unknown,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        });
+      }
+    } finally {
+      eStmt.free();
+    }
+
+    const links: MemoryLink[] = [];
+    const lStmt = this.host.db.prepare(
+      `SELECT from_id, to_id, kind FROM memory_links ORDER BY from_id ASC, kind ASC, to_id ASC`,
+    );
+    try {
+      while (lStmt.step()) {
+        const row = lStmt.getAsObject() as unknown as {
+          from_id: string;
+          to_id: string;
+          kind: LinkKind;
+        };
+        links.push({ fromId: row.from_id, toId: row.to_id, kind: row.kind });
+      }
+    } finally {
+      lStmt.free();
+    }
+
+    return { entries, links };
+  }
+
+  /**
+   * Rebuild the entire SQLite index from the markdown on disk — entries (with
+   * their full payloads) from the `<type>/*.md` body files, links from the
+   * generated `LINKS.md` projection. Dangling links (an endpoint with no body
+   * file) are skipped. This is the "delete memory.sqlite and recover"
+   * capability: the body files are lossless, so the DB is disposable.
+   *
+   * Wipes and repopulates in a single transaction. Callers should regenerate
+   * the projection afterwards. Returns the counts written.
+   */
+  async rebuildFromMarkdown(): Promise<{ entries: number; links: number }> {
+    const parsedEntries: ParsedBodyFile[] = [];
+    for (const type of MEMORY_TYPES) {
+      const dir = memoryBodyDir(this.workspaceUri, type);
+      let names: Array<[string, number]>;
+      try {
+        names = await vscode.workspace.fs.readDirectory(dir);
+      } catch {
+        continue; // no entries of this type yet
+      }
+      for (const [name] of names) {
+        if (!name.endsWith('.md')) continue;
+        const content = await readBody(vscode.Uri.joinPath(dir, name));
+        if (!content) continue;
+        const parsed = parseBodyFile(content);
+        if (parsed && parsed.type === type) parsedEntries.push(parsed);
+      }
+    }
+
+    const linksContent = await readBody(memoryLinksPath(this.workspaceUri));
+    const linkRows = linksContent ? parseLinksFile(linksContent) : [];
+    const ids = new Set(parsedEntries.map((e) => e.id));
+
+    this.host.db.exec('BEGIN');
+    try {
+      this.host.db.run('DELETE FROM memory_links');
+      this.host.db.run('DELETE FROM memory_entries');
+      for (const e of parsedEntries) {
+        this.host.db.run(
+          `INSERT INTO memory_entries (id, type, title, payload_json, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [e.id, e.type, e.title, JSON.stringify(e.payload), e.createdAt, e.updatedAt],
+        );
+      }
+      let links = 0;
+      for (const l of linkRows) {
+        if (!ids.has(l.fromId) || !ids.has(l.toId)) continue;
+        this.host.db.run(
+          `INSERT OR IGNORE INTO memory_links (from_id, to_id, kind) VALUES (?, ?, ?)`,
+          [l.fromId, l.toId, l.kind],
+        );
+        links += 1;
+      }
+      this.host.db.exec('COMMIT');
+      await this.flushOrThrow();
+      return { entries: parsedEntries.length, links };
+    } catch (err) {
+      this.host.db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  /**
+   * Backfill body files that predate lossless frontmatter (no embedded
+   * `payload_json`). Rewrites each such file from the DB row so the markdown
+   * becomes a faithful, rebuildable mirror. Idempotent and cheap: files that
+   * already carry a payload are left untouched. Run once on open.
+   */
+  async reprojectBodies(): Promise<number> {
+    const { entries } = await this.exportAll();
+    let rewritten = 0;
+    for (const e of entries) {
+      const uri = bodyPath(this.workspaceUri, e.type, e.id);
+      const current = await readBody(uri);
+      if (current !== null && current.includes('\npayload_json:')) continue;
+      const body = stripFrontmatter(current ?? '');
+      const fullBody =
+        renderFrontmatter({
+          id: e.id,
+          type: e.type,
+          title: e.title,
+          createdAt: e.createdAt,
+          updatedAt: e.updatedAt,
+          payload: e.payload,
+        }) + body;
+      await writeBody(uri, fullBody);
+      rewritten += 1;
+    }
+    return rewritten;
   }
 
   // --- Internals ---------------------------------------------------------

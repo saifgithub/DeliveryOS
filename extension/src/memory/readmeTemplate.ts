@@ -10,8 +10,9 @@ This directory is DeliveryOS's project memory. It is intended to be **committed 
 
 ## What's here
 
-- \`memory.sqlite\` — the index. A small SQLite DB written by the DeliveryOS extension via \`sql.js\` (no native modules).
+- \`memory.sqlite\` — the index. A small SQLite DB written by the DeliveryOS extension via \`sql.js\` (no native modules). It is the **query/graph engine**, not the source of truth — it can be deleted and rebuilt from the markdown.
   *Binary. Some teams prefer to gitignore this and rely on the markdown bodies + DeliveryOS's regenerate command (deferred).*
+- \`memory/INDEX.md\`, \`memory/LINKS.md\`, \`memory/<type>.md\` — **generated, read-only projection** of the index. Every entry and every link mirrored to plain markdown, rewritten on each change. This is the AI / tooling read path: \`grep\` and \`cat\` it; no database driver needed. Do not edit (edit the body files instead).
 - \`memory/\` — markdown bodies, one file per memory entry, organised by type:
   - \`intent/\` — what you originally wanted
   - \`requirement/\` — what the system agreed to build

@@ -13,6 +13,8 @@ import { registerProjectCreate } from './commands/projectCreate';
 import { registerStagesRefresh } from './commands/stagesRefresh';
 import { CONTEXT_KEYS } from './contextKeys';
 import { MemoryStore } from './memory/MemoryStore';
+import { MemoryProjection } from './memory/projection';
+import { registerRegenerateMemory } from './commands/regenerateMemory';
 import {
   IProjectRegistry,
   InMemoryProjectRegistry,
@@ -68,6 +70,22 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       await persisted.loadActive();
       registry = persisted;
       context.subscriptions.push({ dispose: () => void memoryStore?.close() });
+
+      // Keep the grep-able markdown projection of the memory index current so
+      // the AI / any harness can read project state without a DB driver.
+      // Pushed after the close-disposable so it disposes first (before the
+      // store closes). Backfill any legacy body files (no embedded payload)
+      // so the markdown is rebuildable, then regenerate the projection.
+      const projection = new MemoryProjection(memoryStore, workspaceFolder.uri);
+      context.subscriptions.push(projection);
+      context.subscriptions.push(registerRegenerateMemory(memoryStore, projection));
+      const capturedStore = memoryStore;
+      void capturedStore
+        .reprojectBodies()
+        .catch((err) =>
+          console.error('DeliveryOS: body backfill failed —', err instanceof Error ? err.message : String(err)),
+        )
+        .then(() => projection.regenerateNow());
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       vscode.window.showErrorMessage(
