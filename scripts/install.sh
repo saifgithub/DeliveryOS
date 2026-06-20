@@ -7,15 +7,19 @@ set -eu
 
 EDITORS="code cursor windsurf codium antigravity"
 VERBOSE=0
+SKILLS=1
 
 usage() {
   cat <<EOF
 DeliveryOS install script
 
-Usage: $0 [--verbose|-v] [<path-to-vsix>]
+Usage: $0 [--verbose|-v] [--no-skills] [<path-to-vsix>]
 
 If <path-to-vsix> is omitted, the highest-versioned deliveryos-*.vsix
 in the script's parent directory is used.
+
+By default the DeliveryOS skills (skills/*) are also deployed to
+~/.claude/skills/ at the end; pass --no-skills to skip that step.
 
 Exit codes:
   0 — at least one detected editor installed successfully (or no editors detected: warning only).
@@ -28,6 +32,7 @@ VSIX=""
 for arg in "$@"; do
   case "$arg" in
     --verbose|-v) VERBOSE=1 ;;
+    --no-skills) SKILLS=0 ;;
     -h|--help) usage; exit 0 ;;
     -*) echo "unknown flag: $arg" >&2; usage >&2; exit 2 ;;
     *) VSIX="$arg" ;;
@@ -111,6 +116,13 @@ echo "DeliveryOS install summary:"
 printf "$summary"
 echo
 echo "  detected: $detected · ok: $ok · failed: $failed"
+
+# Deploy the bundled DeliveryOS skills (skills/*) to ~/.claude/skills/.
+# Best-effort: a failure here must not fail the .vsix install.
+if [ "$SKILLS" -eq 1 ] && [ -f "$SCRIPT_DIR/install-skills.sh" ]; then
+  echo
+  sh "$SCRIPT_DIR/install-skills.sh" || echo "warning: skill deploy failed (continuing)." >&2
+fi
 
 if [ "$detected" -eq 0 ]; then
   echo

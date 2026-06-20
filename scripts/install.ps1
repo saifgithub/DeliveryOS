@@ -8,7 +8,11 @@ param(
   [string]$VsixPath,
 
   [Alias('v')]
-  [switch]$Verbose
+  [switch]$Verbose,
+
+  # By default the DeliveryOS skills (skills/*) are deployed to ~\.claude\skills\
+  # at the end. Pass -NoSkills to skip that step.
+  [switch]$NoSkills
 )
 
 Set-StrictMode -Version Latest
@@ -102,6 +106,18 @@ foreach ($row in $rows) {
 }
 Write-Host ""
 Write-Host ("  detected: {0} · ok: {1} · failed: {2}" -f $detected, $ok, $failed)
+
+# Deploy the bundled DeliveryOS skills (skills/*) to ~\.claude\skills\.
+# Best-effort: a failure here must not fail the .vsix install.
+$skillsInstaller = Join-Path $scriptDir 'install-skills.ps1'
+if (-not $NoSkills -and (Test-Path -LiteralPath $skillsInstaller)) {
+  Write-Host ""
+  try {
+    & $skillsInstaller
+  } catch {
+    Write-Warning "skill deploy failed (continuing): $_"
+  }
+}
 
 if ($detected -eq 0) {
   Write-Host ""

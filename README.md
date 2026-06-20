@@ -69,7 +69,7 @@ curl -fsSL https://github.com/saifgithub/deliveryos/releases/download/v0.1.0/ins
 iwr -useb https://github.com/saifgithub/deliveryos/releases/download/v0.1.0/install.ps1 | iex
 ```
 
-The install script detects every supported editor on your `PATH` and installs DeliveryOS into each one automatically. Run it again later to upgrade.
+The install script detects every supported editor on your `PATH` and installs DeliveryOS into each one automatically. It also deploys the bundled [DeliveryOS skills](#skills) to `~/.claude/skills/` (pass `--no-skills` / `-NoSkills` to skip). Run it again later to upgrade.
 
 ### Manual sideload
 
@@ -109,6 +109,25 @@ Add that directory to your `PATH`, then re-run the install script. Antigravity 2
 </details>
 
 ---
+
+## Skills
+
+DeliveryOS ships a set of agent **skills** — the methodology it was built on and dogfoods — under [`skills/`](skills/). They run in Claude Code (or any harness that reads `~/.claude/skills/`) and write into the same `.deliveryos/` memory store the extension uses.
+
+| Skill | What it does |
+| --- | --- |
+| `/sm-elicitation` | Business-analysis elicitation interview — grills you one question at a time across problem, stakeholders, scope, goals, constraints, assumptions and risks, then persists the specification, the full question log, and every decision to a transcript artifact **and** DeliveryOS memory (`intent` + `design` entries). |
+| `/sm-mabp-plan` | MABP Phase A — turn a project (PRD + approved requirements) into a Phase B-ready build workspace. |
+| `/sm-mabp-run` | MABP Phase B — execute a chunk via the 3-role pattern (audit → builder → QA → verdict). |
+
+The install script deploys these automatically; to (re)deploy by hand:
+
+```sh
+scripts/install-skills.sh              # macOS / Linux  →  ~/.claude/skills/
+scripts/install-skills.ps1             # Windows
+```
+
+See [`skills/README.md`](skills/README.md) for details.
 
 ## Verify the download (SHA-256)
 
