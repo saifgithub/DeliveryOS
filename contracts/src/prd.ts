@@ -90,6 +90,14 @@ export interface PrdReviseSectionPromptResult {
   readonly bytesCopied: number;
 }
 
+export interface PrdRunAIParams {
+  readonly projectId: string;
+}
+
+export type PrdRunAIResult =
+  | { readonly ok: true; readonly prd: DraftPrd; readonly report: PrdParseReport }
+  | { readonly ok: false; readonly reason: string; readonly clipboardFallback?: true };
+
 export const PrdLoad: RequestType<PrdLoadParams, PrdLoadResult> = {
   method: 'prd/load',
 };
@@ -111,3 +119,7 @@ export const PrdReviseSectionPrompt: RequestType<
   PrdReviseSectionPromptParams,
   PrdReviseSectionPromptResult
 > = { method: 'prd/reviseSectionPrompt' };
+
+export const PrdRunAI: RequestType<PrdRunAIParams, PrdRunAIResult> = {
+  method: 'prd/runAI',
+};

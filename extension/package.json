@@ -11,7 +11,7 @@
     "url": "https://github.com/saifgithub/DeliveryOS/issues"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.90.0"
   },
   "categories": [
     "Other"
@@ -83,6 +83,12 @@
         "title": "DeliveryOS: Refresh Stage Tree",
         "category": "DeliveryOS",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "deliveryos.memory.regenerate",
+        "title": "DeliveryOS: Rebuild Memory Index from Markdown",
+        "category": "DeliveryOS",
+        "icon": "$(sync)"
       },
       {
         "command": "deliveryos.openHello",
@@ -192,6 +198,11 @@
           "type": "boolean",
           "default": true,
           "description": "Check GitHub Releases for a newer DeliveryOS version on startup and notify when one is available."
+        },
+        "deliveryos.aiCliCommand": {
+          "type": "string",
+          "default": "claude --print",
+          "description": "CLI command used as the AI fallback when no vscode.lm model is available. Must accept the prompt via stdin and write the response to stdout. Examples: 'claude --print', 'llm -m gpt-4o', 'sgpt --no-md'. Leave blank to skip the CLI tier and go straight to clipboard."
         }
       }
     }

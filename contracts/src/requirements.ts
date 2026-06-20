@@ -291,10 +291,27 @@ export const RequirementsOpenBriefFile: RequestType<
   RequirementsOpenBriefFileResult
 > = { method: 'requirements/openBriefFile' };
 
+export interface RequirementsRunAIParams {
+  readonly projectId?: string;
+}
+
+export type RequirementsRunAIResult =
+  | {
+      readonly ok: true;
+      readonly mode: 'json' | 'markdown-table';
+      readonly createdIds: readonly string[];
+      readonly warnings: readonly string[];
+    }
+  | { readonly ok: false; readonly reason: string; readonly clipboardFallback?: true };
+
 export const RequirementsGenerateDecomposePrompt: RequestType<
   RequirementsGenerateDecomposePromptParams,
   RequirementsGenerateDecomposePromptResult
 > = { method: 'requirements/generateDecomposePrompt' };
+
+export const RequirementsRunAI: RequestType<RequirementsRunAIParams, RequirementsRunAIResult> = {
+  method: 'requirements/runAI',
+};
 
 export const RequirementsPasteDecomposed: RequestType<
   RequirementsPasteDecomposedParams,

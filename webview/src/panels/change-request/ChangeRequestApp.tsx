@@ -6,9 +6,11 @@ import {
   ChangeRequestGeneratePrompt,
   ChangeRequestLoad,
   ChangeRequestPasteApply,
+  ChangeRequestRunAI,
   type ChangeRequest,
   type ChangeRequestStatus,
 } from '@deliveryos/contracts';
+import { Sparkles } from 'lucide-react';
 import { messenger } from '../../shared/messenger';
 
 const MAX_BYTES = 2_000_000;
@@ -83,6 +85,32 @@ export function ChangeRequestApp() {
     };
   }, []);
 
+  const handleRunAI = async () => {
+    if (!description.trim()) return;
+    setBusy(true);
+    try {
+      const res = await messenger.sendRequest(ChangeRequestRunAI, HOST_EXTENSION, {
+        description: description.trim(),
+      });
+      if (res.ok) {
+        const crRes = await messenger.sendRequest(ChangeRequestLoad, HOST_EXTENSION, { entryId: res.crEntryId });
+        const cr = crRes.ok ? crRes.changeRequest : null;
+        setPhase(cr ? { phase: 'applied', cr } : { phase: 'log-cr' });
+        showToast(`Applied: +${res.added} added, ~${res.edited} edited, -${res.deleted} deleted.`);
+      } else if (res.clipboardFallback) {
+        showToast('Prompt copied — paste the AI response in the next step.');
+        setPhase({ phase: 'prompted', crEntryId: '', description: description.trim() });
+      } else {
+        showToast(res.reason);
+      }
+    } catch (err) {
+      console.error('ChangeRequestApp: runAI failed', err);
+      showToast('AI run failed — check console.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!description.trim()) return;
     setBusy(true);
@@ -151,6 +179,7 @@ export function ChangeRequestApp() {
               description={description}
               onDescriptionChange={setDescription}
               onGenerate={handleGenerate}
+              onRunAI={handleRunAI}
               busy={busy}
             />
           )}
@@ -199,11 +228,13 @@ function LogCrSection({
   description,
   onDescriptionChange,
   onGenerate,
+  onRunAI,
   busy,
 }: {
   description: string;
   onDescriptionChange: (v: string) => void;
   onGenerate: () => void;
+  onRunAI: () => void;
   busy: boolean;
 }) {
   return (
@@ -223,13 +254,23 @@ function LogCrSection({
         style={{ minHeight: '8rem' }}
         className="w-full rounded-md border border-vscode-inputBorder bg-vscode-inputBg text-vscode-inputFg px-3 py-2 text-sm outline-none focus:border-vscode-focusBorder resize-y"
       />
-      <button
-        onClick={onGenerate}
-        disabled={busy || !description.trim()}
-        className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
-      >
-        {busy ? 'Generating…' : 'Generate prompt and copy'}
-      </button>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={onRunAI}
+          disabled={busy || !description.trim()}
+          className="flex items-center gap-2 px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+        >
+          <Sparkles size={14} className={busy ? 'animate-pulse' : ''} />
+          {busy ? 'AI is thinking…' : 'Send to AI ▶'}
+        </button>
+        <button
+          onClick={onGenerate}
+          disabled={busy || !description.trim()}
+          className="px-4 py-2 rounded-md border border-vscode-border bg-dos-surface text-dos-ink text-sm font-medium disabled:opacity-50 hover:bg-vscode-panel transition-colors"
+        >
+          {busy ? 'Generating…' : 'Generate prompt manually'}
+        </button>
+      </div>
     </section>
   );
 }

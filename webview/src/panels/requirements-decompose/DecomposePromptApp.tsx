@@ -4,9 +4,11 @@ import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
   RequirementsGenerateDecomposePrompt,
   RequirementsPasteDecomposed,
+  RequirementsRunAI,
   type RequirementCategory,
   type RequirementPriority,
 } from '@deliveryos/contracts';
+import { Sparkles } from 'lucide-react';
 import { messenger } from '../../shared/messenger';
 
 const MAX_BYTES = 2_000_000;
@@ -26,6 +28,7 @@ export function DecomposePromptApp() {
   const [paste, setPaste] = useState('');
   const [copying, setCopying] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const [runningAI, setRunningAI] = useState(false);
   const [phase, setPhase] = useState<PhaseState>({ phase: 'idle' });
   const [result, setResult] = useState<ResultState | null>(null);
   const [toastOpen, setToastOpen] = useState(false);
@@ -90,7 +93,30 @@ export function DecomposePromptApp() {
     }
   };
 
+  const handleRunAI = async () => {
+    setRunningAI(true);
+    try {
+      const res = await messenger.sendRequest(RequirementsRunAI, HOST_EXTENSION, { projectId: '' });
+      if (res.ok) {
+        setResult({ mode: res.mode, createdCount: res.createdIds.length, warnings: res.warnings });
+        setPhase({ phase: 'idle' });
+        setPaste('');
+        showToast(`Created ${res.createdIds.length} requirements.`);
+      } else if (res.clipboardFallback) {
+        showToast('Prompt copied — paste the AI response below.');
+      } else {
+        showToast(res.reason === 'no-prd' ? 'No PRD on file yet. Generate the PRD first.' : res.reason);
+      }
+    } catch (err) {
+      console.error('DecomposePromptApp: runAI failed', err);
+      showToast('AI run failed — check console.');
+    } finally {
+      setRunningAI(false);
+    }
+  };
+
   const isLarge = paste.length > LARGE_THRESHOLD;
+  const busy = copying || parsing || runningAI;
 
   return (
     <Toast.Provider swipeDirection="right">
@@ -98,26 +124,36 @@ export function DecomposePromptApp() {
         <header className="px-6 pt-6 pb-3 border-b border-vscode-border">
           <h1 className="text-2xl font-semibold text-dos-accent">Decompose PRD</h1>
           <p className="text-sm text-dos-muted mt-0.5">
-            Generate a prompt, run it in your AI tool, then paste the response to create requirements.
+            Send to your AI provider directly, or copy the prompt and paste the response.
           </p>
         </header>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-8 max-w-3xl">
           <section className="space-y-3">
             <h2 className="text-base font-semibold text-vscode-fg">
-              1. Copy the decomposition prompt
+              1. Run AI
             </h2>
             <p className="text-sm text-dos-muted">
               The PRD is embedded in the prompt between <code>{'<!-- BEGIN_PRD -->'}</code> and{' '}
               <code>{'<!-- END_PRD -->'}</code> markers.
             </p>
-            <button
-              onClick={handleCopyPrompt}
-              disabled={copying}
-              className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
-            >
-              {copying ? 'Copying…' : 'Copy decompose-PRD prompt'}
-            </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button
+                onClick={handleRunAI}
+                disabled={busy}
+                className="flex items-center gap-2 px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+              >
+                <Sparkles size={14} className={runningAI ? 'animate-pulse' : ''} />
+                {runningAI ? 'AI is thinking…' : 'Send to AI ▶'}
+              </button>
+              <button
+                onClick={handleCopyPrompt}
+                disabled={busy}
+                className="px-4 py-2 rounded-md border border-vscode-border bg-dos-surface text-dos-ink text-sm font-medium disabled:opacity-50 hover:bg-vscode-panel transition-colors"
+              >
+                {copying ? 'Copying…' : 'Copy prompt manually'}
+              </button>
+            </div>
           </section>
 
           <section className="space-y-3">
@@ -146,7 +182,7 @@ export function DecomposePromptApp() {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleParseAndCreate}
-                disabled={parsing || !paste.trim()}
+                disabled={busy || !paste.trim()}
                 className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
               >
                 {parsing ? 'Parsing…' : 'Parse and create'}

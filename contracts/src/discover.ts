@@ -102,6 +102,16 @@ export interface DiscoverStateChangedParams {
   readonly interview: InterviewRecord | null;
 }
 
+// --- Inline AI runner (DOS:P12) --------------------------------------------
+
+export interface DiscoverRunAIParams {
+  readonly _empty?: never;
+}
+
+export type DiscoverRunAIResult =
+  | { readonly ok: true; readonly discovery: DiscoveryRecord }
+  | { readonly ok: false; readonly reason: string; readonly clipboardFallback?: true };
+
 // --- Interview message contracts (DOS:P12) ---------------------------------
 
 export interface InterviewGeneratePromptParams {
@@ -190,6 +200,10 @@ export const DiscoverSetMode: NotificationType<DiscoverSetModeParams> = {
 
 export const DiscoverStateChanged: NotificationType<DiscoverStateChangedParams> = {
   method: 'discover/stateChanged',
+};
+
+export const DiscoverRunAI: RequestType<DiscoverRunAIParams, DiscoverRunAIResult> = {
+  method: 'discover/runAI',
 };
 
 export const InterviewGeneratePrompt: RequestType<

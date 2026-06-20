@@ -26,6 +26,7 @@ import {
   DiscoverGeneratePrompt,
   DiscoverGetInitialState,
   DiscoverParseAnswers,
+  DiscoverRunAI,
   DiscoverSaveAnswers,
   DiscoverSaveRawIdea,
   DiscoverSetMode,
@@ -39,12 +40,14 @@ import {
   PrdLoad,
   PrdPasteDraft,
   PrdReviseSectionPrompt,
+  PrdRunAI,
   PrdSaveSection,
   ChangeRequestBootstrap,
   ChangeRequestGeneratePrompt,
   ChangeRequestList,
   ChangeRequestLoad,
   ChangeRequestPasteApply,
+  ChangeRequestRunAI,
   type ChangeRequest,
   BugBootstrap,
   BugList,
@@ -56,6 +59,7 @@ import {
   RequirementsDelete,
   RequirementsFilter,
   RequirementsGenerateDecomposePrompt,
+  RequirementsRunAI,
   RequirementsList,
   RequirementsOpenBriefComposer,
   RequirementsOpenBriefFile,
@@ -98,6 +102,7 @@ import {
   type TestDesignerBootstrapResult,
   type VerificationStatus,
 } from '@deliveryos/contracts';
+import { runPrompt } from '../ai/promptRunner';
 import { parseAnswers } from '../discovery/answersParser';
 import { buildDiscoveryPrompt } from '../discovery/promptBuilder';
 import { buildInterviewPrompt } from '../discovery/interviewPromptBuilder';
@@ -388,6 +393,42 @@ export class HostMessenger {
       return { discovery: updated.payload.discovery as DiscoveryRecord };
     });
 
+    this.messenger.onRequest(DiscoverRunAI, async () => {
+      const intent = await readActiveIntent();
+      const existingInterview = intent.payload.interview ?? null;
+      const prompt = buildDiscoveryPrompt({
+        projectTitle: intent.title,
+        rawIdea: intent.payload.rawIdea.text,
+        questions: DISCOVERY_QUESTIONS_MVP,
+        interview: existingInterview,
+      });
+      let rawResponse: string;
+      try {
+        rawResponse = await runPrompt(prompt);
+      } catch (err) {
+        const isClipboardFallback = err instanceof Error && err.message === 'clipboard-fallback';
+        return {
+          ok: false as const,
+          reason: isClipboardFallback ? 'clipboard-fallback' : String(err),
+          ...(isClipboardFallback ? { clipboardFallback: true as const } : {}),
+        };
+      }
+      const { answers, unmatchedText } = parseAnswers(rawResponse, DISCOVERY_QUESTIONS_MVP);
+      const now = Date.now();
+      const discovery: DiscoveryRecord = {
+        promptSnapshot: prompt,
+        answers: answers as readonly DiscoveryAnswer[],
+        completedAt: now,
+        rawAnswersPaste: rawResponse,
+        unmatchedText,
+      };
+      const updated = await memoryStore.update<'intent'>(intent.id, {
+        payload: { discovery } as Partial<IntentPayload>,
+      });
+      broadcastStateChange(updated.payload.rawIdea, updated.payload.discovery, updated.payload.interview ?? null);
+      return { ok: true as const, discovery: updated.payload.discovery as DiscoveryRecord };
+    });
+
     this.messenger.onNotification(DiscoverSetMode, () => {
       // Webview-originated tab switches are panel-local; no host state to
       // mutate here. Future restore-after-reload flows may read this.
@@ -505,6 +546,35 @@ export class HostMessenger {
       const existing = await memoryStore.loadPrdParent(params.projectId);
       const prd = await memoryStore.upsertPrdParent(intentEntry, sections, existing?.prdId);
       return { prd, report };
+    });
+
+    this.messenger.onRequest(PrdRunAI, async (params) => {
+      const entry = await memoryStore.read(params.projectId);
+      if (!entry || entry.type !== 'intent') {
+        return { ok: false as const, reason: `No intent entry for ${params.projectId}` };
+      }
+      const payload = entry.payload as IntentPayload;
+      const prompt = buildGenerateDraftPrompt({
+        projectTitle: entry.title,
+        rawIdea: payload.rawIdea?.text ?? '',
+        discoveryRecord: payload.discovery ?? { promptSnapshot: '', answers: [], completedAt: 0 },
+      });
+      let rawResponse: string;
+      try {
+        rawResponse = await runPrompt(prompt);
+      } catch (err) {
+        const isClipboardFallback = err instanceof Error && err.message === 'clipboard-fallback';
+        return {
+          ok: false as const,
+          reason: isClipboardFallback ? 'clipboard-fallback' : String(err),
+          ...(isClipboardFallback ? { clipboardFallback: true as const } : {}),
+        };
+      }
+      const intentEntry = { id: entry.id, title: entry.title };
+      const { sections, report } = parsePrdMarkdown(rawResponse, entry.title);
+      const existing = await memoryStore.loadPrdParent(params.projectId);
+      const prd = await memoryStore.upsertPrdParent(intentEntry, sections, existing?.prdId);
+      return { ok: true as const, prd, report };
     });
 
     this.messenger.onRequest(PrdSaveSection, async (params) => {
@@ -667,6 +737,36 @@ export class HostMessenger {
       await vscode.env.clipboard.writeText(prompt);
       const bytesCopied = new TextEncoder().encode(prompt).length;
       return { ok: true as const, bytesCopied };
+    });
+
+    this.messenger.onRequest(RequirementsRunAI, async (params) => {
+      const active = registry.getActive();
+      const targetId = params.projectId || active?.id;
+      if (!targetId) return { ok: false as const, reason: 'no-project' };
+      const prd = await memoryStore.loadPrdParent(targetId);
+      if (!prd) return { ok: false as const, reason: 'no-prd' };
+      const body = renderPrdMarkdown({ projectTitle: prd.projectTitle, sections: prd.sections });
+      const prompt = buildDecomposePrompt({ prd, prdMarkdownBody: body });
+      let rawResponse: string;
+      try {
+        rawResponse = await runPrompt(prompt);
+      } catch (err) {
+        const isClipboardFallback = err instanceof Error && err.message === 'clipboard-fallback';
+        return {
+          ok: false as const,
+          reason: isClipboardFallback ? 'clipboard-fallback' : String(err),
+          ...(isClipboardFallback ? { clipboardFallback: true as const } : {}),
+        };
+      }
+      const parsed = parseDecomposed(rawResponse);
+      if (!parsed.ok) return { ok: false as const, reason: parsed.reason };
+      const createdIds = await memoryStore.createRequirementItems(prd.prdId, parsed.requirements);
+      broadcastChanged('create', createdIds);
+      const warnings: string[] = [];
+      for (const r of parsed.requirements) {
+        if (r.warnings) warnings.push(...r.warnings);
+      }
+      return { ok: true as const, mode: parsed.mode, createdIds, warnings };
     });
 
     this.messenger.onRequest(RequirementsPasteDecomposed, async (params) => {
@@ -1422,6 +1522,83 @@ export class HostMessenger {
       await memoryStore.updateChangeRequest(cr.entryId, { status: 'prompted' });
       await openChangeRequestPanel({ crEntryId: cr.entryId });
       return { ok: true as const, crEntryId: cr.entryId, bytesCopied };
+    });
+
+    this.messenger.onRequest(ChangeRequestRunAI, async (params) => {
+      const active = registry.getActive();
+      if (!active) return { ok: false as const, reason: 'No active project.' };
+      const prd = await memoryStore.loadPrdParent(active.id);
+      if (!prd) return { ok: false as const, reason: 'No PRD on file for this project.' };
+      const reqRecords = await memoryStore.listRequirementItems(prd.prdId);
+      const requirements = reqRecords.map((r) => ({
+        id: r.payload.id,
+        title: r.payload.title,
+        category: r.payload.category,
+        priority: r.payload.priority,
+        sourcePrdSection: r.payload.sourcePrdSection,
+      }));
+      const cr = await memoryStore.createChangeRequest(prd.prdId, params.description, prd.sections);
+      const prdMarkdownBody = renderPrdMarkdown({ projectTitle: prd.projectTitle, sections: prd.sections });
+      const prompt = buildChangeRequestPrompt({ prd, requirements, crDescription: params.description, prdMarkdownBody });
+      await memoryStore.updateChangeRequest(cr.entryId, { status: 'prompted' });
+
+      let rawResponse: string;
+      try {
+        rawResponse = await runPrompt(prompt);
+      } catch (err) {
+        const isClipboardFallback = err instanceof Error && err.message === 'clipboard-fallback';
+        await openChangeRequestPanel({ crEntryId: cr.entryId });
+        return {
+          ok: false as const,
+          reason: isClipboardFallback ? 'clipboard-fallback' : String(err),
+          ...(isClipboardFallback ? { clipboardFallback: true as const } : {}),
+        };
+      }
+
+      const parsed = parseChangeRequest(rawResponse);
+      if (!parsed.ok) {
+        return { ok: false as const, reason: parsed.reason };
+      }
+      const idToEntryId = new Map<string, string>(reqRecords.map((r) => [r.payload.id, r.entryId]));
+      const addedIds = await memoryStore.createRequirementItems(prd.prdId, parsed.added);
+      const editedIds: string[] = [];
+      for (const edit of parsed.edited) {
+        const entryId = idToEntryId.get(edit.id);
+        if (!entryId) continue;
+        await memoryStore.updateRequirementItem(entryId, edit.patch);
+        editedIds.push(entryId);
+      }
+      const deletedUserIds: string[] = [];
+      for (const del of parsed.deleted) {
+        const entryId = idToEntryId.get(del.id);
+        if (!entryId) continue;
+        await memoryStore.deleteRequirementItem(entryId);
+        deletedUserIds.push(del.id);
+      }
+      const allAffected = [...addedIds, ...editedIds];
+      await memoryStore.linkCrToRequirements(cr.entryId, allAffected);
+      await memoryStore.updateChangeRequest(cr.entryId, {
+        status: 'applied',
+        appliedAt: Date.now(),
+        addedRequirementIds: addedIds,
+        editedRequirementIds: editedIds,
+        deletedRequirementUserIds: deletedUserIds,
+      });
+      if (addedIds.length > 0) {
+        this.messenger.sendNotification(RequirementsChanged, BROADCAST, { source: 'create', ids: addedIds });
+      }
+      if (editedIds.length > 0) {
+        this.messenger.sendNotification(RequirementsChanged, BROADCAST, { source: 'update', ids: editedIds });
+      }
+      await openChangeRequestPanel({ crEntryId: cr.entryId });
+      return {
+        ok: true as const,
+        crEntryId: cr.entryId,
+        added: addedIds.length,
+        edited: editedIds.length,
+        deleted: deletedUserIds.length,
+        warnings: parsed.warnings,
+      };
     });
 
     this.messenger.onRequest(ChangeRequestPasteApply, async (params) => {

@@ -3,9 +3,11 @@ import { HOST_EXTENSION } from 'vscode-messenger-common';
 import {
   PrdGenerateDraftPrompt,
   PrdPasteDraft,
+  PrdRunAI,
   type DraftPrd,
   type PrdParseReport,
 } from '@deliveryos/contracts';
+import { Sparkles } from 'lucide-react';
 import { messenger } from '../../shared/messenger';
 
 const MAX_BYTES = 2_000_000;
@@ -22,6 +24,7 @@ export function PrdGenerationPrompt({ projectId, projectTitle, onToast, onImport
   const [draft, setDraft] = useState('');
   const [copying, setCopying] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [runningAI, setRunningAI] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const LINE_PX = 20;
@@ -63,7 +66,28 @@ export function PrdGenerationPrompt({ projectId, projectTitle, onToast, onImport
     }
   };
 
+  const handleRunAI = async () => {
+    setRunningAI(true);
+    try {
+      const res = await messenger.sendRequest(PrdRunAI, HOST_EXTENSION, { projectId });
+      if (res.ok) {
+        onImported(res.prd, res.report);
+        onToast('PRD generated and imported.');
+      } else if (res.clipboardFallback) {
+        onToast('Prompt copied to clipboard — paste the AI response below.');
+      } else {
+        onToast(res.reason);
+      }
+    } catch (err) {
+      console.error('PrdGenerationPrompt: runAI failed', err);
+      onToast('AI run failed — check console.');
+    } finally {
+      setRunningAI(false);
+    }
+  };
+
   const isLarge = draft.length > LARGE_THRESHOLD;
+  const busy = copying || importing || runningAI;
 
   return (
     <section className="max-w-2xl space-y-6">
@@ -72,20 +96,29 @@ export function PrdGenerationPrompt({ projectId, projectTitle, onToast, onImport
           Generate a PRD draft
         </h2>
         <p className="text-sm text-dos-muted">
-          Copy the prompt below, paste it into your AI tool, then paste the resulting
-          markdown back to import the draft.
+          Send directly to your AI provider, or copy the prompt and paste the result below.
         </p>
       </div>
 
-      <div>
-        <p className="text-xs text-dos-muted mb-2">Project: {projectTitle}</p>
-        <button
-          onClick={handleCopyPrompt}
-          disabled={copying}
-          className="px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
-        >
-          {copying ? 'Copying…' : 'Copy generate-PRD prompt'}
-        </button>
+      <div className="space-y-3">
+        <p className="text-xs text-dos-muted">Project: {projectTitle}</p>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            onClick={handleRunAI}
+            disabled={busy}
+            className="flex items-center gap-2 px-4 py-2 rounded-md bg-dos-accent text-white text-sm font-medium disabled:opacity-50 hover:opacity-90 transition-opacity"
+          >
+            <Sparkles size={14} className={runningAI ? 'animate-pulse' : ''} />
+            {runningAI ? 'AI is thinking…' : 'Send to AI ▶'}
+          </button>
+          <button
+            onClick={handleCopyPrompt}
+            disabled={busy}
+            className="px-4 py-2 rounded-md border border-vscode-border bg-dos-surface text-dos-ink text-sm font-medium disabled:opacity-50 hover:bg-vscode-panel transition-colors"
+          >
+            {copying ? 'Copying…' : 'Copy prompt manually'}
+          </button>
+        </div>
       </div>
 
       <div>

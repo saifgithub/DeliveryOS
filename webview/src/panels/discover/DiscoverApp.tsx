@@ -154,6 +154,11 @@ export function DiscoverApp() {
                 questions={state.questions}
                 onPromptGenerated={() => setPromptGeneratedThisSession(true)}
                 onCopied={() => showToast('Prompt copied to clipboard.')}
+                onAISent={(discovery) => {
+                  setState((prev) => prev ? { ...prev, discovery } : prev);
+                  showToast('Discovery complete — answers saved.');
+                  setActiveTab('summary');
+                }}
               />
             </Tabs.Content>
 

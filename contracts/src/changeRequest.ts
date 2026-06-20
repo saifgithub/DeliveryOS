@@ -73,6 +73,21 @@ export type ChangeRequestPasteApplyResult =
     }
   | { readonly ok: false; readonly reason: string; readonly raw: string };
 
+export interface ChangeRequestRunAIParams {
+  readonly description: string;
+}
+
+export type ChangeRequestRunAIResult =
+  | {
+      readonly ok: true;
+      readonly crEntryId: string;
+      readonly added: number;
+      readonly edited: number;
+      readonly deleted: number;
+      readonly warnings: readonly string[];
+    }
+  | { readonly ok: false; readonly reason: string; readonly clipboardFallback?: true };
+
 // --- Bootstrap ---
 
 export type ChangeRequestBootstrapResult =
@@ -102,3 +117,7 @@ export const ChangeRequestPasteApply: RequestType<
   ChangeRequestPasteApplyParams,
   ChangeRequestPasteApplyResult
 > = { method: 'changeRequest/pasteApply' };
+
+export const ChangeRequestRunAI: RequestType<ChangeRequestRunAIParams, ChangeRequestRunAIResult> = {
+  method: 'changeRequest/runAI',
+};
