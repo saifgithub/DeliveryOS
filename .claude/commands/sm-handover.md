@@ -451,13 +451,8 @@ checklist.
 
 ## What NOT to do
 
-- **Don't add a "What just landed" narrative section to HANDOVER.**
-  That narrative lives in `{T.history_dir}/{prefix}_{track}<N>.md`
-  from step 3. HANDOVER is current-state-only after the refactor.
 - **Don't rewrite other tracks' narratives.** Wraps one track only.
   Consistency-scan hits in another track's handover doc are not
   yours to fix — they belong to that track's next wrap.
 - **Don't run `{deploy_command}`** (if set in config) as part of
   handover unless the user explicitly asked. Doc/state hygiene only.
-- **Don't fudge the report when something went sideways.** Honest
-  deviation > clean checklist.

@@ -222,13 +222,8 @@ adjusts, and only THEN do any file edits start.
 
 ## What NOT to do
 
-- **Don't auto-pick a carry-over item.** Offer the list; let the user
-  pick. Don't edit files before plan-mode approval.
 - **Don't read other tracks' handover docs.** Each track is its own
   context; pulling in another track's HANDOVER creates noise.
-- **Don't skip configured sanity checks or bug-list pulls.** They're
-  the cheapest way to catch an outage or surface user-facing bugs
-  before work starts. Failures surface but don't block.
 - **Don't auto-claim or auto-fix bugs from this skill.** It only
   surfaces. Use whatever per-project bug-handling workflow exists.
 
