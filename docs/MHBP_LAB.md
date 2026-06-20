@@ -131,6 +131,18 @@ The gates here are advisory foreign signal layered *around* the unchanged baseli
   "critical" findings**. Its output therefore deserves *more* skepticism than a same-harness verifier's,
   not less, and G4 ("treat divergence as a defect") must not be applied to its claims without the
   empirical probe in §3.
+- **Ground on facts, blind to framing (normative, Run-1).** Run-1's false positives were not random
+  noise — both were the *same category*: assertions about **system state that cannot be verified from
+  the supplied artifacts** (a table that wasn't migrated; an adapter's transaction behavior). The
+  equally-blind same-harness pass did *not* hallucinate, because its findings were checkable from the
+  diff. So **hallucination tracks "claims about facts not derivable from what the auditor can see" —
+  not blindness itself.** This separates two things we must treat differently:
+  - **Framing context** (the builder's reasoning, prior reviews, the shared reading of the spec) —
+    *withhold it.* It is both the decorrelation win and the thing that balloons the window. Keep it out.
+  - **Ground-truth facts** (which migrations are live, which adapter/engine is in use, the runtime env)
+    — *supply a thin slice.* These are a dozen lines of **facts, not interpretation**, so they cannot
+    re-correlate the auditor, and they starve the exact hallucination category. The mechanism is the
+    manifest `## Ground truth` block + the severity gate in §3 — productive grounding without bloat.
 - **Run it patiently in the background.** Set an explicit `--print-timeout` (minutes), expect a
   minutes-long agentic session, and do not kill it early — output lands only at completion.
 - **Run isolation — concurrency-safe (two agents, one repo).** On a busy day two agents may run MHBP
@@ -192,7 +204,9 @@ git worktree remove --force "$WT"
   - What cross-chunk interaction is unplanned — what breaks when chunk N meets chunks already specced?
   - What would a hostile maintainer say about this design in six months?
 - **Output.** `docs/build/auditor/runs/<run-id>/plan_audit.md` (run-id = `gate1-<tag>-<sha8>-<nonce>`,
-  see §1 run isolation), each finding tagged `blocking` / `question` / `noted`.
+  see §1 run isolation), each finding tagged `blocking` / `unverified` / `question` / `noted`. The
+  ground-on-facts principle (§1) and the severity gate (§3) apply here too: a plan-level claim the
+  auditor can't ground in the supplied docs is `unverified`, not `blocking`.
 - **Adjudication (human-in-loop).** Planning has a human in the loop, so the **architect works *with*
   the human** on post-analysis of agy's report: revise the plan, accept as-is, or record a dated
   rebuttal. agy issues no binding verdict — its job is done when the doubt is on the table.
@@ -213,11 +227,26 @@ git worktree remove --force "$WT"
     (`git diff --name-only <range>` / `git log --grep <tag>`), not from memory. It is only as good as
     commit-message tagging — a change committed under a mis-tagged message is **invisible** to it.
     Record how each run's manifest was assembled so the blind spot is on the record.
+  - **Carry a `## Ground truth` block (normative, Run-1 anti-hallucination).** A *thin* list (aim ≤ ~12
+    lines) of system facts the auditor **cannot derive from the code** and would otherwise guess —
+    e.g. which migrations/DDL are actually live (so a "leak" can't be claimed on a non-existent table),
+    the DB adapter/engine and any relevant semantics (e.g. "PrismaPg serializes a tx connection"), the
+    runtime env, and known external invariants. The architect writes it because they have the
+    environment the auditor lacks. **Facts only, never framing or reasoning** — facts can't re-correlate
+    the auditor or balloon the context; they just remove the guess. This block is what would have
+    pre-empted *both* Run-1 false positives.
 - **What agy audits** (scoped via `--add-dir` to the repo roots the manifest names):
   - **Completeness** — is everything the plan specced actually built *and* tested? Any criterion with
     no corresponding code/test? Any delivery surface unexercised?
   - **Accuracy** — does what shipped match intent? Any silent gap, dead end, stubbed path, or drift
     from the spec the conformance gate would not catch because the spec itself was read wrong?
+- **Severity gate — no `blocking` on an unverifiable claim (normative, Run-1).** The audit prompt
+  forbids `blocking` for any claim the auditor cannot ground in the supplied artifacts or the
+  `## Ground truth` block. Such a claim is tagged **`unverified`** instead — a hypothesis for the
+  architect to probe (§"Probe before you route"), never a verdict. Only a *grounded* defect earns
+  `blocking`. This caps confident-wrongness at the source: in Run-1 both false positives would have
+  landed as `unverified`, not `blocking`. The severity vocabulary is therefore
+  `blocking` / `unverified` / `question` / `noted`.
 - **Pair it with a blind same-harness auditor (Run-1).** Run a *second* auditor on the same manifest
   — a fresh, blind-context Claude pass (e.g. an Opus sub-agent that shares no memory with the build).
   In Run-1 the foreign harness scored 0/2 on its loud findings while the blind same-harness pass scored
@@ -340,5 +369,12 @@ First live Gate-2 run, dogfooded on a different project. Full report:
   silently edited 4 files); **probe every blocking infra/DB claim** before routing (reading was
   insufficient); **pair the foreign harness with a blind same-harness auditor** and weight each by its
   adjudicated-true rate, not its confidence.
+- **The hallucinations had a pattern.** Both foreign-harness false positives were the *same category*
+  — assertions about system state not derivable from the code (a non-migrated table; an adapter's tx
+  behavior), while the equally-blind same-harness pass, whose findings *were* code-checkable, did not
+  hallucinate. So hallucination tracks **ungroundable claims, not blindness.** Fix adopted (§1, §3):
+  separate **framing context** (withhold — decorrelation + anti-bloat) from **ground-truth facts**
+  (supply a thin `## Ground truth` block), and **gate severity** so an unverifiable claim is tagged
+  `unverified`, never `blocking`. Grounds the auditor without ballooning its context.
 - **Net:** *Run it; don't trust it.* Gate 2 stays; the foreign-harness-specific premium is unproven
   and, this run, negative.
