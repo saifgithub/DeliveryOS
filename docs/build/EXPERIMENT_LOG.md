@@ -57,7 +57,9 @@ blind, stateless QA). Gate held fixed. Competing predictions are pre-registered 
 | A — Adversary | _pending_ | | n/a (issues no verdict) | _kept / killed / inconclusive_ | |
 | B — Persistent verifier | _pending_ | | _yes / no_ | _kept / killed / inconclusive_ | |
 | MHBP — cross-harness auditor (Gate 1) | _pending_ | | n/a (issues no verdict) | _kept / killed / inconclusive_ | |
-| MHBP — cross-harness auditor (Gate 2) | _pending_ | | n/a (issues no verdict) | _kept / killed / inconclusive_ | |
+| MHBP — Gate 2 (the boundary itself) | 1 (not pre-registered) | +2 cutover-breaking, inner reviews + mechanical gate missed | n/a (issues no verdict) | **kept (provisional)** | Run-1: whole-artifact post-build pass caught real silent-incompleteness defects |
+| MHBP — Gate 2 · foreign harness (agy) | 1 | 0 true / 2 confidently-wrong | n/a | _inconclusive — negative so far_ | Run-1: 0/2 loud findings true; foreign-specific premium unproven |
+| MHBP — Gate 2 · blind same-harness | 1 | 2/2 true | n/a | _inconclusive — positive so far_ | Run-1: context-blindness, not model diversity, produced the catches |
 
 ---
 
@@ -67,6 +69,12 @@ Specced in `docs/MHBP_LAB.md`. A **foreign harness** (`agy`, pinned to a non-Cla
 `Gemini 3.1 Pro (High)`) audits at two optional, independent phase boundaries. The headline metric is
 **correlated-error catches**: real defects all-Claude review missed. Decorrelation requirement: a row
 run with agy on a Claude model is **void** — note the model used per row.
+
+**Fallback exception (MHBP_LAB §1).** When agy is unavailable (timeout, re-login, provider error), an
+**authorized blind same-harness Claude auditor** may run in its place. Such a row is **not void** — log
+it `auditor: blind same-harness (fallback)`, `foreign-harness: unavailable (<reason>)`. It counts
+toward the **blind same-harness** tally only; the foreign-harness slot for that target stays
+`unavailable`, never `ran`.
 
 Defect classification for the Classified column: `real` (substantive defect) · `false-divergence`
 (model-quirk/style, not a defect) · `noise` (false alarm). Correlated-error catches = the subset of
@@ -86,6 +94,11 @@ How it could fail: noise, false divergence (counter-predictions §5a/§5b).
 What it should catch that baseline misses: **silent incompleteness/inaccuracy** of the whole build.
 How it could fail: manifest blind spot (§5d), noise, capability floor (§5c).
 
-| Run | Date | Model used | Manifest source (mechanical?) | Prediction (pre-registered) | Findings raised | Classified (real / false-divergence / noise) | Correlated-error catches | Cost (wall-clock · provider) |
+Per Run-1 (`docs/MHBP_LAB.md` §8) two auditors now run each Gate-2: the foreign harness **and** a
+blind same-harness pass — tallied separately by adjudicated-true rate.
+
+| Run | Date | Auditor / Model used | Manifest source (mechanical?) | Prediction (pre-registered) | Findings raised | Classified (real / false-divergence / noise) | Correlated-error catches | Cost (wall-clock · provider) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| _tag_ | _YYYY-MM-DD_ | _Gemini 3.1 Pro (High)_ | _e.g. git diff --name-only <range> + cited specs_ | _what agy should surface about the build that baseline wouldn't_ | _filled after_ | | | |
+| CR-039 RLS (edgenta_OKR) | 2026-06-20 | foreign · Gemini 3.1 Pro (High) | `git log --grep cr-039` (mechanical; commit-tag dependent) | _NOT pre-registered — live dogfood; signal only, not clean evidence_ | 2 loud "critical" | **0 real** / 2 false-divergence (both confidently wrong; only dismissable by empirical probe) | 0 | timed out pre-relogin, then ran · Gemini |
+| CR-039 RLS (edgenta_OKR) | 2026-06-20 | blind same-harness · Opus (fresh context) — **authorized fallback** (ran first; agy timed out pre-relogin) | `git log --grep cr-039` (mechanical; commit-tag dependent) | _NOT pre-registered — live dogfood; signal only, not clean evidence_ | 2 blocking | **2 real** (tenant-context fail-closed on `delegations/[id]` + `action-items/export`) | 2 (both inner reviews + mechanical gate missed) | · Claude |
+| _tag_ | _YYYY-MM-DD_ | _foreign · Gemini 3.1 Pro (High)_ | _e.g. git diff --name-only <range> + cited specs_ | _what the auditor should surface that baseline wouldn't_ | _filled after_ | | | |
