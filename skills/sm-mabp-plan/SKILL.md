@@ -63,17 +63,7 @@ Write the dependency map before writing any spec files.
 
 ## Step 3 — Write chunk spec files
 
-For each chunk write `docs/planning/chunks/chunk-NN-<slug>.md`. Each spec must contain:
-
-1. **Objective** — what this chunk delivers (2–4 sentences)
-2. **Requirements covered** — list
-3. **Dependencies** — which chunks must be done first
-4. **Pre-resolved design decisions** — the 3–5 key design choices the architect makes so the builder doesn't have to. For CHUNK-01, include the full DB schema. For other chunks, include API route shapes, data structures, file paths.
-5. **Done criteria** — numbered checklist, ≤ 10 items, each verifiable with a command or observable behaviour
-6. **Pre-fire audit** — 5–8 bash commands to verify prerequisites before the builder writes any code
-7. **Allowed changes** — explicit list of files/dirs the builder may touch; explicitly list what NOT to touch
-8. **Builder start tier** + escalation ladder
-9. **Notes for builder** — any gotchas, assumptions to flag, or external data the builder must read before starting
+For each chunk write `docs/planning/chunks/chunk-NN-<slug>.md` from the template in REFERENCE.md § Chunk spec template. The load-bearing section is **Pre-resolved design decisions** — the 3–5 choices the architect makes so the builder doesn't have to (CHUNK-01: the full DB schema; other chunks: API route shapes, data structures, file paths). Every done-criterion must be verifiable by a command or observable behaviour; the pre-fire audit is 5–8 checks; **Allowed changes** must name both what the builder may touch and what it must not.
 
 ---
 

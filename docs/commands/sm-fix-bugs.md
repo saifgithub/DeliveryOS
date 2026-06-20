@@ -4,19 +4,15 @@ description: Triage open bugs from docs/build/bugs.json and fix the easy ones, i
 
 # /sm-fix-bugs
 
-> Command source. Copy this file to `.claude/commands/sm-sm-fix-bugs.md` for Claude Code to pick it up. It is kept here, version-controlled, so changes to the protocol are reviewable.
+> Command source. Canonical copy in `docs/commands/`; active copy in `.claude/commands/sm-fix-bugs.md`, which Claude Code reads. Version-controlled so protocol changes are reviewable.
 
 Triage the open bugs in `docs/build/bugs.json` and fix the easy ones, isolated to a fresh git worktree so the work cannot collide with whatever chunk build is running on `main`.
 
 This is the bug-fix track. Feature and chunk work lives in the multi-agent build process (`docs/MULTI_AGENT_BUILD_PROCESS.md`). The guardrails below are the contract between the two: break them and you risk silent merge conflicts later.
 
-## Why a JSON file, not a database
-
-DeliveryOS tracks bugs in a single version-controlled JSON file, `docs/build/bugs.json`. That is enough because DeliveryOS is a solo build: one person finds and fixes bugs, plus QA sub-agents that occasionally surface a non-blocking issue.
-
-Other projects (for example AMI) use a PostgreSQL `bug_reports` table because they have distributed testers submitting reports remotely and need concurrent, distributed log reporting. DeliveryOS does not. A JSON file in the repo is simpler, diffs cleanly, travels with the code, and needs no service.
-
 ## bugs.json schema
+
+Bugs live in one version-controlled JSON file — `docs/build/bugs.json` — which is enough for a solo build (one person, plus QA sub-agents that occasionally surface a non-blocking issue). One entry per bug:
 
 ```json
 {
@@ -152,13 +148,7 @@ To merge:
 
 ## What NOT to do
 
-- No `git push`. No `--force`, ever.
-- No `--no-verify` on commits. If a pre-commit hook fails, fix what it found.
-- No mass-fix sprees. 3 bugs max. Resist "while I am here" tidying of unrelated code.
-- No new files unless the bug explicitly demands them. Bug fixes edit existing files; new modules are chunk work.
-- No `vsce publish` and no release from `/sm-fix-bugs`.
-- No marking bugs `resolved`. That is the merge-time flip; Saiful owns it.
-- No editing the architect-owned process docs or chunk specs from a bug-fix session.
+Beyond the hard rules above: no `git push` or `--force`; no `--no-verify` (if a pre-commit hook fails, fix what it found); no mass-fix sprees or "while I am here" tidying of unrelated code; no new files unless the bug explicitly demands them (new modules are chunk work).
 
 ## Recovery
 
@@ -167,13 +157,3 @@ If a session crashes, fills up, or is interrupted mid-fix:
 1. Any bug stuck at `status` of `in_progress` with your branch in `assigned_branch` is yours to release or resume.
 2. To release (so the next `/sm-fix-bugs` run can pick it up): set `status` back to `open` and `assigned_branch` to `null`, commit.
 3. To resume: keep the worktree, finish the fix, commit, set `pending_review`.
-
-## Why this works
-
-- **Worktree isolation:** every fix session has its own checkout and cannot collide with chunk builds on `main`.
-- **Committed claim:** the claim is a committed JSON edit, so a parallel session sees it.
-- **Small batches:** 3-bug branches merge trivially.
-- **Hands-off list:** high-conflict files always route through Saiful.
-- **No-publish rule:** the bug track never ships; Saiful decides when.
-
-The cost is a few minutes of overhead per session. The payoff is clean merges and never untangling a collision between a bug fix and a chunk build at 11 PM.
