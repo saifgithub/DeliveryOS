@@ -94,6 +94,14 @@ The Adversary operates **upstream** of the build, at the spec/design layer. It n
 gate, never reads as a verdict. Until a real `fswatch` wrapper is justified (§4), "watch" can be
 the architect simply pinging the Adversary session and reading the output file back.
 
+> **Cross-link — this mechanism is the seed of the parallel autonomous lane substrate.** The
+> `to_*` / `*_findings` dir-as-channel here is the same shape as the per-unit **lane handshake** specced
+> in `docs/MHBP_LAB.md` §5–§7 (file-derived state, no shared flag, a document-watcher to wake each side).
+> In that shared substrate, **Arm A (the Adversary) and Arm B (the persistent verifier) are the
+> `own`-harness auditor tier** (MHBP §6); the foreign `agy` harness is the other tier. The lane mechanism
+> is harness-agnostic — same files, same derived state — so these same-harness arms and the foreign gate
+> run on one protocol. See MHBP_LAB §5 for the lane files and guardrails, §7 for the autonomy transports.
+
 ### 1.4 Why capture risk is low here
 
 The Adversary issues no binding verdict, so there is no pass/fail to soften. Its persistent context
