@@ -16,6 +16,10 @@ This directory is DeliveryOS's project memory. It is intended to be **committed 
   - `verification/` — whether the work passed
   - `release/` — what was released and why
   - `test-spec/` — the executable verification contract for a requirement
+- `checkpoint_history/` — archived `/sm-checkpoint` session-continuity memos (see
+  `.claude/commands/sm-checkpoint.md`). Ad hoc scratch notes, not part of the typed
+  `memory/` typology above, not indexed by `memory.sqlite`, no retention policy —
+  grows unbounded.
 
 See `docs/architecture/memory-layers.md` in the DeliveryOS repo for the canonical typology.
 

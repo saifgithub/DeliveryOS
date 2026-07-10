@@ -1,6 +1,6 @@
 # /sm-checkpoint — Context Continuity
 
-This command preserves and restores your working context across a `/compact` operation. You are writing a memo to your future self.
+Preserves and restores working context across `/compact`.
 
 ## Step 1 — Detect phase
 
@@ -15,17 +15,15 @@ ls ~/.claude/sm_checkpoint_${SESSION_ID}.md 2>/dev/null && echo "EXISTS" || echo
 
 ## Phase: SAVE (output was MISSING)
 
-The checkpoint file does not exist. You are saving context before a compact.
-
-Write `~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md` with a free-form synthesis of everything a future Claude needs to continue this work without asking the user to re-explain anything. Be specific and concrete — include file paths, line numbers, rule names, error text, port numbers, branch names, exact command syntax. Cover:
+Write `~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md`. Be specific and concrete
+— file paths, line numbers, rule names, error text, port numbers, branch names, exact
+command syntax. Cover:
 
 - **Where we are**: project, module, task, and the precise state of that task
 - **What was decided this session**: key choices made and the reasoning behind them
 - **What to do next**: the agreed next step, ideally verbatim
 - **Active constraints**: rules, gotchas, or warnings that surfaced and must not be forgotten
 - **Open items**: anything unresolved, blocked, or flagged for later
-
-Write as if briefing yourself after a week away. One focused document, no headers needed, prose or bullets — whatever captures it fastest.
 
 After writing the file, tell the user:
 
@@ -37,13 +35,16 @@ After writing the file, tell the user:
 
 ## Phase: RESTORE (output was EXISTS)
 
-The checkpoint file exists. You are restoring context after a compact.
-
-1. Read `~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md` in full
-2. Internalize it — treat it as the authoritative record of current session state
-3. Delete the file: `rm ~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md`
-4. Reply to the user with:
+1. Read `~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md` in full and internalize
+   it as the authoritative record of current session state
+2. Archive the checkpoint, then remove the working copy:
+   ```bash
+   mkdir -p .deliveryos/checkpoint_history
+   cp ~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md ".deliveryos/checkpoint_history/$(date -u +%Y%m%dT%H%M%SZ)_${CLAUDE_CODE_SESSION_ID}.md"
+   rm ~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md
+   ```
+3. Reply to the user with:
    - What you are working on (one sentence)
    - The agreed next step
    - One or two key constraints or gotchas to prove you absorbed it
-5. End with: "Ready — shall I pick up from [next step]?"
+4. End with: "Ready — shall I pick up from [next step]?"
