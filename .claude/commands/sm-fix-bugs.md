@@ -1,5 +1,5 @@
 ---
-description: Triage open bugs from docs/build/bugs.json and fix the easy ones, isolated to a fresh git worktree so the work cannot collide with build-cycle chunk work on main. Bug tracking is a simple JSON file — DeliveryOS is a solo build with no distributed testers.
+description: Triage open bugs from docs/build/bugs.json and fix the easy ones, isolated to a fresh git worktree so the work cannot collide with build-cycle chunk work on main. Bug tracking is a flat JSON file — enough for a solo build or small team without a distributed tracker.
 ---
 
 # /sm-fix-bugs
@@ -11,6 +11,11 @@ Triage the open bugs in `docs/build/bugs.json` and fix the easy ones, isolated t
 This is the bug-fix track. Feature and chunk work lives in the multi-agent build process (`docs/MULTI_AGENT_BUILD_PROCESS.md`). The guardrails below are the contract between the two: break them and you risk silent merge conflicts later.
 
 ## bugs.json schema
+
+> This file's path (`docs/build/bugs.json`) and schema are this project's own convention — swap the
+> path and fields for whatever tracker a different project uses. Unlike `session-config.yml`'s
+> `bug_list` block (which only surfaces a count + titles at session start), this command needs the
+> full read/claim/write protocol below, so it isn't yet wired through that config surface.
 
 Bugs live in one version-controlled JSON file — `docs/build/bugs.json` — which is enough for a solo build (one person, plus QA sub-agents that occasionally surface a non-blocking issue). One entry per bug:
 
@@ -32,14 +37,16 @@ Bugs live in one version-controlled JSON file — `docs/build/bugs.json` — whi
 }
 ```
 
-Anyone who finds a bug (Saiful, or a QA sub-agent surfacing a non-blocking issue) appends an entry with `status` set to `open` and the next free `id`. IDs are sequential: `b001`, `b002`, and so on.
+Anyone who finds a bug (the project owner, or a QA sub-agent surfacing a non-blocking issue) appends an entry with `status` set to `open` and the next free `id`. IDs are sequential: `b001`, `b002`, and so on.
 
 ## Hard rules
 
-1. **Never edit on `main`.** Spawn a worktree and branch (step 1). All commits go there. Saiful merges to `main` after review.
+1. **Never edit on `main`.** Spawn a worktree and branch (step 1). All commits go there. The project owner merges to `main` after review.
 2. **Claim before fixing.** Set the bug's `status` to `in_progress` and `assigned_branch` to your branch in `docs/build/bugs.json`, and commit that change first. The committed claim is how a parallel session (rare, but cheap to guard against) sees the bug is taken. Only claim bugs that are currently `open`.
 3. **Bug budget per session: 3.** Fix at most 3 bugs in one worktree, then surface. Smaller batches mean trivial merges. If 3 is not enough, run `/sm-fix-bugs` again: fresh worktree, fresh budget.
-4. **Hands off these files** without an explicit `ok` from Saiful first:
+4. **Hands off these files** without an explicit `ok` from the project owner first. This is
+   DeliveryOS's own list — replace with your project's entry point, build config, packaging
+   manifest, and architect-owned process docs:
    - `package.json` (contribution points and activation events; a wrong edit breaks the whole extension)
    - `src/extension.ts`, or whatever the activation entry point is
    - `tsconfig.json` and the bundler config (esbuild or webpack)
@@ -50,8 +57,8 @@ Anyone who finds a bug (Saiful, or a QA sub-agent surfacing a non-blocking issue
 
    A bug whose fix needs one of these is `medium` at least; surface a plan first.
 5. **Each fix is its own commit.** Message prefix: `fix(bug:<id>): <summary>`. Makes git blame point straight at the bug entry.
-6. **Never publish the extension.** No `vsce publish`, no release. Saiful decides when to ship.
-7. **Do not mark a bug `resolved`** in `bugs.json`. `resolved` is the post-merge confirmation status; only Saiful sets it after merging. `/sm-fix-bugs` only ever sets `open` to `in_progress` (claim) to `pending_review` (committed).
+6. **Never publish the extension.** No `vsce publish`, no release. The project owner decides when to ship.
+7. **Do not mark a bug `resolved`** in `bugs.json`. `resolved` is the post-merge confirmation status; only the project owner sets it after merging. `/sm-fix-bugs` only ever sets `open` to `in_progress` (claim) to `pending_review` (committed).
 
 ## Triage matrix
 
@@ -62,9 +69,9 @@ Classify each open bug before touching code.
 | **tiny** | Typo, copy change, label fix, a wrong icon path, a threshold tweak | Fix autonomously. Commit. |
 | **small** | 1 to 2 files, well bounded, no design call (a missing webview refresh, a wrong command title, an off-by-one in a list view) | Fix autonomously. Commit. |
 | **medium** | Cross-cutting (multiple modules), needs a design decision, or touches a hands-off file | Surface a plan via AskUserQuestion or ExitPlanMode. Wait for `ok`. Then fix. |
-| **large** | Architectural (rework the memory store, change the handoff protocol), needs new infrastructure, or changes a data model | Do NOT fix. Leave `status` as `open`, add a `note`. Saiful plans it as a chunk. |
+| **large** | Architectural (rework the memory store, change the handoff protocol), needs new infrastructure, or changes a data model | Do NOT fix. Leave `status` as `open`, add a `note`. The project owner plans it as a chunk. |
 
-Be honest about classification. A "small" fix that balloons into a multi-file refactor mid-stream: stop, set the bug to `wont_fix` with a note explaining what you found, surface to Saiful. Do not push through.
+Be honest about classification. A "small" fix that balloons into a multi-file refactor mid-stream: stop, set the bug to `wont_fix` with a note explaining what you found, surface to the project owner. Do not push through.
 
 ## Step by step
 
@@ -73,7 +80,7 @@ Be honest about classification. A "small" fix that balloons into a multi-file re
 ```bash
 TS=$(date +%Y%m%d-%H%M%S)
 BRANCH="claude/bug-fix-${TS}"
-WT_PATH=".claude/worktrees/bug-fix-${TS}"
+WT_PATH="{worktree_dir}/bug-fix-${TS}"   # {worktree_dir} from .claude/session-config.yml, default .claude/worktrees
 git worktree add -b "${BRANCH}" "${WT_PATH}" main
 cd "${WT_PATH}"
 ```
@@ -104,7 +111,8 @@ If a bug you wanted is no longer `open` when you read the file, someone else cla
 For each claimed bug:
 
 1. Read enough of the codebase to understand the scope. If it balloons past your triage, stop: reclassify, surface, and either release the claim (set `status` back to `open`, `assigned_branch` to `null`) or set `wont_fix` with a note.
-2. Make the change. Run the relevant checks:
+2. Make the change. Run the relevant checks — these are DeliveryOS's own stack (npm/TypeScript/VS
+   Code); swap for your project's build/lint/test commands:
    - TypeScript compiles: `npm run compile`
    - Lint clean: `npm run lint`
    - Unit tests: `npm test`
@@ -125,7 +133,7 @@ For each claimed bug:
 
 ### 5. Surface the report
 
-Print a structured summary for Saiful, one line per bug touched. State explicitly which bugs are `pending_review` (fix committed on the branch), which are `wont_fix` and why, which medium or large ones are surfacing for planning, and the branch plus worktree path for the merge.
+Print a structured summary for the project owner, one line per bug touched. State explicitly which bugs are `pending_review` (fix committed on the branch), which are `wont_fix` and why, which medium or large ones are surfacing for planning, and the branch plus worktree path for the merge.
 
 ```
 $ /sm-fix-bugs — 2026-05-21 14:30 — claude/bug-fix-20260521-143000
@@ -143,7 +151,7 @@ Deferred (large; needs planning as a chunk):
 
 To merge:
   git merge --no-ff claude/bug-fix-20260521-143000
-  git worktree remove .claude/worktrees/bug-fix-20260521-143000
+  git worktree remove {worktree_dir}/bug-fix-20260521-143000
 ```
 
 ## What NOT to do

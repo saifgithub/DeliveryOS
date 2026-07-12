@@ -94,13 +94,13 @@ The Adversary operates **upstream** of the build, at the spec/design layer. It n
 gate, never reads as a verdict. Until a real `fswatch` wrapper is justified (§4), "watch" can be
 the architect simply pinging the Adversary session and reading the output file back.
 
-> **Cross-link — this mechanism is the seed of the parallel autonomous lane substrate.** The
-> `to_*` / `*_findings` dir-as-channel here is the same shape as the per-unit **lane handshake** specced
-> in `docs/MHBP_LAB.md` §5–§7 (file-derived state, no shared flag, a document-watcher to wake each side).
-> In that shared substrate, **Arm A (the Adversary) and Arm B (the persistent verifier) are the
-> `own`-harness auditor tier** (MHBP §6); the foreign `agy` harness is the other tier. The lane mechanism
-> is harness-agnostic — same files, same derived state — so these same-harness arms and the foreign gate
-> run on one protocol. See MHBP_LAB §5 for the lane files and guardrails, §7 for the autonomy transports.
+> **Cross-link — this mechanism is the seed of the serial lane substrate.** The
+> `to_*` / `*_findings` dir-as-channel here is the same shape as the per-chunk **lane handshake** now
+> specified concretely in `docs/build/auditor/PROTOCOL.md` (file-derived state, no shared flag, a
+> mandatory watcher — run serially, one chunk in flight at a time). In that shared substrate, **Arm A
+> (the Adversary) and Arm B (the persistent verifier) are the `own`-harness auditor tier**
+> (`docs/MHBP_LAB.md` §6); the foreign tier is the other. The lane mechanism is harness-agnostic — same
+> files, same derived state — so these same-harness arms and the foreign gate run on one protocol.
 
 ### 1.4 Why capture risk is low here
 
@@ -171,6 +171,6 @@ and the arm is killed regardless of early wins.
 
 - No edits to `docs/MULTI_AGENT_BUILD_PROCESS.md` or the production `sm-mabp-*` skills. Promotion
   of a proven arm into the baseline is a separate, later step.
-- No `fswatch`/automation for the file-watcher yet. Arm A starts with the architect manually
-  checking the Adversary's output dir; a real watcher wrapper is an optimization to earn *after*
-  the arm proves its worth.
+- A shared portable watcher now exists (`docs/build/auditor/watcher.sh`) — Arm A can adopt it
+  directly instead of manually checking the Adversary's output dir. This does not change Arm A's
+  own promotion criteria (§3).

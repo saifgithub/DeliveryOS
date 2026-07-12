@@ -25,6 +25,7 @@ Add items here; use `/sm-start-fresh P` to pick them up in a session.
 | B-014 | MABP — prompt and process tightening | 🔴 High | Builder invocations are too long and create compliance theatre. Five process improvements: succinctness rule, pre-fire audit interpretation, QA independence, cross-chunk cohesion review, and iteration budget reform. See § B-014 below. |
 | B-015 | MABP — model-tier awareness and escalation protocol | 🔴 High | Architects default to premium tier for all work regardless of task complexity. The flat 3-attempt builder budget burns identical compute on every retry. Two changes: task-proportionate tier selection for architects; model-escalation ladder for builders (standard → standard → premium → human). Provider-agnostic tier language throughout. Supersedes B-014 Change 5. See § B-015 below. |
 | B-016 | MABP — evidence manifest and adversarial QA verification | 🔴 High | Builder agents can fabricate completion; QA confirms without re-running ground truth. Four targeted changes: builder evidence manifest, adversarial-default QA, architect spot-check of QA evidence, verdict gating on manifest coverage. See § B-016 below. |
+| B-017 | MABP-lab — compress static lane-loop docs for input-token savings | 🟢 Low | `caveman`-style compression of `PROTOCOL.md` + the two loop prompts (input tokens, re-read every session) — the counterpart to the output-token guardrail already applied. See § B-017 below. |
 
 ---
 
@@ -858,3 +859,36 @@ B-013 adds structural quality criteria (what to verify). B-014 adds process disc
 **Implementation note:** B-016 is a document edit. It should be implemented in the same O-track session that applies B-013/B-014/B-015 changes, since all four edit `docs/MULTI_AGENT_BUILD_PROCESS.md`.
 
 **Session tag when picked up:** Same O-track session as B-013, B-014, and B-015.
+
+---
+
+## § B-017 — MABP-lab: compress static lane-loop docs for input-token savings
+
+**Status:** Backlogged
+**Priority:** 🟢 Low
+**Applies to:** `docs/build/auditor/PROTOCOL.md`, `ARCHITECT_LOOP_PROMPT.md`, `AUDITOR_LOOP_PROMPT.md`
+
+### The idea
+
+These three files are read into context at the start of every architect/auditor lane-loop session
+(`docs/MHBP_LAB.md` §5) — input tokens paid every session, not once.
+[caveman](https://github.com/juliusbrussee/caveman)'s `/caveman-compress` mode targets exactly this
+case: rewriting a static instruction file into terser fragments, ~46% average input-token reduction
+on every subsequent load, with code/paths/commands preserved byte-exact.
+
+Output-token compression for the *generated* lane files (`.builder.md`/`.auditor.md`) is already
+applied — `PROTOCOL.md` guardrail 8. This item is the input-token counterpart: compressing the
+*static* instructions themselves, not what they produce.
+
+### Why deferred
+
+Rewriting procedural instructions into fragments trades some clarity for token count — reasonable
+for conversational output, riskier for instructions that must be followed precisely across many
+independent sessions with no shared memory. Worth doing, but wants a deliberate pass and a
+read-through check, not a rushed one folded into unrelated work.
+
+**Success signal:** `PROTOCOL.md` and the two loop prompts read measurably shorter with no testable
+instruction lost — a session following the compressed version makes the same decisions as one
+following the current version.
+
+**Session tag when picked up:** any O-track or ad-hoc doc session touching `docs/build/auditor/`.

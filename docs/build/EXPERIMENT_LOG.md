@@ -58,18 +58,26 @@ blind, stateless QA). Gate held fixed. Competing predictions are pre-registered 
 | B — Persistent verifier | _pending_ | | _yes / no_ | _kept / killed / inconclusive_ | |
 | MHBP — cross-harness auditor (Gate 1) | _pending_ | | n/a (issues no verdict) | _kept / killed / inconclusive_ | |
 | MHBP — cross-harness auditor (Gate 2) | _pending_ | | n/a (issues no verdict) | _kept / killed / inconclusive_ | |
-| MHBP — build lanes (foreign tier marginal value, §4.3) | _pending_ | | n/a (issues no verdict) | _kept / killed / inconclusive_ | |
+| MHBP — per-chunk serial loop (foreign tier marginal value, §4.3) | _pending_ | | n/a (issues no verdict) | _kept / killed / inconclusive_ | |
+| MHBP — per-module Tester (cross-chunk defects, §9g) | _pending_ | | n/a (advisory) | _kept / killed / inconclusive_ | |
 
 ---
 
 ## 4. MHBP — cross-harness auditor (agy/Gemini)
 
-Specced in `docs/MHBP_LAB.md`. A **foreign harness** (`agy`, pinned to a non-Claude model —
-`Gemini 3.1 Pro (High)`) appears in **three layers**: **Gate 1** (hard synchronous post-plan barrier,
-§4.1), the **per-unit build lanes** (parallel autonomous, foreign on a sampled subset, §4.3), and
-**Gate 2** (opt-in post-build whole-artifact audit, §4.2). The headline metric is **correlated-error
-catches**: real defects all-Claude review missed. Decorrelation requirement: a row run with agy on a
-Claude model is **void** — note the model used per row.
+Specced in `docs/MHBP_LAB.md`; the per-chunk loop's lane mechanism (§4.3) is now concrete in
+`docs/build/auditor/PROTOCOL.md`. A **foreign harness** (`agy`, pinned to a non-Claude model —
+`Gemini 3.1 Pro (High)`) appears at **Gate 1** (hard synchronous post-plan barrier, §4.1), in the
+**serial per-chunk build→audit loop** (foreign on a risk-flagged / sampled subset, §4.3), and at
+**Gate 2** (opt-in post-build whole-artifact audit, §4.2); a per-module black-box **Tester**
+(`MHBP_LAB.md` §7) adds a fourth layer, scored in the dispositions (§3). The headline metric is
+**correlated-error catches**: real defects all-Claude review missed. Decorrelation requirement: a row
+run with agy on a Claude model is **void** — note the model used per row.
+
+> **Run-1 (2026-06-23, N=1 — signal, not evidence; unscored).** The first MHBP dogfood. Not a scored row:
+> it produced the process learnings now folded into `docs/MHBP_LAB.md` (serial loop, mandatory per-role
+> watcher, read-only/isolated `agy`). Logged here so the ledger and the spec agree Run-1 happened; the
+> tables below start at the first pre-registered run.
 
 Defect classification for the Classified column: `real` (substantive defect) · `false-divergence`
 (model-quirk/style, not a defect) · `noise` (false alarm). Correlated-error catches = the subset of
@@ -95,15 +103,17 @@ How it could fail: manifest blind spot (§5d), noise, capability floor (§5c).
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | _tag_ | _YYYY-MM-DD_ | _Gemini 3.1 Pro (High)_ | _e.g. git diff --name-only <range> + cited specs_ | _what agy should surface about the build that baseline wouldn't_ | _filled after_ | | | |
 
-### 4.3 Build lanes — per-unit parallel audit (own + foreign tiers)
+### 4.3 Per-chunk serial audit loop (own + foreign tiers)
 
-Specced in `docs/MHBP_LAB.md` §5–§7. Each unit (chunk/CR) runs in a lane; every lane gets an `own`-harness
-Claude peer, a sampled/risk-flagged subset *also* gets the `foreign` agy audit, and the `AUDITOR:` field
-records which tier ruled. Headline: correlated-error catches **attributable to the foreign tier** (its
-marginal value over the own peer). Watch counter-predictions MHBP §8e (coordination failure: stranded
-lanes / cap starvation / stale-round race) and §8f (autonomy rubber-stamp: auto-advanced lanes a later
-human sample audit reversed). Decorrelation: a `foreign` row run with agy on a Claude model is **void**.
+Specced in `docs/MHBP_LAB.md` §5–§6. Chunks are audited **serially, one in flight at a time**; every
+chunk gets an `own`-harness Claude peer, a risk-flagged / sampled subset also gets the `foreign` agy
+audit, and the `AUDITOR:` field records which tier ruled. Headline: correlated-error catches
+**attributable to the foreign tier** (its marginal value over the own peer). Watch counter-predictions
+MHBP §9e (handoff failure: a role's watcher not running / a stale-round race / a parked chunk holding the
+line) and §9f (quota-fallback dilution: too many chunks fall back to the `own` Claude auditor for the
+foreign tier to backstop correlated error). Decorrelation: a `foreign` row run with agy on a Claude model
+is **void**.
 
-| Unit | Date | Auditor tier(s) ruled | Foreign model (if any) | Prediction (pre-registered) | Findings raised | Classified (real / false-div / noise) | Correlated-error catches (own / foreign) | Lanes in flight at submit | Parked / escalated? | Cost (tokens · wall-clock · provider) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| _CHnn_ | _YYYY-MM-DD_ | _own \| own+foreign \| +human_ | _Gemini 3.1 Pro (High) \| n/a_ | _what the foreign tier should catch on this lane that the own peer wouldn't_ | _filled after_ | | _own: _ / _foreign: _ | | _no \| parked: reason_ | |
+| Unit | Date | Auditor tier(s) ruled | Foreign model (if any) | Prediction (pre-registered) | Findings raised | Classified (real / false-div / noise) | Correlated-error catches (own / foreign) | Round at submit | Watcher fired? | Parked / escalated? | Cost (tokens · wall-clock · provider) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| _CHnn_ | _YYYY-MM-DD_ | _own \| own+foreign \| +human_ | _Gemini 3.1 Pro (High) \| n/a_ | _what the foreign tier should catch on this chunk that the own peer wouldn't_ | _filled after_ | | own: / foreign: | _N_ | _yes / no_ | _no \| parked: reason_ | |

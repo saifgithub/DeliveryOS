@@ -14,5 +14,6 @@ Phase A (planning) produces validated chunk specs in `docs/planning/chunks/`. Ph
 | `qa_reports/` | QA | QA verdicts (`chunk_NN_<slug>_qa.md`). |
 | `fix_prompts/` | Architect | Revision briefs, 60 lines or fewer each. |
 | `blockers/` | Builder | BLOCKER notes, the only sub-agent escalation surface. |
+| `auditor/` | Auditor (own/foreign/human) | Lane handshake — `PROTOCOL.md` (portable kernel, canonical origin), `DELIVERYOS_BINDINGS.md`, loop prompts, `watcher.sh`, `lanes/`. MHBP-lab scope (experimental), not baseline MABP. |
 
 `BUILD_STATUS.md` and `NEXT_SESSION.md` do not exist yet. The architect creates them at the start of the first build session, once `docs/planning/READY.md` is in place.

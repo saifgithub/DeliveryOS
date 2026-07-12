@@ -1,5 +1,5 @@
 ---
-description: One-time bootstrap for /sm-handover + /sm-start-fresh. Walks you through filling in .claude/session-config.yml — project prefix, one or more tracks (R is required; add M, X, etc. as needed), and per-track specifics (handover doc, sanity checks, bug list, memory file). Re-runnable to amend a field or add a track.
+description: One-time bootstrap for /sm-handover + /sm-start-fresh. Walks you through filling in .claude/session-config.yml — project prefix, at least one track (letter and label are the user's choice), and per-track specifics (handover doc, sanity checks, bug list, memory file). Re-runnable to amend a field or add a track.
 ---
 
 # /sm-session-setup
@@ -11,10 +11,10 @@ config file. Without it, those two skills refuse to run.
 
 ## Multi-track shape
 
-A project has **one prefix** (e.g. `AT` for AMI Trade) and **one or
+A project has **one prefix** (e.g. `PW` for Project Widget) and **one or
 more tracks** — each track is a single letter the user picks to mark
 a parallel stream of work. Sessions are tagged `<prefix>:<track><N>`,
-e.g. `AT:R27`, `AT:M3`.
+e.g. `PW:R27`, `PW:M3`.
 
 The skill doesn't prescribe which letters or what they mean — the
 user decides. A common pattern is one track per workstream (R for
@@ -53,7 +53,7 @@ in the question's option labels. Group related fields where useful.
 
 | Field | Default | Notes |
 |---|---|---|
-| `project_prefix` | Initials of `basename "$(git rev-parse --show-toplevel)"` (e.g. "AMI Trade" → `AT`) | Used to build session tags. Letters only, no colon. |
+| `project_prefix` | Initials of `basename "$(git rev-parse --show-toplevel)"` (e.g. "Project Widget" → `PW`) | Used to build session tags. Letters only, no colon. |
 | `memory_project_file` | Auto-detect: `project_<slug>.md` in the CC project memory dir (optional) | **Shared** across all tracks. The CC per-project auto-memory file — one snapshot for the whole project, updated by whichever track wraps. Skip = no memory update during handover. |
 | `worktree_pattern` | `agent-*` | Subagent-worktree glob. |
 | `worktree_dir` | `.claude/worktrees` | Subagent-worktree location. |

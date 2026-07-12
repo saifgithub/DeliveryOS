@@ -17,4 +17,4 @@ cp docs/commands/*.md .claude/commands/
 | `sm-handover.md` | Session-exit protocol. Run to wrap a session cleanly. |
 | `sm-fix-bugs.md` | Bug-fix track. Triages `docs/build/bugs.json`, fixes the easy ones in an isolated worktree. |
 
-`sm-session-setup.md`, `sm-start-fresh.md`, `sm-checkpoint.md`, and `sm-handover.md` are generic and config-driven, copied as-is from the AMI project. `sm-fix-bugs.md` is adapted for DeliveryOS (JSON bug tracking instead of a remote database).
+`sm-session-setup.md`, `sm-start-fresh.md`, `sm-checkpoint.md`, and `sm-handover.md` are fully generic and config-driven — copy them into any project's `.claude/commands/` unedited. `sm-fix-bugs.md` encodes DeliveryOS's own bug-tracking convention (a flat JSON file, `docs/build/bugs.json`) as a documented default; adapt its file paths, hands-off list, and verification commands per project.
