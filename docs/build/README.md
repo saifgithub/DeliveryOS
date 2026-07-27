@@ -6,7 +6,9 @@ Phase A (planning) produces validated chunk specs in `docs/planning/chunks/`. Ph
 
 | Path | Owner | Purpose |
 |---|---|---|
-| `BUILD_STATUS.md` | Architect | Cumulative live state: the chunk ledger, decisions, next-chunk pointer. Created on the first build session. |
+| `CHUNK_LEDGER.md` | Architect | Cumulative live state: what's on disk, what's running, next-chunk pointer. |
+| `STRUCTURAL_DEBT.md` | Architect | Standing register of approved structural shortcuts. |
+| `COHESION_LOG.md` | Architect | Append-only log of cross-chunk cohesion reviews. |
 | `NEXT_SESSION.md` | Architect | Single-page cold-start brief for the next architect session. |
 | `invocations/` | Architect | Builder invocation prompts, one per chunk fire. |
 | `builder_reports/` | Builder | Builder reports (`chunk_NN_<slug>.md`; `_v2`/`_v3` for re-runs, never overwritten). |
@@ -16,4 +18,4 @@ Phase A (planning) produces validated chunk specs in `docs/planning/chunks/`. Ph
 | `blockers/` | Builder | BLOCKER notes, the only sub-agent escalation surface. |
 | `auditor/` | Auditor (own/foreign/human) | Lane handshake — `PROTOCOL.md` (portable kernel, canonical origin), `DELIVERYOS_BINDINGS.md`, loop prompts, `watcher.sh`, `lanes/`. MHBP-lab scope (experimental), not baseline MABP. |
 
-`BUILD_STATUS.md` and `NEXT_SESSION.md` do not exist yet. The architect creates them at the start of the first build session, once `docs/planning/READY.md` is in place.
+`NEXT_SESSION.md` does not exist yet — the architect creates it at cold-start once needed.

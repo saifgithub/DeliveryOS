@@ -12,7 +12,7 @@ from `MULTI_AGENT_BUILD_PROCESS.md` §3.
 **Read first:** `docs/build/auditor/PROTOCOL.md` (mechanics — this project's copy of the portable
 kernel; it wins on any conflict) → `docs/build/auditor/DELIVERYOS_BINDINGS.md` beside it (resolves the
 kernel's generic terms to this project's paths/commands) → `docs/MHBP_LAB.md` §5–§7 (loop, auditor
-tiers, Tester) → the chunk spec → `docs/build/BUILD_STATUS.md`.
+tiers, Tester) → the chunk spec → `docs/build/CHUNK_LEDGER.md`.
 
 ## Loop
 
@@ -24,7 +24,7 @@ tiers, Tester) → the chunk spec → `docs/build/BUILD_STATUS.md`.
 4. Wait: `sh docs/build/auditor/watcher.sh architect`, or poll. Detect the verdict by the
    `VERDICT:` keyword, not round-number equality.
 5. `AWAITING_FIXES` → fix in priority order, resubmit (step 2, same unit).
-6. `COMPLETE` → sync `BUILD_STATUS.md` (prose terse — `PROTOCOL.md` §5.8), update `INDEX.md`, next unit.
+6. `COMPLETE` → sync `CHUNK_LEDGER.md` (prose terse — `PROTOCOL.md` §5.8), update `INDEX.md`, next unit.
 
 ## Path discipline
 

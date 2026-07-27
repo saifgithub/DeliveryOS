@@ -1,8 +1,38 @@
-# Handover — Development (DOS:R)
+<!--
+CHUNK_LEDGER.md — replaces docs/build/BUILD_STATUS.md (retired 2026-07-27 along with the
+  /sm-handover session-wrap ritual it was named for). This file is NOT a session-handover doc —
+  session-boundary continuity is /sm-checkpoint SAVE/RESTORE (docs/MULTI_AGENT_BUILD_PROCESS.md §12).
+  It is Architect-owned build state for the MABP chunk cycle: what's shipped, what's on disk, what's
+  in flight. Not derived from the orchestration/ dispatch protocol — DeliveryOS's chunk-by-chunk MABP
+  loop is not wired to dispatch lanes (orchestration/dispatch/BINDINGS.md: "no lanes dispatched yet"),
+  so this table is legitimate single-owner state, not a second copy of something the protocol derives.
+  If that changes — chunks start running through orchestration/dispatch/lanes/ — this table should be
+  replaced by `sh orchestration/dispatch/dispatch.sh state`, not kept alongside it.
+  Structural debt and cohesion-check findings are NOT recorded here — see
+  docs/build/STRUCTURAL_DEBT.md and docs/build/COHESION_LOG.md.
+-->
+
+# Chunk ledger — Development (DOS:R)
+
+> ⚠️ **CURRENT-STATE CORRECTION (updated 2026-06-25).** This banner is the live current-state;
+> the table below is frozen at end-of-DOS:R16 (CHUNK-11) and is historical.
+>
+> **v0.1.0 — complete & committed.** CHUNK-12→16 all landed (commits `25a78ae` result-capture ·
+> `e15b061` diff+hook · `d147b81` verification+release · `787d936` bug-triage demo ·
+> `e1cf862` README/essay/release-prep); all 16 chunks done, `extension/deliveryos-0.1.0.vsix`
+> packaged, `npm run gate` GREEN at the v0.1.0 commit. Lifecycle shipped **5** stages
+> (DISCOVER · DEFINE · EXECUTE · VERIFY · ITERATE).
+>
+> **v0.2.0 — in flight (uncommitted working tree).** UAT + DEPLOY added as first-class stages
+> → **7 stages** (DISCOVER · DEFINE · EXECUTE · VERIFY · **UAT** · **DEPLOY** · ITERATE): contracts
+> (`contracts/src/{uat,deployment}.ts`), webview panels, serializers, and MemoryStore CRUD are wired,
+> with **473 tests passing** (`npm test`, 124 suites). Not yet committed or `npm run gate`-verified.
+>
+> **Before a clean v0.1.0 GitHub Release:** finish cross-editor UAT (b002 Cursor, b003 version-check —
+> see [chunk-04-test-results.md](../planning/chunks/chunk-04-test-results.md)) and decide
+> **repo visibility** (still PRIVATE → updater 404s + install one-liner 404s for end users).
 
 **Last updated:** 2026-05-24 (end of DOS:R16 — CHUNK-11 complete · Phase 2 Week 9 closed · Phase 2 complete; file handoff + terminal integration + result watcher shipped end-to-end across Days 1–4; +48 tests, 292 total; 4 substantive commits). Narrative in [`history/DOS_R0016.md`](history/DOS_R0016.md).
-
-Read this file **first** when starting a new Development session (`/sm-start-fresh R`).
 
 ---
 
@@ -29,57 +59,3 @@ Read this file **first** when starting a new Development session (`/sm-start-fre
 | Antigravity CLI | **GONE** — 2.0.1 dropped the CLI binary. Sideload into Antigravity 2.x is GUI-only. |
 | Smoke workspaces on disk | `/tmp/deliveryos-smoke-r5/` + `/tmp/deliveryos-smoke-r5-cursor/` + `/tmp/deliveryos-smoke-r5-antigravity/` + `/tmp/release-verify-v2/` + `/tmp/v002-verify/`. Can be deleted now (b002 + b003 accepted by fiat). |
 | Tracks configured | O (Documentation) · R (Development) · P (Project Management). |
-
----
-
-
-## How to start the next session
-
-`/sm-start-fresh R`
-
-Session name to use: **DOS:R17**
-
-DOS:R17 has the following candidate paths:
-
-1. **CHUNK-12 — Result Capture** — primary next chunk per BUILD-PLAN. **Phase 3 Week 10** (nominal 2026-07-27; we're ~9 weeks ahead). Spec: `docs/planning/chunks/chunk-12-result-capture.md` (verify path at session start). Subscribes to CHUNK-11's `ResultWatcher.onResult`, parses `result.md` bytes (summary + changed files + tests run), persists a Result Memory entry linked to the brief via `derives-from`, writes the audit-trail `history/<ts>-result.md` snapshot using `historyResultUri(ws, ts)` from `paths.ts`. Adds the Result Capture tree-view node + webview surface. MUST import `RESULT`, `resultUri`, `historyResultUri`, `HANDOFF_HISTORY_DIR` from `extension/src/handoff/paths.ts` — no re-implementation. Subscribes to `ResultWatcher.onResult` via either the existing host messenger getter or by moving ownership to `extension.ts` (decision deferred to CHUNK-12).
-2. **CHUNK-11 manual smoke** (carry-over from this session) — see § "Carry-overs" above. ~30 min. Walks the full Generate → Run → Result loop against the real `claude` + `codex` binaries.
-3. **CHUNK-10 / CHUNK-09 / CHUNK-08 / CHUNK-07 / CHUNK-06 manual smokes** (parallel carry-overs) — can roll up with #2 since they share the same dev-launch session.
-4. **Optional**: tree → catalogue deep-link selection (wire `consumePendingRequirementSelection` + the `focus: 'verification'` arg through the webview bootstrap so per-REQ / per-criteria tree clicks highlight the row).
-5. **Optional**: live-verify b001 + b004 fixes; flip both `pending_review → resolved` if clean.
-6. **Optional**: push `origin/main` (51 commits ahead after this wrap).
-7. **Optional Track-O folding pass**: PRD § 18.Y dotfile-vs-slash inconsistency + `harness-profiles.md` slash mentions (new from CHUNK-11 spec § Risks).
-
-User's call. CHUNK-12 is the priority — it closes the loop on the Phase 3 demoable state and starts the diff feature's data pipeline (CHUNK-13 reads Result Memory).
-
-**Pre-flight reminder for DOS:R17:**
-
-- `npm run build` (from repo root) produces `dist/extension.js` (~367.8 KB — up from 342.7 KB; CHUNK-11's handoff host modules + crypto/path imports) + `webview/dist/assets/{discover,hello,messenger,prd-editor,requirements,requirements-decompose,test-designer,brief-composer}-*.js` cleanly. Re-run if the working tree changed since the wrap.
-- `npm test` (from `extension/`) runs the **292-test** suite (85 suites) via `tsx + node:test` in ~500 ms.
-- `npm run typecheck` is green in both `extension/` and `webview/` (run per-workspace; no root-level typecheck script).
-- `npm -w @deliveryos/contracts run build` — **MUST re-run after editing any `contracts/src/*.ts` file**. The extension's `tsc` consumes `contracts/dist/` (not `contracts/src/`); stale dist silently disagrees with source on any new types CHUNK-12 introduces.
-- **Local install state (unchanged from DOS:R5):** `deliveryos.deliveryos@0.0.1` installed in VS Code + Cursor. CHUNK-11 changes are in the dev build (F5) but not in the installed v0.0.1 until next package + sideload.
-- **Repo is PRIVATE** (flipped DOS:R7). Updater unauth API call returns 404 → activation-path updater fails closed silently.
-- **CHUNK-11 canonical exports** for CHUNK-12 to consume:
-  - `extension/src/handoff/paths.ts` → `RESULT`, `HANDOFF_DIR`, `HANDOFF_HISTORY_DIR`, `resultUri`, `resultRelativePattern`, `historyResultUri`, `historyBriefUri`, `historyTimestamp`, `parseHistoryTimestamp`
-  - `extension/src/handoff/resultWatcher.ts` → `ResultWatcher`, `ResultWatchEvent`, `RESULT_DEBOUNCE_MS`
-  - `extension/src/handoff/terminalLauncher.ts` → `TerminalLauncher`, `TerminalClosedEvent` (for harness-aborted UI if CHUNK-12 surfaces it)
-  - `extension/src/handoff/writer.ts` → `HandoffWriter`, `HandoffWriteResult` (CHUNK-12 likely re-uses `writePathAtomic` pattern for its own audit snapshots — currently inlined in `writer.ts`; may want to extract to a shared helper)
-  - `contracts/src/handoff.ts` → `HANDOFF_PATHS`, `HandoffSnapshot`, `TerminalCloseReason`, all 7 message types
-- **`HostMessenger` ownership pattern**: `registerHandoffHandlers` returns a `Disposable` that owns the launcher + watcher + their forwarding subscriptions. CHUNK-12 may want to either subscribe to the existing `ResultWatcher` instance (via a getter exposed on `HostMessenger`) or move ownership to `extension.ts` for cross-handler sharing.
-- **`context.globalState` keys in use**: `deliveryos.handoff.gitignorePromptedFor.<projectId>` (CHUNK-11). `context.workspaceState` keys: `deliveryos.profiles.lastUsed` (CHUNK-10). Don't collide.
-- **`extension/test/vscode-stub.ts`** now supports terminal + watcher + readDirectory + rename + copy + RelativePattern — CHUNK-12's headless tests can rely on this.
-- The CHUNK-12 spec source is `docs/planning/chunks/chunk-12-result-capture.md` (verify exact filename at session start).
-- **`HostMessenger.activeDraft` is a class field**, not a closure — CHUNK-11's terminal-launch command may want to read it (to know which brief is being launched). Access via a getter or pass through the existing `RequirementsDeps`/`BriefDeps` pattern.
-- **`.deliveryos-handoff/` is the canonical handoff directory.** Both MVP profiles set `handoff_dir: '.deliveryos-handoff'`; CHUNK-11 reads from the profile, not from a hard-coded constant. CHUNK-11's `.gitignore` framing should use `applyManagedBlock(existing, body, 'gitignore')` — the applier is already gitignore-aware.
-- **Brief schema still frozen at v1** (`BRIEF_SCHEMA_VERSION = 1`). CHUNK-11 does not extend it.
-- **Type-gotchas (still apply):** `exactOptionalPropertyTypes: true` requires conditional spread. `vscode-messenger-common`'s `RequestType<P, R>` is a type alias `{ method: string }` not a class — use object-literal form. `{ _empty?: never }` params take `{}` (or `Record<string, never>`). Status enum returns must use `as const`.
-- The CHUNK-11 spec source is `docs/planning/chunks/chunk-11-file-handoff.md` (verify exact filename at session start).
-
-### Recent sessions (newest first)
-
-- [DOS:R16](history/DOS_R0016.md)
-- [DOS:R15](history/DOS_R0015.md)
-- [DOS:R14](history/DOS_R0014.md)
-- [DOS:R13](history/DOS_R0013.md)
-- [DOS:R12](history/DOS_R0012.md)
-

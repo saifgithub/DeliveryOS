@@ -13,7 +13,7 @@ flowchart TD
     A2 --> B0
 
     subgraph B["Phase B — Build cycle (track R), one chunk at a time"]
-        B0[Architect picks next chunk<br/>from BUILD_STATUS.md] --> B1[Architect pre-fire audit<br/>+ interpret each check]
+        B0[Architect picks next chunk<br/>from CHUNK_LEDGER.md] --> B1[Architect pre-fire audit<br/>+ interpret each check]
         B1 -->|drift| B1f[Fix chunk spec] --> B1
         B1 -->|clean| B2[Architect writes builder invocation<br/>≤80 lines, design-quality stance, tier]
         B2 --> B3[[Builder sub-agent]]
@@ -26,7 +26,7 @@ flowchart TD
         B7 --> GATE{{Non-agentic gate:<br/>run checks · exit code}}
     end
 
-    GATE -->|green + verifiers converged| V1[Auto-advance:<br/>sync BUILD_STATUS.md, confirm commit<br/>~0 human touch]
+    GATE -->|green + verifiers converged| V1[Auto-advance:<br/>sync CHUNK_LEDGER.md, confirm commit<br/>~0 human touch]
     GATE -->|check fails / verifiers disagree| V2[Divergence:<br/>fix_prompt vK ≤60 lines] --> B0
     GATE -->|stuck / v4 cap| V3[Escalate to stakeholder<br/>AskUserQuestion]
 
@@ -50,5 +50,5 @@ flowchart TD
     AR -->|Agent tool, fresh per chunk| BD[[Builder sub-agent]]
     AR -->|Agent tool, fresh per chunk| QA[[QA verifiers ×N]]
     BD -.no shared memory.- QA
-    AR --- ST[(BUILD_STATUS.md +<br/>chunk specs = durable state)]
+    AR --- ST[(CHUNK_LEDGER.md +<br/>chunk specs = durable state)]
 ```

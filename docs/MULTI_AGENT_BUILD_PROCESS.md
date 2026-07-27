@@ -43,12 +43,12 @@ The stakeholder expects to spend very little time. With §16's autonomous accept
 | Role | Who | Does | Doesn't |
 | --- | --- | --- | --- |
 | **Stakeholder** | Human stakeholder | Authors/approves intent (the spec), adjudicates flagged divergences and escalations, runs the sample audit (§16.4) | Per-chunk go/no-go on convergent chunks (auto-advances), draft invocations, dispatch toil, write code, run tests |
-| **Architect** | sustained session — tier selected per task (see § 15) | Picks the next chunk from `BUILD_STATUS.md`; selects starting tier for the session and each sub-agent; runs and **interprets** the pre-fire factual audit; writes minimum-necessary builder and QA invocations (under 80 lines each) with a design quality stance; spawns sub-agents via the Agent tool; reads the gate result and verifier convergence (§16.4); approves or rejects structural trade-offs and registers approved shortcuts as `Structural debt:` in `BUILD_STATUS.md`; runs a cross-chunk cohesion review every four to five chunks; auto-syncs `BUILD_STATUS.md` on convergent green and runs the sample audit; curates memory | Write extension code, run the test suite, edit code files, share state with sub-agents |
+| **Architect** | sustained session — tier selected per task (see § 15) | Picks the next chunk from `CHUNK_LEDGER.md`; selects starting tier for the session and each sub-agent; runs and **interprets** the pre-fire factual audit; writes minimum-necessary builder and QA invocations (under 80 lines each) with a design quality stance; spawns sub-agents via the Agent tool; reads the gate result and verifier convergence (§16.4); approves or rejects structural trade-offs and registers approved shortcuts in `STRUCTURAL_DEBT.md`; runs a cross-chunk cohesion review every four to five chunks; auto-syncs `CHUNK_LEDGER.md` on convergent green and runs the sample audit; curates memory | Write extension code, run the test suite, edit code files, share state with sub-agents |
 | **Builder / QA** | fresh sub-agent per chunk fire (Agent tool, `subagent_type: general-purpose`) | Re-runs the pre-fire audit (pastes output verbatim), writes TypeScript code and tests, runs the unit suite and the extension smoke in one session, files a report; OR writes a BLOCKER file and exits if any ambiguity surfaces | Use `AskUserQuestion` (sub-agents do not have it), share memory across fires, edit architect-owned docs, refactor outside the chunk scope |
 
-Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`) and `docs/build/BUILD_STATUS.md` are the only durable state.
+Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`), `docs/build/CHUNK_LEDGER.md`, `docs/build/STRUCTURAL_DEBT.md`, and `docs/build/COHESION_LOG.md` are the only durable state.
 
-**Cold-start exception.** If the architect session itself saturates, checkpoint it (`/sm-checkpoint` SAVE → `/compact`) and the fresh architect resumes on RESTORE per §12, reading `BUILD_STATUS.md` and `docs/build/NEXT_SESSION.md` directly.
+**Cold-start exception.** If the architect session itself saturates, checkpoint it (`/sm-checkpoint` SAVE → `/compact`) and the fresh architect resumes on RESTORE per §12, reading `CHUNK_LEDGER.md` and `docs/build/NEXT_SESSION.md` directly.
 
 ---
 
@@ -89,7 +89,9 @@ Phase B working area:
 
 ```text
 docs/build/
-├── BUILD_STATUS.md             # architect's cumulative live state (chunk ledger + decisions)
+├── CHUNK_LEDGER.md             # architect's cumulative live state (what's on disk, what's running)
+├── STRUCTURAL_DEBT.md          # standing register of approved structural shortcuts
+├── COHESION_LOG.md             # append-only log of cross-chunk cohesion reviews
 ├── NEXT_SESSION.md             # architect's single-page "what now" cold-start brief
 ├── invocations/                # builder invocation prompts (one per chunk fire)
 ├── builder_reports/            # builder ships here (chunk_NN_<slug>.md; _v2/_v3 for re-runs, never overwrite)
@@ -103,14 +105,14 @@ docs/build/
 
 | Role | Cumulative state | Per-session delta | Cold-start input |
 | --- | --- | --- | --- |
-| **Architect** | `docs/build/BUILD_STATUS.md` | direct edits during the build cycle (chunk-status flips, debt/cohesion entries) | `BUILD_STATUS.md` + `NEXT_SESSION.md` |
+| **Architect** | `docs/build/CHUNK_LEDGER.md` + `STRUCTURAL_DEBT.md` + `COHESION_LOG.md` | direct edits during the build cycle (chunk-status flips, debt/cohesion entries) | `CHUNK_LEDGER.md` + `NEXT_SESSION.md` |
 | **Builder / QA** | none, fresh per fire, no inter-session memory | the builder/QA report file is the per-chunk artifact | the invocation file is their only input |
 
 ---
 
 ## 6. The build cycle, end to end
 
-1. **Architect** picks the next chunk from `BUILD_STATUS.md`, following the dependency order in `docs/planning/READY.md`.
+1. **Architect** picks the next chunk from `CHUNK_LEDGER.md`, following the dependency order in `docs/planning/READY.md`.
 2. **Architect** re-reads the chunk spec for chunk N, plus its pre-reads: the PRD sections it cites, the builder reports of chunks it depends on, and `CLAUDE.md`.
 3. **Architect** runs the pre-fire factual audit (VS Code API checks, file existence checks, prior-chunk-output checks, chunk-spec line-reference verification) and **interprets** each result: one sentence per check stating what was expected, what was found, and whether it represents drift requiring action. Pasting output without interpretation is not a completed audit. Spec drift means the architect fixes the chunk spec, then re-runs the audit.
 4. **Architect** writes the builder invocation inline following four rules: (1) **Under 80 lines** — do not paste the chunk spec verbatim; instead pre-resolve the three to five key design decisions, state scope constraints, and direct the builder to read the spec file. (2) **Open with a design quality stance**: "Build clean first. If the clean structure and the fast structure diverge, build the clean one. Structural shortcuts must be declared as blocking hot spots with the clean version described." (3) **Done criteria as a numbered checklist**, 10 lines maximum. (4) **State the builder's starting tier** (Economy / Standard / Premium — see § 15) and the escalation ladder that applies.
@@ -121,7 +123,7 @@ docs/build/
 9. **Architect** spawns QA via the Agent tool (`subagent_type: general-purpose`, prompt = step 8 output).
 10. **QA** re-runs every "done" criterion against primary sources (actual editor behaviour, not just exit codes), audits test quality, audits report completeness, reproduces each hot spot, writes `qa_reports/chunk_NN_<slug>_qa.md`, and ends with the mandatory verdict block (§8 Cycle 5).
 11. **Verdict — auto-advancing (§16.4).** The non-agentic gate runs the verifiers' acceptance checks against the impl. The outcome decides, not a narrative:
-    - **Auto-advance** (verifiers converged AND gate green) → architect syncs `BUILD_STATUS.md` (chunk status flip, chunk N entry appended with builder report path, verifier checks + gate result, key facts, next-chunk pointer refreshed) and confirms the chunk's commit landed. **No human approval required.**
+    - **Auto-advance** (verifiers converged AND gate green) → architect syncs `CHUNK_LEDGER.md` (chunk status flip, chunk N entry appended with builder report path, verifier checks + gate result, key facts, next-chunk pointer refreshed) and confirms the chunk's commit landed. **No human approval required.**
     - **Divergence** (a verifier check fails the impl, or verifiers disagree → spec ambiguity) → architect drafts `fix_prompts/chunk_NN_<slug>_v<K>.md` (60 lines or fewer) and loops back to step 1, or files a spec BLOCKER. No status sync; chunk N is still in flight.
     - **Escalate** → architect uses `AskUserQuestion` to surface options: keep iterating / redesign the chunk / re-plan / park.
     - **Sample audit** → a random fraction of auto-advanced chunks gets a human spot-check — the scaling backstop against verifiers converging on a shared wrong reading.
@@ -172,7 +174,7 @@ Six interleaved cycles, each catching a different failure class.
 - **Fires twice:** the architect (while drafting the invocation) and the builder (in their session, before any code change).
 - **Catches:** stale chunk-spec claims that would burn hours on a wrong premise. For a VS Code extension the common ones are: a VS Code API that does not exist in the pinned `engines.vscode` version, a contribution-point key typo in `package.json`, a file that a prior chunk was supposed to create but did not, a shared type or interface named in the spec that has since drifted.
 - **Rule:** every chunk spec has a `### Pre-fire audit` listing 5 to 10 commands. The builder pastes the output verbatim into the report **and writes one sentence per command** stating what was expected, what was found, and whether it represents drift. Paste-without-interpretation is not a completed audit. Any failure means a BLOCKER, no code written.
-- **Typical commands:** check `package.json` `engines.vscode`; grep the installed `@types/vscode` surface for the APIs the chunk uses; confirm prior-chunk output files exist; confirm the chunk's declared dependency chunks are marked done in `BUILD_STATUS.md`; verify chunk-spec line references.
+- **Typical commands:** check `package.json` `engines.vscode`; grep the installed `@types/vscode` surface for the APIs the chunk uses; confirm prior-chunk output files exist; confirm the chunk's declared dependency chunks are marked done in `CHUNK_LEDGER.md`; verify chunk-spec line references.
 
 ### Cycle 2 — Builder one-session test plus smoke (during the build)
 
@@ -202,7 +204,7 @@ Six interleaved cycles, each catching a different failure class.
 
 Economy failure is never retried at the same tier — it signals the task needs more capability, not another attempt. Standard and Premium each get one same-tier retry before escalating.
 
-**Structural shortcut rule:** a structural shortcut (denormalised schema, missing constraint, magic number, leaky abstraction) taken to meet the attempt budget is not a valid resolution at any tier. It is a BLOCKER with a description of what clean resolution requires. The architect decides whether to approve the shortcut; if approved, it is registered as `Structural debt:` in `BUILD_STATUS.md`.
+**Structural shortcut rule:** a structural shortcut (denormalised schema, missing constraint, magic number, leaky abstraction) taken to meet the attempt budget is not a valid resolution at any tier. It is a BLOCKER with a description of what clean resolution requires. The architect decides whether to approve the shortcut; if approved, it is registered in `STRUCTURAL_DEBT.md`.
 
 - Iteration history (command, diagnosis, fix, rerun) goes into the builder report per criterion.
 - The tier used for each attempt is recorded in the report.
@@ -288,14 +290,14 @@ Where a chunk only adds a few tests on top of a long pre-existing suite, prefer 
 
 The architect is the only sustained-context AI session. Its responsibilities per cycle:
 
-- **Chunk selection and pre-read.** Picks the next chunk in dependency order from `BUILD_STATUS.md` and `READY.md`. Re-reads the chunk spec plus its cited PRD sections and the builder reports of dependency chunks.
+- **Chunk selection and pre-read.** Picks the next chunk in dependency order from `CHUNK_LEDGER.md` and `READY.md`. Re-reads the chunk spec plus its cited PRD sections and the builder reports of dependency chunks.
 - **Pre-fire audit ownership.** Before drafting an invocation, the architect runs the audit against real state (VS Code API surface, file system, line refs, prior-chunk outputs). Drift means the architect edits the chunk spec to match reality, then re-audits. The builder still runs the audit again in their session; two passes are cheaper than one wrong premise.
 - **Invocation drafting.** Builder invocations are written inline: under 80 lines, no chunk spec verbatim paste (direct the builder to read the spec file), design quality stance in the opening paragraph, key design decisions pre-resolved, done criteria as a numbered checklist (10 lines max), starting tier and escalation ladder stated. QA (verifier) invocations carry the **§16.3 verifier gates (G1–G4) verbatim** and the Pass-0 blind-authoring directive, plus the structural quality sweep; under triangulation the architect fires ≥2 verifiers with diversified lens/tier (§16.4).
 - **Sub-agent orchestration.** Spawns builder and QA via `Agent(subagent_type: general-purpose, ...)`. Reads the report file directly when the sub-agent returns; the chat summary is not authoritative.
 - **BLOCKER resolution.** Reads `blockers/chunk_NN_*.md`, edits the chunk spec or pre-reads, re-checks cohesion with neighbouring chunks if the interface changed, re-fires.
-- **Verdict and sync (auto-advancing, §16.4).** The gate + verifier convergence decide, not the architect's recommendation. On auto-advance the architect immediately syncs `BUILD_STATUS.md` and confirms the commit landed — no human approval solicited. Divergence loops to a fix prompt or BLOCKER; escalation goes to the stakeholder via `AskUserQuestion`. The architect also runs the **sample audit** on a random fraction of auto-advanced chunks (the backstop against correlated verifier error).
-- **Cross-chunk cohesion review.** Every four to five chunks, before firing the next builder, the architect greps for the three most common patterns introduced in recent chunks (naming conventions, error-handling shapes, data-access patterns) and confirms they are consistent. If drift is found, a targeted fix prompt is raised before continuing. The review is logged in `BUILD_STATUS.md` as a `Cohesion check:` entry.
-- **Structural debt register.** The architect is the only agent who can approve a structural shortcut. When approving a chunk whose hot spots include a structural shortcut, the `BUILD_STATUS.md` entry for that chunk must include a `Structural debt:` field: what was cut, what the clean version looks like, and which future chunk should address it. Debt not registered does not exist as far as future architects are concerned.
+- **Verdict and sync (auto-advancing, §16.4).** The gate + verifier convergence decide, not the architect's recommendation. On auto-advance the architect immediately syncs `CHUNK_LEDGER.md` and confirms the commit landed — no human approval solicited. Divergence loops to a fix prompt or BLOCKER; escalation goes to the stakeholder via `AskUserQuestion`. The architect also runs the **sample audit** on a random fraction of auto-advanced chunks (the backstop against correlated verifier error).
+- **Cross-chunk cohesion review.** Every four to five chunks, before firing the next builder, the architect greps for the three most common patterns introduced in recent chunks (naming conventions, error-handling shapes, data-access patterns) and confirms they are consistent. If drift is found, a targeted fix prompt is raised before continuing. The review is appended to `COHESION_LOG.md` as a new row.
+- **Structural debt register.** The architect is the only agent who can approve a structural shortcut. When approving a chunk whose hot spots include a structural shortcut, add a row to `STRUCTURAL_DEBT.md`: what was cut, what the clean version looks like, and which future chunk should address it. Debt not registered does not exist as far as future architects are concerned.
 - **Tier selection.** The architect selects the session tier and each sub-agent's starting tier based on task complexity (see § 15). The default for routine build sessions is Standard. Economy is for mechanical tasks only. Premium is for design work, BLOCKER resolution, and the Advisor role.
 - **Memory curation.** When something non-obvious is learned, the architect saves it as a `feedback_*` or `memory_*` note in the Claude Code memory directory and adds a one-line pointer to the index.
 
@@ -324,7 +326,7 @@ What the architect does NOT do: write extension code, run the test suite, edit c
 | An agent issues a confident verdict from a partial view of reality | Non-agentic gate (mechanical exit code) + §16.4 verifier triangulation + human sample audit |
 | Verifiers converge on a shared wrong reading (correlated error) | §16.4 verifier diversity (lens/tier) + random human sample audit of auto-advanced chunks |
 
-**The process cannot catch:** the architect designing the wrong chunk (correct execution of an incorrect spec); a bug class none of the tests detect (tests prove the chunk spec is met, not that the spec is right); cross-chunk interactions that emerge only when several ship together. The cohesion validation in Phase A and a periodic review of `BUILD_STATUS.md` surface these, not the per-chunk cycles. §16.4 narrows the residual — verifier-vs-verifier divergence surfaces spec ambiguity for free, and the sample audit catches a fraction of shared-wrong-reading cases — but cannot close it: a spec that is confidently wrong, read the same wrong way by every verifier, still ships. That irreducible "is the intent right?" judgement is the human floor (§16.4).
+**The process cannot catch:** the architect designing the wrong chunk (correct execution of an incorrect spec); a bug class none of the tests detect (tests prove the chunk spec is met, not that the spec is right); cross-chunk interactions that emerge only when several ship together. The cohesion validation in Phase A and a periodic review of `CHUNK_LEDGER.md`/`COHESION_LOG.md` surface these, not the per-chunk cycles. §16.4 narrows the residual — verifier-vs-verifier divergence surfaces spec ambiguity for free, and the sample audit catches a fraction of shared-wrong-reading cases — but cannot close it: a spec that is confidently wrong, read the same wrong way by every verifier, still ships. That irreducible "is the intent right?" judgement is the human floor (§16.4).
 
 ---
 
@@ -346,11 +348,19 @@ skill, unedited) plus one DeliveryOS-specific convention layered on top, documen
 in the skill itself since the skill is shared across every project. The `/sm-handover` /
 `/sm-start-fresh` / `/sm-session-setup` trio and `.claude/session-config.yml` are retired, along with
 the O- and P-track handover docs (`PLANNING_STATUS.md`, `PM_STATUS.md`) — see `docs/pm/BACKLOG.md`
-§B-004. **`BUILD_STATUS.md` is not retired.** Unlike the other two, it doubles as the Architect's
-active per-chunk ledger (chunk-status table, Structural-debt register, Cohesion-check log — §4, §6,
-§9 below) — deciding its fate is a separate, still-open question. It continues to be read and written
-directly by the Architect during the build cycle; only `/sm-handover`'s per-session wrap of it is
-gone.
+§B-004. **`BUILD_STATUS.md` is split, not retired** (resolved 2026-07-27, split by write-pattern):
+chunk-status content — mutable, single-owner, not derived from anything DeliveryOS's actual
+chunk-by-chunk build loop consults today (it doesn't run through `orchestration/dispatch/` lanes;
+see that protocol's own `BINDINGS.md`) — moves to `docs/build/CHUNK_LEDGER.md`, a plain ledger with
+no handover framing. The Structural-debt register (durable, cross-cutting, single-owner) becomes its
+own standing file, `docs/build/STRUCTURAL_DEBT.md`. The Cohesion-check log (append-only) becomes
+`docs/build/COHESION_LOG.md`. None of the three is derived, logged, or registered anywhere else —
+each is single-writer (the Architect) and reflects exactly one of: derivable state (none of these
+qualify, so nothing was deleted), an append-only log, or a mutable single-owner register. If
+DeliveryOS's chunk loop is ever wired onto `orchestration/dispatch/` lanes, `CHUNK_LEDGER.md` should
+be replaced by `sh orchestration/dispatch/dispatch.sh state`, not kept alongside it — a hand-maintained
+table next to something a protocol derives is exactly the second-source-of-truth problem this split
+exists to avoid.
 
 **Tracks are now an informal naming convention, not config-driven.** `DOS` is the project prefix;
 `O` (Documentation), `R` (Development), `P` (Project Management) are the track letters, tagged
@@ -391,7 +401,7 @@ made by the architect in-session; it does not require switching tracks.
 
 ## 13. Why this works (and where it does not)
 
-**Works because:** each cycle catches a different failure class; the architect keeps decision authority but offloads execution to fresh sub-agents; builder and QA are independent with no shared memory; the chunk specs and `BUILD_STATUS.md` are the single source of truth, chat is scaffolding; iteration budgets prevent infinite loops; the depth cap prevents unbounded revision; BLOCKER-file-only escalation forces exhaustive ambiguity discovery up front; one chunk at a time keeps every failure small and contained.
+**Works because:** each cycle catches a different failure class; the architect keeps decision authority but offloads execution to fresh sub-agents; builder and QA are independent with no shared memory; the chunk specs and `CHUNK_LEDGER.md` are the single source of truth, chat is scaffolding; iteration budgets prevent infinite loops; the depth cap prevents unbounded revision; BLOCKER-file-only escalation forces exhaustive ambiguity discovery up front; one chunk at a time keeps every failure small and contained.
 
 **Does not work for:** one-off small fixes (cycle overhead exceeds the work); genuinely exploratory design (write the chunk spec first); rapidly shifting requirements (stabilise the chunk spec first).
 
@@ -420,10 +430,10 @@ Stakeholder triggers (the architect interprets them):
 
 # Re-read state mid-session
 "read again"
-# → architect re-reads the active chunk spec + PRD + BUILD_STATUS.md end to end
+# → architect re-reads the active chunk spec + PRD + CHUNK_LEDGER.md end to end
 
 # Sign off — usually automatic: convergent verifiers + green gate auto-advance (§16.4),
-#   architect syncs BUILD_STATUS.md and confirms the commit with no human word.
+#   architect syncs CHUNK_LEDGER.md and confirms the commit with no human word.
 # "approve" is only needed to override a divergence- or sample-flagged chunk.
 
 # Ask for a revision
@@ -447,7 +457,7 @@ All model references in this document use capability tiers, not provider names o
 
 | Tier | Capability profile | When to use |
 | --- | --- | --- |
-| **Economy** | Fast, low context, good at mechanical and deterministic tasks | Pre-fire audit execution, status reads, log parsing, boilerplate scaffolding, config-only chunks, `BUILD_STATUS.md` updates |
+| **Economy** | Fast, low context, good at mechanical and deterministic tasks | Pre-fire audit execution, status reads, log parsing, boilerplate scaffolding, config-only chunks, `CHUNK_LEDGER.md` updates |
 | **Standard** | Strong reasoning, large context, good at implementation | Writing code, running tests, standard analysis — most builder and QA work, routine architect sessions |
 | **Premium** | Highest reasoning, best at complex design and judgment | Architecture decisions, BLOCKER resolution, Advisor role, escalated builder attempts, complex chunk design |
 
@@ -460,7 +470,7 @@ Economy = Haiku-class · Standard = Sonnet-class · Premium = Opus-class
 
 | Architect task | Tier |
 | --- | --- |
-| `BUILD_STATUS.md` update, status sync, log parsing | Economy |
+| `CHUNK_LEDGER.md` update, status sync, log parsing | Economy |
 | Routine implementation chunk — open session, build | Standard |
 | Cross-chunk cohesion review | Standard |
 | Fix-prompt drafting for a simple revision | Standard |

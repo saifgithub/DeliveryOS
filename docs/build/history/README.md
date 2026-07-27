@@ -8,10 +8,12 @@ context only.
 Filenames are `DOS_R<NNNN>.md` (four-digit zero-padded session number) so
 `ls history/` sorts chronologically.
 
-`../BUILD_STATUS.md` (this directory's "current state" doc) is **not** retired — unlike
-`PLANNING_STATUS.md`/`PM_STATUS.md`, it doubles as the Architect's active per-chunk ledger
-(`docs/MULTI_AGENT_BUILD_PROCESS.md` §4/§6/§9), so its fate is a separate, still-open decision. It
-continues to be read/written directly by the Architect; `/sm-handover` no longer touches it.
+`../BUILD_STATUS.md` (this directory's former "current state" doc) is renamed to
+`../CHUNK_LEDGER.md` — resolved 2026-07-27: it doubled as the Architect's active per-chunk build
+state, so it isn't retired like `PLANNING_STATUS.md`/`PM_STATUS.md`, just renamed and stripped of
+the handover-ritual framing (the "read this first" pointer, `/sm-start-fresh` line, and the stale
+"how to start next session" narrative are gone). Structural debt and cohesion-check entries that
+used to live inside it now go to `../STRUCTURAL_DEBT.md` and `../COHESION_LOG.md` instead.
 
 ## File shape
 

@@ -155,7 +155,7 @@ work (invariant 2).
     conformance gate would miss because the spec itself was read wrong?
 - **Output.** `docs/build/auditor/build_audit_<tag>.md`, severity-tagged.
 - **Routing.** The architect routes findings into the baseline's paths: fix-loop, a dated rebuttal in
-  `BUILD_STATUS.md`, or escalation (invariant 2 — the auditor never touches `npm run gate`).
+  `CHUNK_LEDGER.md`, or escalation (invariant 2 — the auditor never touches `npm run gate`).
 - **Known limitation (§9d).** Gate 2 sees only what the manifest lists; an omitted file hides its own
   gap. Build the manifest mechanically from the touched-files record (`git diff --name-only` over the
   build range + cited specs), not from memory.

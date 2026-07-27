@@ -20,14 +20,14 @@
 
 | # | Phase | Script (deterministic) | Agent call | Tier |
 | --- | --- | --- | --- | --- |
-| 0 | Select chunk | Next by dependency order (`READY.md`/`BUILD_STATUS.md`); human overrides explicitly | — | — |
+| 0 | Select chunk | Next by dependency order (`READY.md`/`CHUNK_LEDGER.md`); human overrides explicitly | — | — |
 | 1 | Normalize + pre-fire audit | Run the commands | Extract criteria/commands from whatever heading shape the spec uses; interpret clean/drift | Economy |
 | 2 | Invocation + builder fire | Validate shape (<80 lines, tier, ≤10 criteria, criteria map 1:1 to Phase 1's list) | Draft invocation; fire builder on the escalation ladder | Standard (draft) / ladder (build) |
 | 3 | Verifier triangulation | Gate-checkpoint: check files exist before unblinding | ≥2 verifiers in `parallel()`, diversified lens/tier | Standard + Premium |
 | 4 | Architect spot-check | Re-execute sampled builder-manifest rows, diff output | Derive 2–3 rows independently **from the spec alone** — not shown the builder's manifest or verifier findings | Standard |
 | 5 | Gate | `npm run gate`, exit code + `last-run.json` consumed as boolean only | — | — |
 | 6 | Verdict + routing | Convergence computed by the orchestrator over the verifier set, never self-reported by one verifier | See below | — |
-| 7 | Cohesion review | Cadence trigger (every 4–5 chunks); format + append `BUILD_STATUS.md` entry | Grep the 3 most common recent patterns, confirm consistency | Standard |
+| 7 | Cohesion review | Cadence trigger (every 4–5 chunks); format + append `COHESION_LOG.md` entry | Grep the 3 most common recent patterns, confirm consistency | Standard |
 
 Verifier triangulation (3) runs at N=3 instead of the N=2 default when Phase 2's invocation carries
 `riskFlag: true` — set when the chunk touches a §16.5 delivery surface with irreversible/state-changing
@@ -54,11 +54,11 @@ them differently, so the design now does too:
 ```
 structural-debt hot spot flagged  → architect-AI (Premium) approval call — MULTI_AGENT_BUILD_PROCESS.md
                                      §9: "the architect is the only agent who can approve a structural
-                                     shortcut." Approved → register `Structural debt:` in BUILD_STATUS.md,
+                                     shortcut." Approved → register in STRUCTURAL_DEBT.md,
                                      continue. Not approved → divergence.
 
 all green + spot-check passed
-+ no findings/disagreement        → auto-advance: agent writes the BUILD_STATUS.md entry (Economy) →
++ no findings/disagreement        → auto-advance: agent writes the CHUNK_LEDGER.md entry (Economy) →
                                      script commits + confirms the SHA landed → deterministic sampler
                                      selects a fraction of auto-advanced chunks and NOTIFIES A HUMAN
                                      (script never self-certifies — §16.4's "scaling backstop against

@@ -56,7 +56,7 @@ flowchart TD
         G2[Auditor reads TOUCHED-FILES manifest<br/>built mechanically: git diff --name-only<br/>COMPLETENESS + ACCURACY · severity-tagged]
     end
 
-    G2 --> ROUTE[Architect routes findings:<br/>fix-loop / dated rebuttal in BUILD_STATUS / escalate]
+    G2 --> ROUTE[Architect routes findings:<br/>fix-loop / dated rebuttal in CHUNK_LEDGER / escalate]
 
     GATE[(npm run gate<br/>non-agentic binding floor —<br/>no auditor ever edits or runs it)]
     GATE -.stays the machine floor under all of this.- LOOP

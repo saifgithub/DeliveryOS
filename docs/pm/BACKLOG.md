@@ -596,11 +596,11 @@ Add a severity rule to the hot spots declaration:
 
 This closes the gap where "it works, it's just a bit messy" becomes advisory and ships.
 
-**Change D — Structural debt register in BUILD_STATUS.md** (Section 9, architect role contract):
+**Change D — Structural debt register in STRUCTURAL_DEBT.md** (Section 9, architect role contract):
 
 Add to the architect role contract:
 
-> "The architect is the only agent who can approve a structural shortcut. When approving a chunk whose hot spots include a structural shortcut, the `BUILD_STATUS.md` entry for that chunk must include a `Structural debt:` field: what was cut, what the clean version looks like, and which future chunk should clean it up. Debt that is not registered does not exist as far as future architects are concerned."
+> "The architect is the only agent who can approve a structural shortcut. When approving a chunk whose hot spots include a structural shortcut, add a row to `STRUCTURAL_DEBT.md` for that chunk: what was cut, what the clean version looks like, and which future chunk should clean it up. Debt that is not registered does not exist as far as future architects are concerned."
 
 This makes structural debt visible across sessions and assignable to a future chunk rather than silently accumulating.
 
@@ -608,7 +608,7 @@ This makes structural debt visible across sessions and assignable to a future ch
 
 B-013 changes _what quality standard_ the agents are held to. B-014 changes _how the process is run_ (prompt shape, audit rigour, QA independence). Both are needed. B-013 without B-014 sets a higher bar but delivers it via the same long, compliance-theatre invocations. B-014 without B-013 tightens the process but still has no structural quality gate.
 
-**Success signal:** A chunk that touches a database schema or core abstraction is reviewed by QA for structural quality. A shortcut that would previously have shipped as advisory is flagged as blocking. The `BUILD_STATUS.md` chunk entry has either a clean structural audit or an explicit `Structural debt:` field — never silence.
+**Success signal:** A chunk that touches a database schema or core abstraction is reviewed by QA for structural quality. A shortcut that would previously have shipped as advisory is flagged as blocking. The chunk has either a clean structural audit or an explicit `STRUCTURAL_DEBT.md` entry — never silence.
 
 **Implementation note:** B-013 is a document edit, not a code change. An O-track session edits `docs/MULTI_AGENT_BUILD_PROCESS.md` to incorporate the four changes. No R-track work required.
 
@@ -675,7 +675,7 @@ Every four to five chunks, the architect runs a cross-chunk structural review be
 - Confirm they are consistent across all chunks delivered so far
 - If drift is found, raise a fix prompt targeting the inconsistency before continuing
 
-This review is logged in `BUILD_STATUS.md` as a `Cohesion check:` entry. It does not require a full builder fire — the architect does it in-session and either approves as consistent or drafts a targeted fix prompt.
+This review is appended to `COHESION_LOG.md` as a new row. It does not require a full builder fire — the architect does it in-session and either approves as consistent or drafts a targeted fix prompt.
 
 **Change 5 — Iteration budget reform** (Section 8 Cycle 3):
 
@@ -688,7 +688,7 @@ The current 3-attempt budget creates time pressure that encourages structural sh
 
 B-014 changes how the process runs. B-013 changes what quality standard the agents are held to. The changes interact: B-014 Change 1 (shorter invocations) makes B-013 Change A (design quality stance) more effective, because the stance now appears near the top of a short prompt rather than buried in a long one. Implement both together.
 
-**Success signal:** A builder invocation is under 80 lines. The pre-fire audit includes one interpretation sentence per command. QA's report shows an independent pass section distinct from the hot spots reconciliation section. The `BUILD_STATUS.md` shows a `Cohesion check:` entry every four to five chunks. No structural shortcut appears in a report without a blocking severity declaration.
+**Success signal:** A builder invocation is under 80 lines. The pre-fire audit includes one interpretation sentence per command. QA's report shows an independent pass section distinct from the hot spots reconciliation section. `COHESION_LOG.md` shows an entry every four to five chunks. No structural shortcut appears in a report without a blocking severity declaration.
 
 **Implementation note:** B-014 is a document edit, not a code change. The same O-track session that implements B-013 should implement B-014 — both edit `docs/MULTI_AGENT_BUILD_PROCESS.md` and the changes are tightly coupled.
 
@@ -707,7 +707,7 @@ B-014 changes how the process runs. B-013 changes what quality standard the agen
 
 The MABP is implicitly Claude-centric and cost-unaware. Two specific flaws:
 
-**Flaw 1 — Architect tier defaults to premium regardless of task.** In practice, architect sessions run on the highest-capability model available. But not all architect tasks require that. Syncing `BUILD_STATUS.md`, running a pre-fire audit, or writing a straightforward fix prompt are standard-tier tasks being billed at premium rates. Over a 16-chunk build, this is significant waste.
+**Flaw 1 — Architect tier defaults to premium regardless of task.** In practice, architect sessions run on the highest-capability model available. But not all architect tasks require that. Syncing `CHUNK_LEDGER.md`, running a pre-fire audit, or writing a straightforward fix prompt are standard-tier tasks being billed at premium rates. Over a 16-chunk build, this is significant waste.
 
 **Flaw 2 — The iteration budget is tier-blind.** The current rule gives a builder three attempts at the same model tier, then a BLOCKER. This wastes premium compute (if the builder was already premium) on attempts that won't change the outcome, and wastes human escalation bandwidth (if the builder was standard) on problems that a higher-capability model could have resolved.
 
@@ -719,7 +719,7 @@ The MABP should express all model references in capability tiers, not provider n
 
 | Tier | Capability profile | Cost profile | When to use |
 | --- | --- | --- | --- |
-| **Economy** | Fast, low context, good at mechanical and deterministic tasks | Lowest | Pre-fire audit execution, status reads, log parsing, boilerplate scaffolding, config-only chunks, file searches, `BUILD_STATUS.md` updates |
+| **Economy** | Fast, low context, good at mechanical and deterministic tasks | Lowest | Pre-fire audit execution, status reads, log parsing, boilerplate scaffolding, config-only chunks, file searches, `CHUNK_LEDGER.md` updates |
 | **Standard** | Strong reasoning, large context, good at implementation | Medium | Writing code, running tests, standard analysis, most builder and QA work |
 | **Premium** | Highest reasoning, best at complex design and judgment calls | Highest | Architecture decisions, BLOCKER resolution, escalated builder attempts, advisor role, complex chunk design |
 
@@ -736,7 +736,7 @@ The architect session tier is selected based on the nature of the work being ope
 
 | Architect task | Tier |
 | --- | --- |
-| `BUILD_STATUS.md` update, status sync, log parsing | Economy |
+| `CHUNK_LEDGER.md` update, status sync, log parsing | Economy |
 | Opening a session to build a straightforward implementation chunk | Standard |
 | Opening a session for a cross-chunk cohesion review (B-014 Change 4) | Standard |
 | Fix-prompt drafting for a simple revision | Standard |
@@ -792,7 +792,7 @@ B-003 (agent team delivery) addresses tiered orchestration for DOS-native delive
 
 Both B-003 and B-015 should use the same generic tier language. When B-003 is implemented, the tier definitions from B-015 should be shared rather than duplicated.
 
-**Success signal:** A MABP build log shows standard-tier sessions for routine chunks and premium-tier sessions only for complex or escalated work. A chunk that required escalation to premium shows in `BUILD_STATUS.md` with a `Tier escalated:` note. No specific model names appear in the MABP document — only tier labels.
+**Success signal:** A MABP build log shows standard-tier sessions for routine chunks and premium-tier sessions only for complex or escalated work. A chunk that required escalation to premium shows a `Tier escalated:` note in `CHUNK_LEDGER.md`. No specific model names appear in the MABP document — only tier labels.
 
 **Implementation note:** B-015 is a document edit. It should be implemented in the same O-track session as B-013 and B-014, since all three edit `docs/MULTI_AGENT_BUILD_PROCESS.md` and the changes are interdependent.
 

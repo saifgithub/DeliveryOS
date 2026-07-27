@@ -50,7 +50,7 @@ intent layer, upstream of the build.
 ### 1.1 The role
 
 - **The Adversary** is a red-team peer, context-equal to the architect. It reads the same
-  pre-reads: the full `docs/build/BUILD_STATUS.md`, every chunk spec in `docs/planning/chunks/`,
+  pre-reads: the full `docs/build/CHUNK_LEDGER.md`, every chunk spec in `docs/planning/chunks/`,
   and the cited PRD sections. **Persistent context is a feature here** — cross-chunk intent drift
   is exactly the residual it hunts, and it cannot see drift without remembering the arc.
 - It does **not** verify conformance, write checks, or issue pass/fail. It surfaces *doubt about
@@ -85,7 +85,7 @@ docs/build/adversary/
 3. The architect reads the findings and either:
    - **(a)** revises the chunk spec or re-picks the chunk (routes into the baseline's existing
      spec-change / BLOCKER path — nothing new downstream), or
-   - **(b)** records a dated **rebuttal** in `BUILD_STATUS.md` ("Adversary raised X on chunk NN;
+   - **(b)** records a dated **rebuttal** in `CHUNK_LEDGER.md` ("Adversary raised X on chunk NN;
      not actioned because …").
 4. Bound the exchange to **two rounds** per chunk (mirrors baseline Cycle 6's depth cap) to avoid
    ping-pong, then the architect decides and logs.
