@@ -1,7 +1,7 @@
 # DeliveryOS — P-track Backlog
 
 Items the P-track owns or flags. Rough priority ordering within each status tier.
-Add items here; use `/sm-start-fresh P` to pick them up in a session.
+Add items here; a P-track session picks them up on cold start (`docs/MULTI_AGENT_BUILD_PROCESS.md` §12).
 
 ---
 
@@ -174,9 +174,11 @@ The principle is: **use the lowest-cost model that can do the job at each tier.*
 
 ## § B-004 — Session continuity: handover and start-fresh as a DOS-native concept
 
-**What:** Make session lifecycle management a first-class feature inside DOS. When you close the extension and return hours or days later, DOS should know exactly where you left off — what was in progress, what decisions were made, what the carry-overs are — and offer a structured resume path. Mirrors the `/sm-handover` + `/sm-start-fresh` skill pattern used to build DOS itself, but implemented natively in the extension rather than as external Claude Code skills.
+**What:** Make session lifecycle management a first-class feature inside DOS. When you close the extension and return hours or days later, DOS should know exactly where you left off — what was in progress, what decisions were made, what the carry-overs are — and offer a structured resume path. Mirrors the `/sm-checkpoint` SAVE→RESTORE archive pattern used to build DOS itself (`docs/MULTI_AGENT_BUILD_PROCESS.md` §12 — the `/sm-handover`/`/sm-start-fresh` skill pattern this item originally cited was retired in favor of that mechanism), but implemented natively in the extension rather than as external Claude Code skills.
 
-**Why:** The DOS build relied heavily on session continuity. Each session wrap produced a structured handover document (commit count, test state, carry-overs, next-session name); each session open consumed it and resumed coherently. Without this, AI-assisted delivery degrades over time: agents lose context, work gets duplicated, decisions get re-litigated. DOS already stores memory — it should use that memory to manage its own session state, not just project artifacts.
+**Why:** The DOS build relies heavily on session continuity. Each `/sm-checkpoint` SAVE→RESTORE cycle archives a structured memo (identity marker, carry-overs, state) that the next session reads by identity, not by "newest file". Without this, AI-assisted delivery degrades over time: agents lose context, work gets duplicated, decisions get re-litigated. DOS already stores memory — it should use that memory to manage its own session state, not just project artifacts.
+
+**Status:** Still open — this item is about building native in-extension session UI (a `session` memory type, a "Resume" banner), which the external tooling retirement above does not deliver. The retirement only replaced the _external_ Claude-Code-skill mechanism DOS's own build process uses; it is not a substitute for this native feature.
 
 **The core insight from building DOS:** context windows end. Work doesn't. The handover pattern bridges that gap without human overhead. DOS should do this automatically.
 
@@ -210,7 +212,7 @@ A `session` memory row captures:
 
 4. **Multiple concurrent workstreams.** A single project may have parallel sessions (different features in flight). Session Memory must support tagging by workstream, not just by timestamp. This mirrors the O/R/P multi-track model.
 
-5. **What the AI sees at resume.** When the user opens a session resume, DOS should prime the AI with the last Session Memory entry — giving it carry-overs, in-progress artifacts, and last decisions — before the user types anything. This is the `start-fresh` equivalent: structured priming, not a blank slate.
+5. **What the AI sees at resume.** When the user opens a session resume, DOS should prime the AI with the last Session Memory entry — giving it carry-overs, in-progress artifacts, and last decisions — before the user types anything. This is the checkpoint-RESTORE equivalent (`docs/MULTI_AGENT_BUILD_PROCESS.md` §12): structured priming, not a blank slate.
 
 **Relationship to other items:** B-004 is load-bearing for B-003 (agent team delivery needs session state to track which tier is running and resume after interruption) and for B-005 (elicitation conversations need session context to avoid asking the same questions twice).
 

@@ -20,7 +20,7 @@ files (`REFERENCE.md`, scripts). An agent harness — Claude Code, or any tool t
 files under `.deliveryos/memory/`; the extension's **"Rebuild Memory Index from Markdown"** command
 ingests them into `memory.sqlite`. See each skill's `REFERENCE.md` for exact formats.
 
-> Project-scoped *slash commands* for developing this repo (session handover, bug-fix worktree, etc.)
+> Project-scoped *slash commands* for developing this repo (session checkpoint, bug-fix worktree, etc.)
 > live separately under [`.claude/commands/`](../.claude/commands/) — those drive the DeliveryOS build,
 > they are not shipped to end users.
 

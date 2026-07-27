@@ -13,9 +13,9 @@ This is the bug-fix track. Feature and chunk work lives in the multi-agent build
 ## bugs.json schema
 
 > This file's path (`docs/build/bugs.json`) and schema are this project's own convention — swap the
-> path and fields for whatever tracker a different project uses. Unlike `session-config.yml`'s
-> `bug_list` block (which only surfaces a count + titles at session start), this command needs the
-> full read/claim/write protocol below, so it isn't yet wired through that config surface.
+> path and fields for whatever tracker a different project uses. `/sm-checkpoint`'s RESTORE step only
+> surfaces a count + titles at session start (`docs/MULTI_AGENT_BUILD_PROCESS.md` §12); this command
+> needs the full read/claim/write protocol below, so it isn't wired through that surface.
 
 Bugs live in one version-controlled JSON file — `docs/build/bugs.json` — which is enough for a solo build (one person, plus QA sub-agents that occasionally surface a non-blocking issue). One entry per bug:
 
@@ -80,7 +80,7 @@ Be honest about classification. A "small" fix that balloons into a multi-file re
 ```bash
 TS=$(date +%Y%m%d-%H%M%S)
 BRANCH="claude/bug-fix-${TS}"
-WT_PATH="{worktree_dir}/bug-fix-${TS}"   # {worktree_dir} from .claude/session-config.yml, default .claude/worktrees
+WT_PATH=".claude/worktrees/bug-fix-${TS}"
 git worktree add -b "${BRANCH}" "${WT_PATH}" main
 cd "${WT_PATH}"
 ```
@@ -151,7 +151,7 @@ Deferred (large; needs planning as a chunk):
 
 To merge:
   git merge --no-ff claude/bug-fix-20260521-143000
-  git worktree remove {worktree_dir}/bug-fix-20260521-143000
+  git worktree remove .claude/worktrees/bug-fix-20260521-143000
 ```
 
 ## What NOT to do

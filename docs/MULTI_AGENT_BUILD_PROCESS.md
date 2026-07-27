@@ -48,7 +48,7 @@ The stakeholder expects to spend very little time. With §16's autonomous accept
 
 Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`) and `docs/build/BUILD_STATUS.md` are the only durable state.
 
-**Cold-start exception.** If the architect session itself saturates, the stakeholder wraps it with `/sm-handover` and opens the next with `/sm-start-fresh`. The fresh architect resumes from `BUILD_STATUS.md` and `docs/build/NEXT_SESSION.md`.
+**Cold-start exception.** If the architect session itself saturates, checkpoint it (`/sm-checkpoint` SAVE → `/compact`) and the fresh architect resumes on RESTORE per §12, reading `BUILD_STATUS.md` and `docs/build/NEXT_SESSION.md` directly.
 
 ---
 
@@ -103,7 +103,7 @@ docs/build/
 
 | Role | Cumulative state | Per-session delta | Cold-start input |
 | --- | --- | --- | --- |
-| **Architect** | `docs/build/BUILD_STATUS.md` | session handover written by `/sm-handover` | `BUILD_STATUS.md` + `NEXT_SESSION.md` |
+| **Architect** | `docs/build/BUILD_STATUS.md` | direct edits during the build cycle (chunk-status flips, debt/cohesion entries) | `BUILD_STATUS.md` + `NEXT_SESSION.md` |
 | **Builder / QA** | none, fresh per fire, no inter-session memory | the builder/QA report file is the per-chunk artifact | the invocation file is their only input |
 
 ---
@@ -128,7 +128,7 @@ docs/build/
 
 Human touchpoints in the cycle: ~0 on a convergent chunk (auto-advance); a human is pulled in only on divergence, escalation, or a sampled audit (§16.4).
 
-**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; `/sm-handover` cleans up the `agent-*` worktrees.
+**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; the `/sm-checkpoint` RESTORE step cleans up the `agent-*` worktrees (§12).
 
 ---
 
@@ -341,17 +341,51 @@ When something non-obvious is learned, the architect saves it as feedback and ad
 
 ## 12. Session management
 
-Sessions are managed by the config-driven `.claude` commands (`/sm-session-setup`, `/sm-start-fresh`, `/sm-handover`).
+Session continuity runs entirely on `/sm-checkpoint`'s SAVE → `/compact` → RESTORE cycle (the global
+skill, unedited) plus one DeliveryOS-specific convention layered on top, documented here rather than
+in the skill itself since the skill is shared across every project. The `/sm-handover` /
+`/sm-start-fresh` / `/sm-session-setup` trio and `.claude/session-config.yml` are retired, along with
+the O- and P-track handover docs (`PLANNING_STATUS.md`, `PM_STATUS.md`) — see `docs/pm/BACKLOG.md`
+§B-004. **`BUILD_STATUS.md` is not retired.** Unlike the other two, it doubles as the Architect's
+active per-chunk ledger (chunk-status table, Structural-debt register, Cohesion-check log — §4, §6,
+§9 below) — deciding its fate is a separate, still-open question. It continues to be read and written
+directly by the Architect during the build cycle; only `/sm-handover`'s per-session wrap of it is
+gone.
 
-**Track configuration.** Track count and labels are project-specific. The config-driven `.claude` commands support any number of named tracks with separate handover docs. A common pattern for a build project is one planning track and one development track — for example, tagged `<PREFIX>:O<N>` (Docs) and `<PREFIX>:R<N>` (Development). Fill in the project prefix when running `/sm-session-setup`. Separate handover docs keep planning narratives and build narratives from interleaving. The planning track leads, since it produces the chunk specs; the development track follows. Once the build is underway the two can run in either order, because the planning track is then mostly doc maintenance.
+**Tracks are now an informal naming convention, not config-driven.** `DOS` is the project prefix;
+`O` (Documentation), `R` (Development), `P` (Project Management) are the track letters, tagged
+`DOS:O<N>` / `DOS:R<N>` / `DOS:P<N>` in checkpoint identity lines and commit messages. No YAML file
+enforces this — it is just what each session calls itself.
 
-A chunk-spec fix raised by a BLOCKER during a development session touches planning-track files but is made by the architect in-session; it does not require switching tracks.
+**SAVE** (before `/compact`): the global skill writes `~/.claude/sm_checkpoint_$SESSION_ID.md` as it
+does in any project. **DeliveryOS convention:** the memo's first line is an identity marker,
+`IDENTITY: DOS:<track><N>` (e.g. `IDENTITY: DOS:R17`) — write this before anything else in the memo.
+It is what makes RESTORE and cold-start lookup below possible.
 
-**One-time setup.** Run `/sm-session-setup`: set the project prefix, configure tracks (planning + development at minimum), set handover paths. If the bug-list block is not yet relevant (greenfield project with no shipped product), leave it disabled.
+**RESTORE** (the first message after `/compact` — and now also every new session's cold-start
+entry point): the global skill archives the memo to
+`.claude/checkpoint_history/<timestamp>_<session-id>.md` as it does in any project (commit
+`7f97341`). **DeliveryOS convention, additionally performed at RESTORE:**
 
-**Each session.** Open with `/sm-start-fresh <track>` and wrap with `/sm-handover <track>`. `/sm-start-fresh` reads that track's handover doc, surfaces what is next, and enters plan mode. `/sm-handover` rotates state, runs a consistency scan, and leaves a clean tree.
+1. Commit **only** that one archived file, by pathspec (`git add .claude/checkpoint_history/<file> && git commit`) — never a broad `git add`.
+2. Sweep for merged `agent-*` worktrees under `.claude/worktrees/` left over from Agent-tool
+   `isolation: 'worktree'` calls (the job `/sm-handover`'s step 2 used to do): for each, verify
+   `git log main..<branch>` is empty, then `git worktree remove -f -f` + `git branch -D`. Never touch
+   an unmerged worktree.
+3. Run a light consistency scan (stale commit/test counts, renamed commands) over files touched this
+   session — the ad hoc sweep `/sm-handover` used to run.
+4. On track R, surface `docs/build/bugs.json`'s open-bug count/titles — the "sanity check at session
+   open" `/sm-start-fresh R` used to do.
 
-**When the architect saturates.** Wrap with `/sm-handover <track>`, then `/sm-start-fresh <track>` opens a fresh architect that resumes from the track's handover doc and `NEXT_SESSION.md`.
+**Cold start (new session, no prior compaction in this session):** grep
+`.claude/checkpoint_history/` for the newest file carrying **your own** identity marker — never
+"newest by mtime". The directory interleaves every track's sessions, so the literal newest file is
+often a different track's memo. There is no `LATEST.md` / `LATEST_<track>.md` pointer — a single file
+every session overwrites is a shared mutable flag that races under concurrent commits; disjoint
+archive files selected by identity at read time avoid that.
+
+A chunk-spec fix raised by a BLOCKER during a development session touches planning-track files but is
+made by the architect in-session; it does not require switching tracks.
 
 ---
 
