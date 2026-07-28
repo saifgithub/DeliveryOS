@@ -15,7 +15,7 @@ them. Section numbers below match PROTOCOL.md's for easy cross-reference.
 | The gate (§5.3, implicitly) | `npm run gate` (`scripts/gate.mjs`: clean → build → typecheck → test → package). Result at `docs/build/gate/last-run.json`. |
 | Branch (§2 "delivery is on origin") | `main` directly — no dedicated handshake branch. DeliveryOS ships a packaged `.vsix`, not a deployed service, so there's no auto-deploy risk from lane files landing on `main`. |
 | Ledger (§5.3) | `docs/build/EXPERIMENT_LOG.md` §4.3. |
-| Anchor doc | No `CLAUDE.md` exists in this repo. Use `docs/MULTI_AGENT_BUILD_PROCESS.md` + `docs/build/README.md`'s ownership table instead. |
+| Anchor doc | `CLAUDE.md` (repo root) → `docs/MULTI_AGENT_BUILD_PROCESS.md` + `docs/build/README.md`'s ownership table for build-cycle detail. |
 | Real measurement | `docs/MULTI_AGENT_BUILD_PROCESS.md` §16.5 delivery surfaces — drive the actual surface, not an internal call. |
 | Auditor tiers (§1) | `own` (Claude peer) / `foreign` / `human` — see `docs/MHBP_LAB.md` §6 for the full pluggable-auditor rules. |
 | Baseline build-process doc (§1, §4) | `docs/MULTI_AGENT_BUILD_PROCESS.md` (the 3-role architect/builder/auditor contract). A downstream project reusing the kernel either points this at its own equivalent baseline doc or adopts DeliveryOS's directly. |

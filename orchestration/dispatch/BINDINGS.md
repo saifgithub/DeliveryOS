@@ -6,7 +6,7 @@ BINDINGS.md — DeliveryOS's resolution of DISPATCH_PROTOCOL.md's generic tokens
 
 # DeliveryOS bindings for DISPATCH_PROTOCOL.md
 
-Adopted 2026-07-27 from AMI_MarketApp's CR052 orchestration protocol (`PORTABLE_MANIFEST.md`).
+Adopted 2026-07-27 per this tree's `PORTABLE_MANIFEST.md`.
 Stood up ahead of need — DeliveryOS is currently a single-maintainer project with no lanes dispatched
 yet. This is available headroom for future multi-instance work, not something in active use today.
 
