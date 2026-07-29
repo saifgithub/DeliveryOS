@@ -1,9 +1,9 @@
 # History — track R (Development) — DeliveryOS
 
 **Closed convention — no longer receives new entries.** Per-session wrap narratives written by
-`/sm-handover R`, retired in favor of the `/sm-checkpoint` archive mechanism
-(`.claude/checkpoint_history/`); see `docs/MULTI_AGENT_BUILD_PROCESS.md` §12. Kept for historical
-context only.
+`/sm-handover R` — the old config-driven command, not today's `/sm-handover` — retired in favor of
+the `/sm-checkpoint` archive mechanism (`.deliveryos/checkpoint_history/`); see
+`docs/MULTI_AGENT_BUILD_PROCESS.md` §12. Kept for historical context only.
 
 Filenames are `DOS_R<NNNN>.md` (four-digit zero-padded session number) so
 `ls history/` sorts chronologically.

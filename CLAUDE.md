@@ -46,8 +46,12 @@ reference version other projects pull from, not a downstream consumer citing whe
 
 Session-boundary continuity runs on `/sm-checkpoint`'s SAVE → `/compact` → RESTORE cycle — see
 `docs/MULTI_AGENT_BUILD_PROCESS.md` §12 for the DeliveryOS-specific convention layered on top
-(identity-marker cold start, no `LATEST.md` pointer). The `/sm-handover` / `/sm-start-fresh` trio
-this replaced is retired.
+(identity-marker cold start, no `LATEST.md` pointer). That cycle is intra-session only, since it
+keys on `$CLAUDE_CODE_SESSION_ID`; handing work to a *different* session — the other machine,
+another instance, a fresh session after a crash — is `/sm-handover` → `/sm-takeover <ID>`, which
+routes the same memo through the committed `.deliveryos/checkpoint_history/` archive. The retired
+trio is the old config-driven `/sm-handover` / `/sm-start-fresh` / `/sm-session-setup`; today's
+`/sm-handover` shares its name and nothing else.
 
 ## Repo layout
 

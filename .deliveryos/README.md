@@ -16,10 +16,13 @@ This directory is DeliveryOS's project memory. It is intended to be **committed 
   - `verification/` — whether the work passed
   - `release/` — what was released and why
   - `test-spec/` — the executable verification contract for a requirement
-- `checkpoint_history/` — archived `/sm-checkpoint` session-continuity memos (see
-  `.claude/commands/sm-checkpoint.md`). Ad hoc scratch notes, not part of the typed
-  `memory/` typology above, not indexed by `memory.sqlite`, no retention policy —
-  grows unbounded.
+- `checkpoint_history/` — session-continuity memos, one filename format
+  (`<UTC-timestamp>_<session-id>.md`) written by two commands. `/sm-checkpoint` archives
+  here on RESTORE — ad hoc scratch, a by-product of surviving a `/compact`.
+  `/sm-handover` writes here deliberately, as a durable artifact another session or
+  another machine picks up by ID with `/sm-takeover`. Neither kind is part of the typed
+  `memory/` typology above, neither is indexed by `memory.sqlite`, and there is no
+  retention policy — the directory grows unbounded.
 
 See `docs/architecture/memory-layers.md` in the DeliveryOS repo for the canonical typology.
 

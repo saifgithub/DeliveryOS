@@ -345,10 +345,12 @@ When something non-obvious is learned, the architect saves it as feedback and ad
 
 Session continuity runs entirely on `/sm-checkpoint`'s SAVE → `/compact` → RESTORE cycle (the global
 skill, unedited) plus one DeliveryOS-specific convention layered on top, documented here rather than
-in the skill itself since the skill is shared across every project. The `/sm-handover` /
-`/sm-start-fresh` / `/sm-session-setup` trio and `.claude/session-config.yml` are retired, along with
+in the skill itself since the skill is shared across every project. Cross-*session* continuity — a
+different machine or instance, not a different context window — runs on `/sm-handover` +
+`/sm-takeover`; see the subsection below. The config-driven `/sm-handover` / `/sm-start-fresh` /
+`/sm-session-setup` trio and `.claude/session-config.yml` are retired, along with
 the O- and P-track handover docs (`PLANNING_STATUS.md`, `PM_STATUS.md`) — see `docs/pm/BACKLOG.md`
-§B-004. **`BUILD_STATUS.md` is split, not retired** (resolved 2026-07-27, split by write-pattern):
+§B-004. (Today's `/sm-handover` reuses only that trio's name; none of its machinery came back.) **`BUILD_STATUS.md` is split, not retired** (resolved 2026-07-27, split by write-pattern):
 chunk-status content — mutable, single-owner, not derived from anything DeliveryOS's actual
 chunk-by-chunk build loop consults today (it doesn't run through `orchestration/dispatch/` lanes;
 see that protocol's own `BINDINGS.md`) — moves to `docs/build/CHUNK_LEDGER.md`, a plain ledger with
@@ -374,10 +376,12 @@ It is what makes RESTORE and cold-start lookup below possible.
 
 **RESTORE** (the first message after `/compact` — and now also every new session's cold-start
 entry point): the global skill archives the memo to
-`.claude/checkpoint_history/<timestamp>_<session-id>.md` as it does in any project (commit
-`7f97341`). **DeliveryOS convention, additionally performed at RESTORE:**
+`.deliveryos/checkpoint_history/<timestamp>_<session-id>.md` — that is the first tier of its
+archive-directory resolution, which picks `.deliveryos/` when present and falls back to `.claude/`
+then `$HOME/.claude/` elsewhere (commit `7f97341`). **DeliveryOS convention, additionally performed
+at RESTORE:**
 
-1. Commit **only** that one archived file, by pathspec (`git add .claude/checkpoint_history/<file> && git commit`) — never a broad `git add`.
+1. Commit **only** that one archived file, by pathspec (`git add .deliveryos/checkpoint_history/<file> && git commit`) — never a broad `git add`.
 2. Sweep for merged `agent-*` worktrees under `.claude/worktrees/` left over from Agent-tool
    `isolation: 'worktree'` calls (the job `/sm-handover`'s step 2 used to do): for each, verify
    `git log main..<branch>` is empty, then `git worktree remove -f -f` + `git branch -D`. Never touch
@@ -388,11 +392,30 @@ entry point): the global skill archives the memo to
    open" `/sm-start-fresh R` used to do.
 
 **Cold start (new session, no prior compaction in this session):** grep
-`.claude/checkpoint_history/` for the newest file carrying **your own** identity marker — never
+`.deliveryos/checkpoint_history/` for the newest file carrying **your own** identity marker — never
 "newest by mtime". The directory interleaves every track's sessions, so the literal newest file is
 often a different track's memo. There is no `LATEST.md` / `LATEST_<track>.md` pointer — a single file
 every session overwrites is a shared mutable flag that races under concurrent commits; disjoint
 archive files selected by identity at read time avoid that.
+
+**Cross-machine handover** (`/sm-handover` → `/sm-takeover`): `/sm-checkpoint` is keyed to
+`$CLAUDE_CODE_SESSION_ID` and its working memo lives in `~/.claude/`, so it cannot hand context to
+another session, cannot reach the other machine, and orphans the memo if the session dies before
+RESTORE. `/sm-handover` writes the same memo straight into `.deliveryos/checkpoint_history/` under
+the same `<timestamp>_<session-id>.md` name, removes the working copy, and commits that one file by
+pathspec; `/sm-takeover <ID>` resolves any file in that directory by unambiguous substring. One
+archive, two writers, no new filename convention. DeliveryOS specifics on top of the generic
+commands:
+
+- The memo's first line is the same `IDENTITY: DOS:<track><N>` marker SAVE uses.
+- Commit subject is `chore(handover):`; `/sm-takeover` commits nothing.
+- At takeover, also perform RESTORE's items 2–4 above (worktree sweep, consistency scan, track-R
+  bug surfacing). The consistency scan matters *more* here — the memo was written against a
+  different working tree. Note the worktree sweep is per-machine: `.claude/worktrees/` is
+  git-ignored, so a takeover can only ever see its own box's leftovers.
+- A handover memo carries an identity marker, so the cold-start grep above will find it. That is
+  correct — it *is* the newest state for that track — but read its **Handover** block before
+  resuming, since a memo from the other machine describes a tree this one may not have.
 
 A chunk-spec fix raised by a BLOCKER during a development session touches planning-track files but is
 made by the architect in-session; it does not require switching tracks.

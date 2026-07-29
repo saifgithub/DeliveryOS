@@ -42,10 +42,15 @@ After writing the file, tell the user:
 
 1. Read `~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md` in full and internalize
    it as the authoritative record of current session state
-2. Archive the checkpoint, then remove the working copy:
+2. Archive the checkpoint, then remove the working copy. Use the current project's archive
+   directory if one of the conventional ones exists here; otherwise fall back to a
+   project-agnostic archive so unrelated projects don't get a stray folder:
    ```bash
-   mkdir -p .claude/checkpoint_history
-   cp ~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md ".claude/checkpoint_history/$(date -u +%Y%m%dT%H%M%SZ)_${CLAUDE_CODE_SESSION_ID}.md"
+   if   [ -d .deliveryos ]; then ARCHIVE_DIR=".deliveryos/checkpoint_history"
+   elif [ -d .claude ];     then ARCHIVE_DIR=".claude/checkpoint_history"
+   else                          ARCHIVE_DIR="$HOME/.claude/checkpoint_history"; fi
+   mkdir -p "$ARCHIVE_DIR"
+   cp ~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md "$ARCHIVE_DIR/$(date -u +%Y%m%dT%H%M%SZ)_${CLAUDE_CODE_SESSION_ID}.md"
    rm ~/.claude/sm_checkpoint_${CLAUDE_CODE_SESSION_ID}.md
    ```
 3. Reply to the user with:

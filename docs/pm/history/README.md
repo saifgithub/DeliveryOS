@@ -1,9 +1,9 @@
 # History — track P (Project Management) — DeliveryOS
 
 **Closed convention — no longer receives new entries.** Per-session wrap narratives written by
-`/sm-handover P`, retired in favor of the `/sm-checkpoint` archive mechanism
-(`.claude/checkpoint_history/`); see `docs/MULTI_AGENT_BUILD_PROCESS.md` §12. Kept for historical
-context only.
+`/sm-handover P` — the old config-driven command, not today's `/sm-handover` — retired in favor of
+the `/sm-checkpoint` archive mechanism (`.deliveryos/checkpoint_history/`); see
+`docs/MULTI_AGENT_BUILD_PROCESS.md` §12. Kept for historical context only.
 
 Filenames are `DOS_P<NNNN>.md` (four-digit zero-padded session number) so
 `ls history/` sorts chronologically.
