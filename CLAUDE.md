@@ -44,9 +44,10 @@ reference version other projects pull from, not a downstream consumer citing whe
 
 ## Continuity
 
-Session-boundary continuity runs on `/sm-checkpoint`'s SAVE → `/compact` → RESTORE cycle — see
+Session-boundary continuity runs on the `/sm-savepoint` → `/compact` → `/sm-readpoint` cycle — see
 `docs/MULTI_AGENT_BUILD_PROCESS.md` §12 for the DeliveryOS-specific convention layered on top
-(identity-marker cold start, no `LATEST.md` pointer). That cycle is intra-session only, since it
+(identity-marker cold start, no `LATEST.md` pointer), and `docs/hooks/README.md` for an optional
+`PreCompact`/`SessionStart` hook pair that runs the same cycle automatically. That cycle is intra-session only, since it
 keys on `$CLAUDE_CODE_SESSION_ID`; handing work to a *different* session — the other machine,
 another instance, a fresh session after a crash — is `/sm-handover` → `/sm-takeover <ID>`, which
 routes the same memo through the committed `.deliveryos/checkpoint_history/` archive. The retired

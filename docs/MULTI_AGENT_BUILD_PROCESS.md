@@ -48,7 +48,7 @@ The stakeholder expects to spend very little time. With §16's autonomous accept
 
 Builders and QA never share memory across chunks. The architect is the only stateful agent. The chunk specs (`docs/planning/chunks/`), `docs/build/CHUNK_LEDGER.md`, `docs/build/STRUCTURAL_DEBT.md`, and `docs/build/COHESION_LOG.md` are the only durable state.
 
-**Cold-start exception.** If the architect session itself saturates, checkpoint it (`/sm-checkpoint` SAVE → `/compact`) and the fresh architect resumes on RESTORE per §12, reading `CHUNK_LEDGER.md` and `docs/build/NEXT_SESSION.md` directly.
+**Cold-start exception.** If the architect session itself saturates, checkpoint it (`/sm-savepoint` → `/compact`) and the fresh architect resumes with `/sm-readpoint` per §12, reading `CHUNK_LEDGER.md` directly.
 
 ---
 
@@ -130,7 +130,7 @@ docs/build/
 
 Human touchpoints in the cycle: ~0 on a convergent chunk (auto-advance); a human is pulled in only on divergence, escalation, or a sampled audit (§16.4).
 
-**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; the `/sm-checkpoint` RESTORE step cleans up the `agent-*` worktrees (§12).
+**Git discipline.** Each chunk lands as one cohesive set of commits with conventional messages (`feat(chunk-NN): ...`, `test(chunk-NN): ...`). For serial building the builder commits on the main branch (greenfield, solo, low collision risk). When parallel chunk builds are eventually used, each builder sub-agent runs in an isolated worktree (`isolation: worktree`) and the architect merges on approve; the `/sm-readpoint` step cleans up the `agent-*` worktrees (§12).
 
 ---
 
@@ -343,9 +343,9 @@ When something non-obvious is learned, the architect saves it as feedback and ad
 
 ## 12. Session management
 
-Session continuity runs entirely on `/sm-checkpoint`'s SAVE → `/compact` → RESTORE cycle (the global
-skill, unedited) plus one DeliveryOS-specific convention layered on top, documented here rather than
-in the skill itself since the skill is shared across every project. Cross-*session* continuity — a
+Session continuity runs entirely on the `/sm-savepoint` → `/compact` → `/sm-readpoint` cycle (the
+generic commands, unedited) plus one DeliveryOS-specific convention layered on top, documented here
+rather than in the commands themselves since they are shared across every project. Cross-*session* continuity — a
 different machine or instance, not a different context window — runs on `/sm-handover` +
 `/sm-takeover`; see the subsection below. The config-driven `/sm-handover` / `/sm-start-fresh` /
 `/sm-session-setup` trio and `.claude/session-config.yml` are retired, along with
@@ -369,17 +369,16 @@ exists to avoid.
 `DOS:O<N>` / `DOS:R<N>` / `DOS:P<N>` in checkpoint identity lines and commit messages. No YAML file
 enforces this — it is just what each session calls itself.
 
-**SAVE** (before `/compact`): the global skill writes `~/.claude/sm_checkpoint_$SESSION_ID.md` as it
-does in any project. **DeliveryOS convention:** the memo's first line is an identity marker,
+**`/sm-savepoint`** (before `/compact`): writes `~/.claude/sm_checkpoint_$SESSION_ID.md` as it does
+in any project. **DeliveryOS convention:** the memo's first line is an identity marker,
 `IDENTITY: DOS:<track><N>` (e.g. `IDENTITY: DOS:R17`) — write this before anything else in the memo.
-It is what makes RESTORE and cold-start lookup below possible.
+It is what makes the read-back and cold-start lookup below possible.
 
-**RESTORE** (the first message after `/compact` — and now also every new session's cold-start
-entry point): the global skill archives the memo to
-`.deliveryos/checkpoint_history/<timestamp>_<session-id>.md` — that is the first tier of its
-archive-directory resolution, which picks `.deliveryos/` when present and falls back to `.claude/`
-then `$HOME/.claude/` elsewhere (commit `7f97341`). **DeliveryOS convention, additionally performed
-at RESTORE:**
+**`/sm-readpoint`** (the first message after `/compact`, and every new session's cold-start entry
+point): archives the memo to `.deliveryos/checkpoint_history/<timestamp>_<session-id>.md` — the first
+tier of its archive-directory resolution, which picks `.deliveryos/` when present and falls back to
+`.claude/` then `$HOME/.claude/` elsewhere (commit `7f97341`). **DeliveryOS convention, additionally
+performed at read-back:**
 
 1. Commit **only** that one archived file, by pathspec (`git add .deliveryos/checkpoint_history/<file> && git commit`) — never a broad `git add`.
 2. Sweep for merged `agent-*` worktrees under `.claude/worktrees/` left over from Agent-tool
@@ -391,17 +390,30 @@ at RESTORE:**
 4. On track R, surface `docs/build/bugs.json`'s open-bug count/titles — the "sanity check at session
    open" `/sm-start-fresh R` used to do.
 
-**Cold start (new session, no prior compaction in this session):** grep
-`.deliveryos/checkpoint_history/` for the newest file carrying **your own** identity marker — never
+**Cold start (new session, no prior compaction in this session):** run `/sm-readpoint`. Finding no
+working copy — a fresh session has a fresh `$CLAUDE_CODE_SESSION_ID` — it lists
+`.deliveryos/checkpoint_history/`; take the newest file carrying **your own** identity marker, never
 "newest by mtime". The directory interleaves every track's sessions, so the literal newest file is
 often a different track's memo. There is no `LATEST.md` / `LATEST_<track>.md` pointer — a single file
 every session overwrites is a shared mutable flag that races under concurrent commits; disjoint
-archive files selected by identity at read time avoid that.
+archive files selected by identity at read time avoid that. A memo reached this way is **already
+archived**: read it, do not re-archive or delete it.
 
-**Cross-machine handover** (`/sm-handover` → `/sm-takeover`): `/sm-checkpoint` is keyed to
+> Before the `/sm-savepoint` + `/sm-readpoint` split, this was a manual grep. The single
+> self-detecting `/sm-checkpoint` it replaced could not do it — a fresh session has no working copy,
+> so its probe returned `MISSING` and it took the *write* branch, overwriting the session's own
+> memo slot instead of restoring anything.
+
+**Automated companion.** A `PreCompact` + `SessionStart` hook pair can run the savepoint/readpoint
+cycle above without a slash command — a mechanical fallback memo before compaction if
+`/sm-savepoint` wasn't run, auto-restored into context right after. See `docs/hooks/README.md`;
+same archive-directory resolution as above, so it composes with the DeliveryOS convention on this
+page without changes.
+
+**Cross-machine handover** (`/sm-handover` → `/sm-takeover`): `/sm-savepoint` is keyed to
 `$CLAUDE_CODE_SESSION_ID` and its working memo lives in `~/.claude/`, so it cannot hand context to
 another session, cannot reach the other machine, and orphans the memo if the session dies before
-RESTORE. `/sm-handover` writes the same memo straight into `.deliveryos/checkpoint_history/` under
+`/sm-readpoint` runs. `/sm-handover` writes the same memo straight into `.deliveryos/checkpoint_history/` under
 the same `<timestamp>_<session-id>.md` name, removes the working copy, and commits that one file by
 pathspec; `/sm-takeover <ID>` resolves any file in that directory by unambiguous substring. One
 archive, two writers, no new filename convention. DeliveryOS specifics on top of the generic
