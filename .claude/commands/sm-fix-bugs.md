@@ -13,7 +13,7 @@ This is the bug-fix track. Feature and chunk work lives in the multi-agent build
 ## bugs.json schema
 
 > This file's path (`docs/build/bugs.json`) and schema are this project's own convention — swap the
-> path and fields for whatever tracker a different project uses. `/sm-checkpoint`'s RESTORE step only
+> path and fields for whatever tracker a different project uses. `/sm-readpoint` only
 > surfaces a count + titles at session start (`docs/MULTI_AGENT_BUILD_PROCESS.md` §12); this command
 > needs the full read/claim/write protocol below, so it isn't wired through that surface.
 

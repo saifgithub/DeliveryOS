@@ -17,8 +17,8 @@ This directory is DeliveryOS's project memory. It is intended to be **committed 
   - `release/` — what was released and why
   - `test-spec/` — the executable verification contract for a requirement
 - `checkpoint_history/` — session-continuity memos, one filename format
-  (`<UTC-timestamp>_<session-id>.md`) written by two commands. `/sm-checkpoint` archives
-  here on RESTORE — ad hoc scratch, a by-product of surviving a `/compact`.
+  (`<UTC-timestamp>_<session-id>.md`) written by two commands. `/sm-readpoint` archives
+  here after reading a memo back — ad hoc scratch, a by-product of surviving a `/compact`.
   `/sm-handover` writes here deliberately, as a durable artifact another session or
   another machine picks up by ID with `/sm-takeover`. Neither kind is part of the typed
   `memory/` typology above, neither is indexed by `memory.sqlite`, and there is no

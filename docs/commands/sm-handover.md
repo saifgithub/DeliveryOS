@@ -1,6 +1,7 @@
 ---
-description: Write a durable, git-committed handover memo so a DIFFERENT session — another machine, another instance, or a fresh session after a crash — can pick the work up with /sm-takeover. Unlike /sm-checkpoint this is not keyed to the current session id.
+description: Write a durable, git-committed handover memo so a DIFFERENT session — another machine, another instance, or a fresh session after a crash — can pick the work up with /sm-takeover. Unlike /sm-savepoint this is not keyed to the current session id.
 argument-hint: [explicit next step for the receiving session]
+model: sonnet
 ---
 
 # /sm-handover
@@ -11,10 +12,17 @@ argument-hint: [explicit next step for the receiving session]
 Write a handover memo into the project's checkpoint archive and commit it, so another session can
 resume this work with `/sm-takeover <ID>`.
 
-**This is not `/sm-checkpoint`.** `/sm-checkpoint` is intra-session: it stashes a memo in your home
+**This is not `/sm-savepoint`.** That pair is intra-session: it stashes a memo in your home
 directory keyed to `$CLAUDE_CODE_SESSION_ID` and reads it back after `/compact`. That file is
 invisible to every other session and never reaches another machine. `/sm-handover` is the
 inter-session channel — the memo lives in the repo, in git, addressed by an ID anyone can type.
+
+> **Why `model: sonnet`.** Writing the memo is a structured extraction over a large context — the
+> expensive part of this command, and a fixed-shape task. The override lasts only the current turn
+> and is never written to settings. Like `/sm-savepoint`, this command always terminates by
+> handing back to the user, so the override cannot leak into resumed work. `/sm-takeover`
+> deliberately carries **no** override: it exists to resume someone else's work, which is the last
+> place to economize.
 
 ## Hard rules
 
@@ -32,7 +40,7 @@ inter-session channel — the memo lives in the repo, in git, addressed by an ID
 5. **Write for a reader with no shared disk.** The receiving session may be on other hardware.
    Anything that exists only in your working tree, your shell, or your `/tmp` does not travel.
 6. **Handover is terminal for the memo, not for the session.** The working copy in `~/.claude/` is
-   removed, so this session's next `/sm-checkpoint` takes a clean SAVE branch instead of restoring a
+   removed, so this session's next `/sm-readpoint` has nothing stale to restore and a later
    stale duplicate. You may keep working afterwards.
 
 ## Step by step
@@ -52,11 +60,11 @@ echo "MEMO=${MEMO}"
 git check-ignore -q "$MEMO" && echo "FATAL: archive dir is git-ignored — stop" || echo "committable"
 ```
 
-The filename format is deliberately identical to the one `/sm-checkpoint` RESTORE writes, so the two
-commands share one archive and `/sm-takeover` can address either kind of memo.
+The filename format is deliberately identical to the one `/sm-readpoint` writes when it archives, so
+the two commands share one archive and `/sm-takeover` can address either kind of memo.
 
-This resolution deliberately **has no `$HOME` fallback**, unlike `/sm-checkpoint`'s archive step.
-`/sm-checkpoint` can archive to `$HOME` because RESTORE runs in the same session on the same box; a
+This resolution deliberately **has no `$HOME` fallback**, unlike `/sm-readpoint`'s archive step.
+That one can archive to `$HOME` because it runs in the same session on the same box; a
 handover memo in `$HOME` can never be committed, so the last tier is an in-repo directory instead.
 Do not "fix" this into consistency.
 
@@ -82,7 +90,7 @@ numbers, rule names, error text, port numbers, branch names, exact command synta
   the user's explicit directive — record it verbatim under its own **Explicit next step
   (user-directed)** line instead of inferring one; this tells `/sm-takeover` to act on it without
   pausing for confirmation.
-- **State not in git**: the section `/sm-checkpoint` doesn't need and this one can't omit. Every
+- **State not in git**: the section `/sm-savepoint` doesn't need and this one can't omit. Every
   uncommitted and untracked path from step 2, one line each on what it holds and whether it matters;
   running servers, ports, and background jobs; local-only env vars and `.env` contents **by name,
   never by value**; whether a dependency install is needed; local worktrees and branches never
@@ -122,7 +130,7 @@ handover silently loses work.
 
 Do not broaden the `git add`. Do not "tidy the tree first". Do not push. Do not summarize — the
 memo's value is entirely in its specifics. Do not `/compact` afterwards on the assumption the memo
-covers you: it lives in git, not in this session, and `/sm-checkpoint` is what covers a compaction.
+covers you: it lives in git, not in this session, and `/sm-savepoint` is what covers a compaction.
 
 ## Recovery
 
@@ -131,5 +139,5 @@ covers you: it lives in git, not in this session, and `/sm-checkpoint` is what c
 - **Handed over the wrong state** — run `/sm-handover` again; it writes a fresh file with a new
   timestamp. Never edit or delete a memo that is already committed — tell the receiving session
   which ID is live.
-- **Working copy already existed in `~/.claude/`** — a pending `/sm-checkpoint` SAVE. Read it as raw
+- **Working copy already existed in `~/.claude/`** — a pending `/sm-savepoint`. Read it as raw
   material, then overwrite it in step 3 as normal; step 4 removes it either way.

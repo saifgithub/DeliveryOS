@@ -1,6 +1,6 @@
 ---
 description: Pick up work handed over by /sm-handover from a different session, machine, or instance. Takes the ID printed by the handover; with no argument, lists what is available.
-argument-hint: <ID> (omit to list available handovers)
+argument-hint: [ID]
 ---
 
 # /sm-takeover
@@ -9,7 +9,7 @@ argument-hint: <ID> (omit to list available handovers)
 > which Claude Code reads. Version-controlled so protocol changes are reviewable.
 
 Read a memo from the project's checkpoint archive and resume that work in this session. This is
-`/sm-checkpoint`'s RESTORE decoupled from session identity — the memo may have been written by
+`/sm-readpoint` decoupled from session identity — the memo may have been written by
 another session, on another machine, on another day.
 
 ## Hard rules
@@ -62,7 +62,7 @@ newest first, since the filenames lead with a sortable UTC timestamp.
 Read `$MEMO` end to end and internalize it as the authoritative record of the state being handed
 over. Pay particular attention to **State not in git** — everything listed there is absent from this
 machine unless you verify otherwise. A memo with no such section was likely written by
-`/sm-checkpoint` rather than `/sm-handover`; treat its uncommitted-state claims as unknown.
+`/sm-savepoint` rather than `/sm-handover`; treat its uncommitted-state claims as unknown.
 
 ### 3. Verify you can actually resume
 
