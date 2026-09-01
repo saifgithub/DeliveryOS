@@ -1,6 +1,6 @@
 # MHBP — Process Diagram
 
-Multi-**Harness** Build Process: a foreign harness — **Antigravity (`agy`, Gemini)** — bolted onto the unchanged MABP baseline as an adversarial, decorrelated auditor at three layers (Gate 1, the serial per-chunk loop, Gate 2), plus a black-box **Tester (Part III)** that exercises each completed module as the user and loops defects back to the builder. Source: [MHBP_LAB.md](MHBP_LAB.md).
+Multi-**Harness** Build Process: foreign tools — **Antigravity (`agy`, Gemini)**, **Kimi CLI (Moonshot AI's Kimi)**, and two local OpenAI-compatible endpoints (**`ami-llm`**, **`GLM-5.3-Flash-NVFP4`**, called directly by the architect rather than run as their own tool loop) — bolted onto the unchanged MABP baseline as adversarial, decorrelated auditors at three layers (Gate 1, the serial per-chunk loop, Gate 2), plus a black-box **Tester (Part III)** that exercises each completed module as the user and loops defects back to the builder. Source: [MHBP_LAB.md](MHBP_LAB.md).
 
 > **Experimental / non-normative.** The production process ([MULTI_AGENT_BUILD_PROCESS.md](MULTI_AGENT_BUILD_PROCESS.md)) and `npm run gate` are the binding floor; the foreign audit is advisory signal layered on top.
 >
@@ -15,7 +15,7 @@ flowchart TD
     PLAN --> G1
 
     subgraph G1box["GATE 1 — HARD SYNCHRONOUS barrier (Design → Build)"]
-        G1[Auditor attacks the plan<br/>agy · Gemini 3.1 Pro High · read-only<br/>--add-dir docs/planning]
+        G1[Auditor attacks the plan<br/>agy/Kimi CLI · read-only · --add-dir docs/planning<br/>or a local endpoint · architect pastes scoped content]
         G1 --> G1A{Blocking findings?}
         G1A -->|none| PASS1[Cleared]
         G1A -->|open + human present| HUM1[Human adjudicates ONCE<br/>revise / accept / dated rebuttal]
@@ -29,7 +29,7 @@ flowchart TD
         direction TB
         C0[Pick next chunk in dependency order] --> CB[Builder builds<br/>writes UNIT.builder.md · SUBMITTED round N]
         CB -->|auditor watcher fires| CA[Auditor audits independently<br/>blind adversarial pass · re-read source at file:line]
-        CA --> CAW[writes UNIT.auditor.md · VERDICT + AUDITOR: own/foreign/human]
+        CA --> CAW[writes UNIT.auditor.md · VERDICT + AUDITOR: own/foreign/human + MODEL: if foreign]
         CAW -->|builder watcher fires| CV{Verdict}
         CV -->|AWAITING_FIXES| CB
         CV -->|COMPLETE| C0
@@ -74,7 +74,7 @@ origin) + `DELIVERYOS_BINDINGS.md` (this project's resolution). Loop prompts: `A
 sequenceDiagram
     participant B as Builder (Claude)
     participant FS as lanes/UNIT.*.md
-    participant A as Auditor (agy / peer / human)
+    participant A as Auditor (agy / Kimi / local-endpoint / peer / human)
 
     Note over B,A: each side has a background watcher on its inbound file
     B->>FS: write UNIT.builder.md (SUBMITTED round N)
@@ -91,16 +91,21 @@ sequenceDiagram
 
 ## Pluggable auditor — own / foreign / human
 
-The chunk's auditor is a **role**; the `AUDITOR:` field records who ruled. Decorrelation comes from the **model family**, not from withholding context.
+The chunk's auditor is a **role**; the `AUDITOR:` field records who ruled, and a `MODEL:` field records *which* foreign tool when `AUDITOR: foreign`. Decorrelation comes from the **model family**, not from withholding context, and not from which of the three foreign tools ran.
 
 ```mermaid
 flowchart TD
     ROLE{Auditor role per chunk}
-    ROLE -->|foreign · decorrelation tier| AGY[Antigravity agy · Gemini<br/>NON-Claude required — Claude model voids the run<br/>risk-flagged chunks, seams, random sample]
+    ROLE -->|foreign · decorrelation tier<br/>risk-flagged chunks, seams, random sample| FOR{Foreign tool used?<br/>NON-Claude required — Claude model voids the run<br/>MODEL: field records which}
+    FOR --> AGY[Antigravity agy · Gemini<br/>separate harness · own semaphore write]
+    FOR --> KIMI[Kimi CLI · Moonshot AI<br/>separate harness · own semaphore write]
+    FOR --> LOCAL[ami-llm / GLM-5.3-Flash-NVFP4<br/>local endpoint · architect calls + writes semaphore on its behalf]
     ROLE -->|own · same family| PEER[Claude blind peer §16.4<br/>cheap, native — NOT decorrelated]
     ROLE -->|human · async floor| HU[Human<br/>drains escalations + borderline parks]
 
-    AGY -.quota out / outage.-> FB[Fallback: Claude blind pass<br/>logged 'own — agy unavailable'<br/>earns NO foreign catch]
+    AGY -.quota out / outage.-> FB[Fallback: Claude blind pass<br/>logged 'own — foreign unavailable'<br/>earns NO foreign catch]
+    KIMI -.quota out / outage.-> FB
+    LOCAL -.endpoint unreachable.-> FB
     FB --- PEER
 ```
 
@@ -132,9 +137,14 @@ flowchart TD
 ```mermaid
 flowchart TD
     ROLE{Tester role per module}
-    ROLE -->|foreign · doubly independent| AGY["agy / Gemini — DESIGNS<br/>different model family + code-blind by role<br/>read-only/isolated: can't drive a live editor"]
+    ROLE -->|foreign · doubly independent<br/>different model family + code-blind by role| FOR{"Foreign tool DESIGNS only —<br/>none can drive a live editor"}
+    FOR --> AGY["agy / Gemini<br/>read-only/isolated"]
+    FOR --> KIMI["Kimi CLI / Moonshot AI<br/>read-only/isolated"]
+    FOR --> LOCAL["ami-llm / GLM-5.3-Flash-NVFP4<br/>no tool access at all — text-only design"]
     ROLE -->|own · executes live| CL["Claude peer — EXECUTES<br/>@vscode/test-electron · sideload · surface exercise"]
     ROLE -->|human · async floor| HU["Human — adjudicates<br/>'defect or intended?'"]
-    AGY -->|scenarios + integration checks| CL
-    AGY -.quota out.-> FB["Fallback: Claude does both<br/>logged 'own — agy unavailable'<br/>no foreign catch credited"]
+    FOR -->|scenarios + integration checks| CL
+    AGY -.quota out.-> FB["Fallback: Claude does both<br/>logged 'own — foreign unavailable'<br/>no foreign catch credited"]
+    KIMI -.quota out.-> FB
+    LOCAL -.endpoint down.-> FB
 ```

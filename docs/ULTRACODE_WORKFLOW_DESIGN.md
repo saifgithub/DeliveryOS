@@ -16,6 +16,38 @@
 - **`extension/test/*.test.ts` is a flat, non-recursive glob.** Verifier-authored check files must
   land directly in that directory or `npm run gate`'s test step silently skips them.
 
+## Foreign-tool participation (MHBP §1) — a known constraint
+
+`docs/MHBP_LAB.md` §1 catalogues three foreign auditor tools (agy, Kimi CLI, two local
+OpenAI-compatible endpoints). None of them plug into this design's phase table as a literal
+`agent()` call:
+
+- **`agent()` spawns a Claude subagent, not an arbitrary model.** Per the Workflow tool's own
+  documentation, `agent()`'s `model`/`agentType` options select among this harness's own
+  registered models/subagent types and default to inheriting the session's resolved model —
+  there is no option to point `agent()` at an external HTTP endpoint or a foreign CLI's model.
+  (Checked against the workflow-authoring skill's tool-schema text as of this design; if a
+  future Workflow tool version adds such an option, re-verify rather than assume.)
+- **The script body cannot shell out either.** Workflow scripts run in a sandboxed JS context
+  with no filesystem or Node.js API access — a literal `curl` call or spawned `kimi` subprocess
+  cannot be written as a deterministic script statement inside `phase()`/`pipeline()` control
+  flow.
+- **Consequence: any Kimi/local-endpoint participation inside an ultracode phase would have to
+  be indirect** — an `agent()` call whose Claude subagent is instructed to make the call itself
+  (Bash `curl` to `ami-llm`/`GLM-5.3-Flash-NVFP4`, or spawn the `kimi`/`agy` CLI as a subprocess)
+  and return the foreign model's output as that agent's result. The *orchestration* stays a
+  Claude subagent; only the *judgment folded into its returned text* originates from the foreign
+  model.
+- **This path is unneeded today.** MHBP_LAB.md's Gate 1/Gate 2 (§2/§3) already wrap the whole
+  build from *outside* this workflow (§4: "the two Gate 1/Gate 2 audits are harness-agnostic...
+  operating on the plan and touched-files manifest, not the build's internals") — they run
+  before Phase 0 and after Phase 7, as separate agy/Kimi/local-endpoint sessions, never as a
+  phase's `agent()` call.
+- **No phase in the table below changes in this pass.** This is a constraint note for a possible
+  future design (e.g. folding a foreign opinion into Phase 3's verifier triangulation), not a
+  change to the current seven phases — same "design, not yet implemented" status as the rest of
+  this doc.
+
 ## Phases
 
 | # | Phase | Script (deterministic) | Agent call | Tier |

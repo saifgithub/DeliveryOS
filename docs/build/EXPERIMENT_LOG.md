@@ -63,16 +63,16 @@ blind, stateless QA). Gate held fixed. Competing predictions are pre-registered 
 
 ---
 
-## 4. MHBP — cross-harness auditor (agy/Gemini)
+## 4. MHBP — cross-harness auditor (agy/Kimi/local-endpoint)
 
 Specced in `docs/MHBP_LAB.md`; the per-chunk loop's lane mechanism (§4.3) is now concrete in
-`docs/build/auditor/PROTOCOL.md`. A **foreign harness** (`agy`, pinned to a non-Claude model —
-`Gemini 3.1 Pro (High)`) appears at **Gate 1** (hard synchronous post-plan barrier, §4.1), in the
-**serial per-chunk build→audit loop** (foreign on a risk-flagged / sampled subset, §4.3), and at
-**Gate 2** (opt-in post-build whole-artifact audit, §4.2); a per-module black-box **Tester**
-(`MHBP_LAB.md` §7) adds a fourth layer, scored in the dispositions (§3). The headline metric is
-**correlated-error catches**: real defects all-Claude review missed. Decorrelation requirement: a row
-run with agy on a Claude model is **void** — note the model used per row.
+`docs/build/auditor/PROTOCOL.md`. **Foreign tools** (`agy`→Gemini, Kimi CLI→Kimi, and the local
+endpoints `ami-llm`/`GLM-5.3-Flash-NVFP4`, `MHBP_LAB.md` §1) appear at **Gate 1** (hard synchronous
+post-plan barrier, §4.1), in the **serial per-chunk build→audit loop** (foreign on a risk-flagged /
+sampled subset, §4.3), and at **Gate 2** (opt-in post-build whole-artifact audit, §4.2); a per-module
+black-box **Tester** (`MHBP_LAB.md` §7) adds a fourth layer, scored in the dispositions (§3). The
+headline metric is **correlated-error catches**: real defects all-Claude review missed. Decorrelation
+requirement: a row run with a foreign tool on a Claude model is **void** — note the model used per row.
 
 > **Run-1 (2026-06-23, N=1 — signal, not evidence; unscored).** The first MHBP dogfood. Not a scored row:
 > it produced the process learnings now folded into `docs/MHBP_LAB.md` (serial loop, mandatory per-role
@@ -106,13 +106,14 @@ How it could fail: manifest blind spot (§5d), noise, capability floor (§5c).
 ### 4.3 Per-chunk serial audit loop (own + foreign tiers)
 
 Specced in `docs/MHBP_LAB.md` §5–§6. Chunks are audited **serially, one in flight at a time**; every
-chunk gets an `own`-harness Claude peer, a risk-flagged / sampled subset also gets the `foreign` agy
-audit, and the `AUDITOR:` field records which tier ruled. Headline: correlated-error catches
+chunk gets an `own`-harness Claude peer, a risk-flagged / sampled subset also gets the `foreign` audit
+(agy/Kimi/local-endpoint, `MHBP_LAB.md` §1), and the `AUDITOR:` field records which tier ruled — the
+`MODEL:` field on the lane file records which foreign tool. Headline: correlated-error catches
 **attributable to the foreign tier** (its marginal value over the own peer). Watch counter-predictions
 MHBP §9e (handoff failure: a role's watcher not running / a stale-round race / a parked chunk holding the
 line) and §9f (quota-fallback dilution: too many chunks fall back to the `own` Claude auditor for the
-foreign tier to backstop correlated error). Decorrelation: a `foreign` row run with agy on a Claude model
-is **void**.
+foreign tier to backstop correlated error). Decorrelation: a `foreign` row run with a foreign tool on a
+Claude model is **void**.
 
 | Unit | Date | Auditor tier(s) ruled | Foreign model (if any) | Prediction (pre-registered) | Findings raised | Classified (real / false-div / noise) | Correlated-error catches (own / foreign) | Round at submit | Watcher fired? | Parked / escalated? | Cost (tokens · wall-clock · provider) |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
