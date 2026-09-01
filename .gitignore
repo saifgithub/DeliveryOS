@@ -68,4 +68,8 @@ generated/
 /extension/readme.md
 
 # Gate runtime artifact (the dir is tracked via .gitkeep; the result file is per-run)
+# The non-agentic gate's own records. Untracked ON PURPOSE, and it is a rule rather than an
+# accident: <GATE_RUN_RECORD> must live under the auditor's own tree or on an untracked path, or a
+# runner the auditor invokes has written into someone else's write-path on its behalf.
 docs/build/gate/last-run.json
+docs/build/gate/item-*.json

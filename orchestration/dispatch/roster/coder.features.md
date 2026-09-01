@@ -5,17 +5,51 @@
 role: coder
 spec: feature panels + their contracts (everything not memory or harness)
 kind: code
-owns: contracts/src/* (all 20 files); extension/src/{webview,serializers,commands,diff,brief,
-      discovery,reverse,release,requirements,result,verification,tree,ai,iteration,prd,
-      specialists}/**; webview/src/panels/**; webview/src/shared/**; their test counterparts
+owns:
+  contracts/src/**
+  extension/src/webview/**
+  extension/src/serializers/**
+  extension/src/commands/**
+  extension/src/diff/**
+  extension/src/brief/**
+  extension/src/discovery/**
+  extension/src/reverse/**
+  extension/src/release/**
+  extension/src/requirements/**
+  extension/src/result/**
+  extension/src/verification/**
+  extension/src/tree/**
+  extension/src/ai/**
+  extension/src/iteration/**
+  extension/src/prd/**
+  extension/src/specialists/**
+  webview/src/panels/**
+  webview/src/shared/**
+  extension/test/*.test.ts
+  webview/src/panels/**/*.test.ts
 schema_owner: false
 wip_cap: 1
-auditor: per-lane GATE
-live_handle:                 # blank — not yet launched
+auditor: auditor.deliveryos
+live_handle:                 # blank until launched; the launch_template returns it
 commit_tag: DOS:coder.features
 worktree: .claude/worktrees/coder.features-<ITEM>
 active_lanes: []
+impl:
+  profile:     agentic-premium
+  kind:        process
+  band:        standard
+  family:      claude
+  turn_taking: self-watch
+  lifetime:    one-shot
+  write_mode:  commits
 ```
+
+**`owns:` note.** `extension/test/*.test.ts` is written out rather than described because
+`check_bindings.sh` computes set disjointness over these literal strings; it is *broad* — it claims
+every extension test file, including `memory*.test.ts` which `coder.memory` also needs. That overlap
+is real and is the reason those two instances cannot run concurrently today, which is what
+`wip_cap: 1` on both encodes. Splitting the test glob per subsystem is the fix; it is a refactor of
+the test layout, not a roster edit.
 
 **Honest granularity note — read before dispatching a second concurrent lane here.** This instance is
 NOT further shardable today, and should not be split into one-per-panel instances despite the

@@ -59,6 +59,7 @@ first — the reasoning survives, the archaeology goes to BINDINGS or the commit
 | `install/templates/DOD_BINDINGS.TEMPLATE.md` | shape for the DoD answers (emitted outside this tree) |
 | `install/templates/REGISTER.TEMPLATE.md` | shape for a register, for a project that has none (emitted outside this tree) |
 | `install/templates/ANSWERS.TEMPLATE.md` | shape for the stand-up record |
+| `install/templates/gate_check.sh` | shape for the machine-gate hook — **the only code an adopting project writes** |
 
 No code changes are needed in any of them. `dispatch.sh`, `watcher.sh`, `check_bindings.sh` and
 `rotate_trail.py` take their locations from their own script directory or from flags. The only code
@@ -73,6 +74,8 @@ an adopting project writes is its own `gate_check.sh`, and only if it uses `GATE
 | `dispatch/roster/<instance-id>.md` | one per instance. Adding a file adds an instance — nothing hardcodes the roster |
 | the project's own DoD bindings | the answers to `DEFINITION_OF_DONE.md`'s questions, plus any rows this project adds. Lives with the project's governance docs, not in this tree |
 | `dispatch/board.md`, `dispatch/trail.md` | seed the headers only |
+| `install/needles.conf` | the four grep needle sets `check_bindings.sh` sources. It lives outside that script deliberately: these are project **values**, and the script is tier A |
+| `dispatch/gate_check.sh` | the project's own machine-gate hook, written from the tier-A shape. Only if it uses `GATE: machine` |
 
 **Tokens BINDINGS must resolve before the first lane is dispatched.** An unbound token is a stand-up
 error, not an empty cell. `install/check_bindings.sh` is what turns that sentence into an exit code.
@@ -107,7 +110,7 @@ told every downstream reader to look for files that were never there.
 
 | Shape | What is coupled, and how it must fail |
 |---|---|
-| `dispatch/gate_check.sh` | The machine-gate hook: where the runner's record lives, its result and revision fields. **Ships exiting non-zero for every item**, so an unedited copy renders every machine-gated lane `UNGATED` rather than passing them |
+| `dispatch/gate_check.sh` | Written by the project from the tier-A shape at `install/templates/gate_check.sh`. Coupled to where the runner's record lives and its result and revision field names. The **shape** exits non-zero for every item, so a project that copies it and stops renders every machine-gated lane `UNGATED` rather than passing them. The project's own filled copy is tier B and never travels |
 | a launch helper | The launch and re-attach commands per profile. Optional — the profiles table already carries the templates; a helper only saves typing |
 | a full-suite wrapper | The long-running command and its output contract, including the terminal exit-code line the Auditor polls for |
 

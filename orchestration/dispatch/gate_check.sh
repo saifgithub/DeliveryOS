@@ -1,48 +1,40 @@
 #!/bin/sh
-# gate_check.sh - the machine-gate hook (DISPATCH_PROTOCOL.md §4a, GATE: machine).
+# gate_check.sh - DeliveryOS's machine-gate hook (DISPATCH_PROTOCOL.md §4a, GATE: machine).
+# TIER B — this project's own; never copied onward. The portable shape is
+# ../install/templates/gate_check.sh.
 #
-# THIS FILE IS A SHAPE, NOT WORKING CODE. It is the one script an adopting project writes itself.
-# Copy it, replace the two marked blocks, delete this warning. Unedited, it exits 1 for every item,
-# which renders every machine-gated lane UNGATED — the correct fail-loud behaviour for a hook that
-# has not been written yet, and the reason it ships exiting 1 rather than 0.
-#
-# CONTRACT (the whole of it):
 #   argv[1]  the item id
-#   exit 0   this item is gated: the project's non-agentic runner exited 0 over the independently
-#            authored acceptance checks, AT THE REVISION THE ITEM WAS SUBMITTED AT
-#   exit !=0 anything else — no record, a failing record, a record at a different revision, an
-#            unreadable record. dispatch.sh renders UNGATED and does not care which.
+#   exit 0   docs/build/gate/item-<ITEM>.json says passed AND its gitSha matches the SHA the lane
+#            was submitted at
+#   exit !=0 anything else
 #
-# THREE RULES, and each one is load-bearing:
-#
-# 1. BE CHEAP. dispatch.sh calls this once per accepted machine-gated lane on EVERY state print and
-#    every watcher poll. READ the runner's record; never run the suite here. A hook that runs the
-#    build turns `dispatch.sh state` into a build.
-#
-# 2. CHECK THE REVISION. A green record from an earlier revision is not evidence about this
-#    submission. Comparing the record's revision against the lane's submitted SHA is most of this
-#    script's value; a hook that only reads pass/fail has re-implemented `GATE: none` with extra
-#    steps.
-#
-# 3. NEVER WRITE. This is a reader. It emits an exit code and nothing else — no lane edits, no
-#    record edits, no state. Its stdout and stderr are discarded by the caller.
-
+# A READER. It runs no build — dispatch.sh calls it on every state print and every watcher poll.
+# `npm run gate -- --item <ITEM>` is what produces the record; this only reads it.
 set -u
 ITEM=${1:-}
 [ -n "$ITEM" ] || exit 2
 
-# --- REPLACE: locate the runner's record for this item ------------------------------------------
-# It must live under <AUDIT_ROOT>/** or on an untracked path, and it must carry the revision it ran
-# at (AUDITOR_LOOP_PROMPT.md -> path discipline, revision fidelity). Bind its path and its field
-# names in BINDINGS as <GATE_RUN_RECORD>; do not hardcode a format here that BINDINGS does not
-# describe.
-RECORD=""            # e.g. RECORD="$(dirname -- "$0")/../<...>/$ITEM.<...>"
-# ------------------------------------------------------------------------------------------------
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+REPO=$(CDPATH= cd -- "$DIR/../.." && pwd)
+RECORD="$REPO/docs/build/gate/item-$ITEM.json"
+LANE="$REPO/orchestration/audit/cr/$ITEM.architect.md"
 
-[ -n "$RECORD" ] && [ -f "$RECORD" ] || exit 1
+[ -f "$RECORD" ] || exit 1
+[ -f "$LANE" ]   || exit 1
 
-# --- REPLACE: read the result and the revision, and compare the revision to the submission -------
-# Both halves are required. Read the lane's submitted SHA from
-# <AUDIT_LANE_DIR>/$ITEM.architect.md, read the record's own revision, and fail unless they match.
+# The record's own claim. Both fields are written by scripts/gate.mjs; neither is agent-authored.
+grep -q '"passed": *true' "$RECORD" || exit 1
+REC_SHA=$(grep -Eo '"gitSha": *"[0-9a-f]+"' "$RECORD" | head -1 | grep -Eo '[0-9a-f]{7,}')
+[ -n "$REC_SHA" ] || exit 1
+
+# The SHA the lane was submitted at — the LAST one in the file, since a lane accumulates rounds by
+# appending and only the newest submission is the one a verdict can be about.
+LANE_SHA=$(grep -Eio '\b[0-9a-f]{7,40}\b' "$LANE" | tail -1)
+[ -n "$LANE_SHA" ] || exit 1
+
+# Prefix comparison, so an abbreviated SHA on either side still matches the same commit. This is the
+# half that makes the check mean something: without it, a green record from an earlier revision
+# gates a submission it never saw.
+case "$REC_SHA" in "$LANE_SHA"*) exit 0 ;; esac
+case "$LANE_SHA" in "$REC_SHA"*) exit 0 ;; esac
 exit 1
-# ------------------------------------------------------------------------------------------------

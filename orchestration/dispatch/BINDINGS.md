@@ -20,9 +20,34 @@ yet. This is available headroom for future multi-instance work, not something in
 | `<AUDIT_LANE_DIR>` | `orchestration/audit/cr` |
 | `<WORKTREE_DIR>` | `.claude/worktrees` (lane worktrees: `<instance-id>-<ITEM>`) |
 | `<TAG_PREFIX>` | `DOS` — commit tag `(DOS:<instance-id> <ITEM>)`, reuses this repo's existing session-tag prefix |
+| `<ITEM>` id format | `B-NNN` for backlog rows, `bNNN` for bug records. One format per register; see the register table below |
+| `<TZ>` | `Asia/Kuala_Lumpur` (UTC+8) — both ledger headers stamp in it |
+| `<SYNC_COMMAND>` | `git fetch origin && git merge --ff-only origin/main` from the repo root |
+| `<GATE_RUN_RECORD>` | `docs/build/gate/item-<ITEM>.json`, written by `scripts/gate.mjs --item <ITEM>`. Result field: `passed` (boolean) — `exitCode` and per-check `checks[]` carry the detail. Revision field: `gitSha`. **Untracked by rule, not by accident** (`.gitignore`), satisfying the constraint that the record lands under `<AUDIT_ROOT>/**` or on an untracked path |
+| `<DOD_BINDINGS_PATH>` | `docs/governance/DEFINITION_OF_DONE_BINDINGS.md` |
 | The stakeholder | Saiful — sole human-in-the-loop |
 | Shared branch | `main` directly, delivery = pushed to `origin`. DeliveryOS ships a packaged `.vsix`, not a deployed service, so there is no auto-deploy risk from lane files landing on `main` (same reasoning as `docs/build/auditor/DELIVERYOS_BINDINGS.md`'s existing branch binding for the older per-chunk kernel) |
-| Change registers | `docs/pm/BACKLOG.md` (`B-XXX` — CR-equivalent, planned changes) and `docs/build/bugs.json` (`id` field — DEF-equivalent, defects). **Proposed convention, not an established one** — this repo has never run CR/DEF ids through a shared lane directory before; confirm before the first lane dispatches. |
+| Architect's inner process | `docs/MULTI_AGENT_BUILD_PROCESS.md` — this repo's own build process, which the orchestration chassis layers over rather than replaces |
+| Continuity / status record | `docs/build/CHUNK_LEDGER.md` + the `/sm-savepoint` → `/sm-readpoint` memo cycle (`docs/commands/`) |
+
+## Registers (DISPATCH_PROTOCOL.md §1a)
+
+| Register id | `<REGISTER_PATH>` | `<ITEM_KIND>` | `<STATUS_VOCAB>` | `<SPEC_POINTER>` | `<DOD_APPLIES>` |
+|---|---|---|---|---|---|
+| `backlog` | `docs/pm/BACKLOG.md`; a row is addressed by its `B-NNN` id | planned change | its three section headings — *Ready* (not started) · *In progress* (being worked) · *Done* (closed). A row's status is which section it sits under | the `## § B-NNN` section in the same file | **yes** |
+| `bugs` | `docs/build/bugs.json`; a row is the object in the `bugs` array whose `id` matches | defect | `open` (not started or being worked) · `resolved` (closed) | the bug record itself — its `summary`, `repro` and `expected` fields are the spec | **no** |
+
+Both registers share `orchestration/audit/cr/` as the one lane directory, per protocol.
+
+**`<DOD_APPLIES>` is a human decision, made here, per kind.** A planned change renders the full DoD:
+it can touch docs, a register row and a user-facing surface, so every row is answerable. A defect
+does not: its scope is "this specific thing was wrong and now is not", and requiring the Docs,
+Register-row-and-manual and band-justification rows on a one-line fix produces a column of `N/A`s —
+which is exactly how a reviewer learns to wave `N/A`s through. A defect still carries the chunk
+evidence list, is still audited, and is still gated.
+
+**Proposed convention, not an established one** — this repo has never run register ids through a
+shared lane directory. Confirm before the first lane dispatches.
 | Test command — extension surface | `npm run test --workspace=deliveryos` (`tsx --tsconfig test/tsconfig.json --test test/*.test.ts`) |
 | Test command — webview surface | `npm run typecheck --workspace=@deliveryos/webview` (`tsc --noEmit`) — **no unit tests exist for this surface**; typecheck is the only automated gate today |
 | Test command — contracts surface | `npm run build:contracts` (`tsc -p tsconfig.json`) — a shared type-definitions package with no tests of its own; correctness is verified by its consumers' typecheck |
@@ -55,12 +80,45 @@ Serialize any lane touching these via `DEPENDS-ON` (guardrail 3) — never work 
 These three are why the `coder.features` roster instance (see `roster/coder.features.md`) is scoped to
 run one lane at a time in practice, not why it is split further — see that file's own note.
 
-## Hosting
+## Implementation profiles (DISPATCH_PROTOCOL.md §2)
 
-No standing launch helpers yet — Tier B′ (`dispatch_launch.sh` and friends) was deliberately not
-adopted in this pass (optional per `PORTABLE_MANIFEST.md` §"Standing it up" step 1). Until it is,
-launch an instance the same way any other Claude Code session is launched in this project, and record
-its `live_handle` by hand in its roster file.
+One row per distinct way an instance can run here. Every de-harnessed string from the portable files
+lands in this table; no tier-A file names any of these values.
+
+| Column | `agentic-premium` |
+|---|---|
+| `id` | `agentic-premium` |
+| `kind` | `process` — an independent Claude Code session, not a subagent of the Architect |
+| `launch_template` | `claude -p --session-id <uuid> --permission-mode acceptEdits --add-dir <repo> "<pointer payload>"`, started in the background. **The template mints `<uuid>` and returns it**; the Architect records what it returns |
+| `resume_template` | `claude --resume <uuid>` |
+| `watch_capable` | yes — can hold a blocking `dispatch.sh inst <id>` watch, but not under `lifetime: one-shot` |
+| `anchor` | `CLAUDE.md`, auto-loaded from the repo root. A loop prompt still has to be handed in explicitly; only the agent guide is automatic |
+| `context_policy` | auto-compaction, always on, unattended. Fires near ~1M tokens — a backstop, not the operating point |
+| `fanout` | available (`Workflow` / `Agent`), **granted per launch**, never standing. Withholding it per lane is how the Architect protects the shared quota |
+| `timeout_ceiling` | 600000 ms per command; past the default a command is auto-backgrounded, which ends a one-shot instance mid-lane |
+| `result_convention` | commits + pushes its own paths; the lane files are the hand-off |
+| `version_pin` | none set — a known gap. Two instances on different releases of the same tool are two profiles, and nothing here would currently distinguish them |
+
+**Not adopted:** a launch helper script. The template above is the binding; a helper would only save
+typing (optional per `PORTABLE_MANIFEST.md`'s tier-B′ note).
+
+**The live doorbell is `SendMessage` to the `live_handle`.** Available on this profile, and used only
+as a doorbell: status, a clarification, a simple hand-off. Never large context, never a command to
+execute — the file is truth.
+
+## Capability bands (ROLES.md)
+
+| Band | Fills with, here |
+|---|---|
+| Economy | Haiku-class |
+| Standard | Sonnet-class |
+| Premium | Opus-class |
+
+**The fleet cannot decorrelate today.** Every roster entry is `family: claude`, auditor included.
+Other families are available to this project and documented (`docs/MHBP_LAB.md` §1 — a separate
+agentic CLI on a different family, and two local OpenAI-compatible endpoints the architect calls
+directly), and none has ever been wired into a lane. Recorded here as a known gap rather than left
+for someone to infer from a roster of identical `family:` values.
 
 ## Definition-of-Done bindings
 

@@ -12,9 +12,11 @@
 #   5  harness/tool/model names must not appear in tier A  (this is what "any LLM" means)
 #   6  incident-narration heuristic over tier A            (advisory: warns, never fails)
 #
-# Checks 4 and 5 need the needles from interview phase 1. Fill NEEDLE_* below. LEAVING THEM EMPTY
-# IS ITSELF A FAILURE — an empty needle set silently passes everything, which is worse than not
-# running the check, because it prints a pass.
+# Checks 4 and 5 need this project's needles, which are project VALUES and therefore must not live
+# in this file — this script is tier A, and a tier-A file carrying the project's own name would fail
+# its own check. They live in `install/needles.conf` beside it, written at stand-up (interview phase
+# 1) and never copied onward. A MISSING OR EMPTY needle set IS A FAILURE: an empty one silently
+# passes everything and prints a pass, which is worse than not checking at all.
 #
 # Usage:  sh install/check_bindings.sh [-v]
 # Exit:   0 all checks pass · 1 a check failed · 2 bad usage or the tree is not where expected
@@ -25,13 +27,10 @@ ORCH=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 TEMPLATES="$SCRIPT_DIR/templates"
 VERBOSE=0; [ "${1:-}" = "-v" ] && VERBOSE=1
 
-# --- FILL THESE AT STAND-UP (interview phase 1) --------------------------------------------------
-# Extended-regex alternations. Every spelling and casing that could appear in a file.
-NEEDLE_PROJECT=""     # this project's name, in every form
-NEEDLE_HOSTS=""       # hosts, domains, environment names
-NEEDLE_PERSON=""      # the stakeholder's name
-NEEDLE_HARNESS=""     # harness / CLI / tool / model names in play here  (<HARNESS_TERMS>)
-# ------------------------------------------------------------------------------------------------
+NEEDLE_PROJECT=""; NEEDLE_HOSTS=""; NEEDLE_PERSON=""; NEEDLE_HARNESS=""
+NEEDLES="$SCRIPT_DIR/needles.conf"
+# shellcheck disable=SC1090
+[ -f "$NEEDLES" ] && . "$NEEDLES"
 
 fails=0
 FLIST=${TMPDIR:-/tmp}/.cb_files_$$
@@ -59,6 +58,7 @@ tier_a() {
     -name "trail.md" -prune -o \
     -name "audit-trail.md" -prune -o \
     -name "ANSWERS.md" -prune -o \
+    -name "needles.conf" -prune -o \
     -name "gate_check.sh" -prune -o \
     -type f \( -name "*.md" -o -name "*.sh" -o -name "*.py" \) -print
 }
@@ -105,7 +105,11 @@ check_rows() {
       [ -s "$FLIST" ] || { fail "1 rows: $base emits to $target, which matches no file"; ok=0; continue; }
     fi
 
-    toks=$(grep -Eo '`<[A-Z_]+>`' "$t" 2>/dev/null | sort -u)
+    # A ROW NAME is a token in a TABLE CELL — a line starting with `|`. A token in a template's
+    # prose is explanation, not a row the emitted file owes: the register shape explains what
+    # `<SPEC_POINTER>` means without the register itself having a row by that name. `<UNBOUND>` is
+    # the placeholder marker and never a row name; check 2 owns it.
+    toks=$(grep -E '^\|' "$t" 2>/dev/null | grep -Eo '`<[A-Z_]+>`' | grep -v '^`<UNBOUND>`$' | sort -u)
     [ -n "$toks" ] || continue
     while IFS= read -r f; do
       [ -f "$f" ] || continue
@@ -122,9 +126,13 @@ check_rows() {
 # Scoped to exclude install/templates/, which is SUPPOSED to be full of them. Unscoped, this check
 # can never pass, and a check that can never pass gets disabled rather than fixed.
 check_unbound() {
-  # Excludes install/templates/ (supposed to be full of them) and this script (which names the
-  # marker in order to search for it — a checker matching itself is noise, not a finding).
-  hits=$(grep -rl "<UNBOUND>" "$ORCH" 2>/dev/null | grep -v "^$TEMPLATES/" | grep -v "^$SCRIPT_DIR/check_bindings.sh$" || true)
+  # Three exclusions, all of them files that name the marker in order to DEFINE it rather than
+  # because they are unbound: the templates (supposed to be full of them), this script, and the
+  # manifest section that documents this check. Everything else is a real finding.
+  hits=$(grep -rl "<UNBOUND>" "$ORCH" 2>/dev/null \
+    | grep -v "^$TEMPLATES/" \
+    | grep -v "^$SCRIPT_DIR/check_bindings.sh$" \
+    | grep -v "^$ORCH/PORTABLE_MANIFEST.md$" || true)
   if [ -n "$hits" ]; then
     fail "2 unbound: <UNBOUND> remains in:"; echo "$hits" | sed 's/^/        /'
   else
@@ -176,8 +184,8 @@ check_owns() {
 # --- 4/5. the honesty greps ----------------------------------------------------------------------
 grep_tier_a() {  # $1=label $2=needles
   if [ -z "$2" ]; then
-    fail "$1: needle set is EMPTY — fill it at stand-up (interview phase 1). An empty needle set
-        passes everything and prints a pass, which is worse than not checking."
+    fail "$1: needle set is EMPTY. Write install/needles.conf at stand-up (interview phase 1);
+        an empty needle set passes everything and prints a pass."
     return
   fi
   # NOT `tier_a | xargs grep` — xargs splits on whitespace, so any space in the repo's own path
@@ -196,7 +204,11 @@ grep_tier_a() {  # $1=label $2=needles
 # because a false positive that blocks a stand-up is a check people delete.
 check_narration() {
   pat="(this once|we (once|had|hit|lost|saw)|last (week|month|time)|on one occasion|there was a time|stranded (a|the)|for ~?[0-9]+ ?(h|hr|hours|min|minutes)|in practice we)"
-  hits=$(tier_a | while IFS= read -r f; do grep -niE "$pat" "$f" 2>/dev/null | sed "s|^|$f:|"; done)
+  # This script is excluded from THIS check only: it holds the pattern in order to search for it,
+  # and a checker matching its own regex literal is noise. It stays inside checks 4 and 5, which is
+  # where a leak could actually be introduced now that the needles live outside it.
+  hits=$(tier_a | grep -v "^$SCRIPT_DIR/check_bindings.sh$" \
+    | while IFS= read -r f; do grep -niE "$pat" "$f" 2>/dev/null | sed "s|^|$f:|"; done)
   if [ -n "$hits" ]; then
     echo "warn  6 narration: possible incident narration in tier A (invariant 2) — review, do not"
     echo "        auto-edit. Keep the rule; move the anecdote to BINDINGS or the commit log."
