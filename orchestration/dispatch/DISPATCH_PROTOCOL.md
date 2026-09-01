@@ -78,10 +78,54 @@ key on EVERY channel:
 | Watcher | `dispatch.sh inst <instance-id>` blocks until a lane targets THIS instance |
 | Worktree | `<WORKTREE_DIR>/<instance-id>-<ITEM>/` |
 | Commit tag | `(<TAG_PREFIX>:<instance-id> <ITEM>)` |
-| Interrogation | the instance is a **named background session** the stakeholder lists/attaches (`live_handle` = its session name/id) |
+| Interrogation | `live_handle` — an **opaque re-attach token whose form the instance's implementation profile defines**. The protocol never parses it; it hands it back to whatever launched the instance |
 
-The roster (`roster/<instance-id>.md`) binds a role to a spec + its owned paths + its addressing
-block. Adding a file adds an instance — the fleet is open.
+### The roster entry
+
+`roster/<instance-id>.md` is the whole binding for one instance. Adding a file adds an instance — the
+fleet is open, and nothing hardcodes the roster. The field list is portable; every value is local:
+
+```
+role:          architect | auditor | coder | noncoder
+spec:          <the narrow sub-specification this instance owns>
+kind:          code | content | requester-note
+owns:          <path globs — see the grammar below>
+schema_owner:  true | false      # may this instance change a shared interface/schema
+wip_cap:       <max concurrent lanes>
+auditor:       <instance-id of the auditor that gates this instance, or the per-lane GATE>
+live_handle:   <opaque re-attach token, per impl.profile — blank until launched>
+commit_tag:    (<TAG_PREFIX>:<instance-id> <ITEM>)
+worktree:      <WORKTREE_DIR>/<instance-id>-<ITEM>
+active_lanes:  []
+impl:
+  profile:     <id of a row in BINDINGS → Implementation profiles>   MANDATORY
+  kind:        in-process | process | script | service | human       MANDATORY
+  band:        economy | standard | premium                          MANDATORY
+  family:      <model family>                                        MANDATORY
+  turn_taking: self-watch | invoked | always-on                      MANDATORY
+  lifetime:    one-shot | resumable | persistent                     MANDATORY
+  write_mode:  commits | patch-returned | read-only                  MANDATORY
+```
+
+**`impl:` names the mechanism, never the allegiance.** There is deliberately no `own | foreign` field:
+those words are defined relative to whoever wrote the file and invert the moment the tree is copied
+into a project whose fleet is different. Decorrelation is `family:` — two instances are decorrelated
+when their `family:` values differ, which is a fact about the models and stays true on copy.
+`family:` is MANDATORY on **every** instance, not only auditor-capable ones: the check that matters
+is *coder family ≠ its auditor's family*, and that comparison is a lookup only if both sides record it.
+
+**`owns:` grammar (normative).** One path glob per line, no brace expansion, no inline prose, comments
+on their own line. Prose like *"and their test counterparts"* is not a path and no check can compute
+set disjointness over it — and disjointness is what guardrail 3 (collision avoidance) and the
+independence rule below both reduce to. Write the test paths out.
+
+**Exception to "the Architect maintains the roster": an auditor's entry is install-owned.** The
+Architect may add, edit and retire coder and non-coder entries. It may not create, edit or retire an
+`auditor.*` entry, or change the `auditor:` field that points a coder at one. Those are written at
+stand-up and changed only by the stakeholder. The reason is structural, not procedural: an Architect
+that can rewrite its own gate's roster entry controls the existence of its own gate, and independence
+becomes prose again (ROLES.md rule 4). The Architect may freely *start* an auditor's watcher — that
+is scheduling, not roster control.
 
 **Hosting (important).** An instance is an **independent, listable session — NOT a subagent of the
 Architect.** Only an independent session appears in the stakeholder's session/agent list and can be opened

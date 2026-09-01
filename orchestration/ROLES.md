@@ -9,7 +9,9 @@ Owner: the Architect. Companion: DISPATCH_PROTOCOL.md (mechanics).
 
 Four roles. A **role** is a stable abstraction; an **agent is an instance** of a role bound to a
 narrow sub-specification. Only the Architect is a singleton — every other role scales by adding
-instances. The Architect maintains the roster.
+instances. The Architect maintains the roster — with one exception, and it is the one that keeps the
+gate real: **an `auditor.*` entry, and the `auditor:` field pointing a coder at one, are written at
+stand-up and are not the Architect's to change** (DISPATCH_PROTOCOL.md §2).
 
 ## The org
 
@@ -36,6 +38,30 @@ instances. The Architect maintains the roster.
 - Lanes = work orders. `board.md` = the ops dashboard. `trail.md` = the company record.
   A per-instance WIP cap = not overloading a team.
 
+## Capability bands
+
+Every instance runs at a **band**, never at a named model. Bands are the protocol's only vocabulary
+for capability: a portable file names the band, BINDINGS names what fills it here, and a roster entry
+records which band that instance runs at.
+
+| Band | Capability profile | Where it belongs |
+|---|---|---|
+| **Economy** | Fast, low context, good at mechanical and deterministic tasks | Status reads, log parsing, boilerplate scaffolding, config-only chunks, ledger updates |
+| **Standard** | Strong reasoning, large context, good at implementation | Writing code, running tests, routine analysis — most coder and chunk-audit work |
+| **Premium** | Highest reasoning, best at complex design and judgment | Design decisions, BLOCKER resolution, escalated attempts, the item-level audit |
+
+**Never name a model in a portable file, and never name one in an invocation — name the band.** A
+band is a level of capability; which model sits at that level changes on a timescale shorter than
+this protocol's, and a project that hardcodes one inherits a stale answer the day it copies the tree.
+
+**A band is model *and* harness together.** The same weights behind a different tool loop — different
+context budget, different tool access, different retry behaviour — is not the same band. Bind the
+pair, not the model.
+
+**Never Economy for an auditor.** A cheap auditor returns a confident `COMPLETE` it never earned,
+which is worse than no auditor: it manufactures false confidence where an absent one would at least
+leave a visible gap.
+
 ## Load-bearing rules (do not weaken)
 
 1. **Separation of duties.** The Architect assigns and integrates but never verifies its own
@@ -45,7 +71,10 @@ instances. The Architect maintains the roster.
 2. **One role, many instances.** Everything is addressed to a specific **instance ID**
    (`<role>.<spec>`), never to a role in the abstract. See DISPATCH_PROTOCOL.md §2.
 3. **The fleet is open.** A new instance joins by dropping a `roster/<instance-id>.md`; nothing in
-   the protocol or `dispatch.sh` hardcodes the roster.
-4. **Independence is structural, not promised.** The Auditor's independence is enforced by disjoint
-   write-paths and re-verification of committed SHAs, not by instructions. Prompt instructions are
-   not controls.
+   the protocol or `dispatch.sh` hardcodes the roster. Auditor entries are the exception above.
+4. **Independence is structural, not promised.** The Auditor's independence rests on things that are
+   true whether or not anyone reads a prompt: disjoint write-paths, re-verification of committed
+   SHAs, an install-owned roster entry the Architect cannot rewrite, and — where a project has a
+   non-agentic runner — acceptance checks the implementing instance does not own and therefore
+   cannot edit. **Prompt instructions are not controls.** Each of those is checkable by someone who
+   distrusts every agent in the fleet; that is the test a control has to pass.
