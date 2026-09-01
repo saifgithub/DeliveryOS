@@ -223,6 +223,15 @@ alone — the Architect's own token, unverified by anything. `machine` reaches `
 the Architect did not write, over checks the implementer did not author and cannot edit. The two
 sound adjacent and differ in exactly the property gates exist for.
 
+**What a single verifier's green does NOT prove, stated plainly.** With one auditor authoring the
+checks, green means *"this verifier's reading of the spec is satisfied"* — nothing more. Two
+verifiers on **different `impl.family` values** authoring blind from the same spec add a real signal:
+where they disagree, the spec is ambiguous, and that divergence is the finding. One verifier has no
+such signal and cannot manufacture one by being careful. So: `machine` at one verifier is a genuine
+gate and a **weaker** one, and a project that runs it that way should know which of the two it has
+rather than discovering it later. The residual that stays with the stakeholder either way — *do the
+checks faithfully encode the intent?* — is at least concentrated on one reviewable artifact.
+
 **An item ships as chunks + an item-level audit, or as item-only. The item-level audit is mandatory
 in both branches.** That is what makes `GATE: none` safe on a chunk: there is no path to a finished
 item that skips the terminal gate, so chunking is a cost-and-parallelism decision rather than a

@@ -48,6 +48,27 @@ particular is synchronous and can fire mid-tool-loop, so a hook here must never 
   window/threshold, if you tune one) is a separate, deliberately scoped concern — not something
   this hook pair reads or manages.
 
+**Not a recovery mechanism for an orchestration Auditor.** Two independent reasons, and the second
+holds even if you fix the first:
+
+- **They are Claude Code events parsing Claude Code's hook JSON.** `PreCompact` and `SessionStart`
+  exist in one harness and the scripts read that harness's payload shape. `orchestration/`'s premise
+  is that any role can be filled by any LLM behind any tool loop (`ROLES.md`, and the roster's
+  `impl.profile`), so a continuity story that only works for one harness is not a continuity story
+  for the fleet — it is a convenience for the instances that happen to run under this one.
+- **The PreCompact fallback is not adequate auditor input.** It is a git-state snapshot plus a
+  transcript tail. An auditor resuming mid-round needs the round's revision, which checks it filed,
+  and which trust-critical steps it actually ran with what observed output. That is what the round
+  journal (`<AUDIT_ROOT>/runs/<date>_run-NN/`) is for, and even the journal is only a *claim* the
+  auditor wrote about itself — an auditor re-runs every step that no non-agentic artifact records.
+
+There is also one cwd-dependency worth knowing: `sm-sessionstart-restore.sh` resolves its archive
+directory **relative to the session's cwd** (`.deliveryos/` → `.claude/` → `$HOME/.claude/`). That is
+correct for an ordinary session sitting at a repo root. It bites only when a session's own cwd is
+inside a lane worktree — the archive lands in that worktree, and lane closure removes the worktree
+with `git worktree remove -f -f`, taking the archived memo with it. Run instance sessions from the
+repo root, or bind an absolute archive path, if you use these hooks alongside lane worktrees.
+
 **On genericizing before landing here.** The tested/running copies of these two scripts carry no
 project-specific content by design (see "Both are global" above); the copies in this directory
 are kept byte-identical to that global, portable form — no DeliveryOS-specific content, and no
