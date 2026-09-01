@@ -92,7 +92,7 @@ hand-off — a submit, a merge, an answer to a `NEEDS-INFO`, an assignment.
    local. The auditor only ever sees committed SHAs, never a half-built tree.
 6. Wait — your choice of mechanism; `sh <AUDIT_ROOT>/watcher.sh architect` blocks until a verdict
    returns, or poll between build steps. **Pass `-t <seconds>` unless a human can interrupt it** —
-   an unbounded block in a headless session never returns, and `... state` is the safe one-shot. On AWAITING_FIXES, fix the findings in priority order and
+   an unbounded block in an unattended run never returns, and `... state` is the safe one-shot. On AWAITING_FIXES, fix the findings in priority order and
    resubmit at the next round (go to step 2). On COMPLETE, update the item's status in its register
    and flag it to the stakeholder for their hands-on acceptance test (their single checkpoint per
    item); a defect they find reopens the lane — fix and resubmit at the next round. Other lanes
@@ -104,10 +104,21 @@ check pass: fix the SOURCE.
 
 ## Spawning an auditor
 
-A standing auditor instance is not required. You may spawn a fresh agent per audit and hand it
+A standing auditor instance is not required. Where the roster's auditor entry has
+`impl.lifetime: one-shot`, you start a fresh execution of it per audit and hand it
 [`AUDITOR_LOOP_PROMPT.md`](AUDITOR_LOOP_PROMPT.md) as its reference. That prompt is already written
 for statelessness — *"fresh eyes each round are fine and encouraged"* — so this is its honest form,
-not a shortcut. Three rules, none of them optional:
+not a shortcut.
+
+**Starting an auditor is not the same as creating one.** You may launch, re-launch and hand work to
+an auditor instance that already has a roster entry. You may **not** write, edit or retire that entry,
+choose its band or family, or repoint a coder's `auditor:` field — those are install-owned
+(DISPATCH_PROTOCOL.md §2). The distinction is the whole of the Auditor's independence at this layer:
+an Architect that decides *which* auditor exists has decided its own gate, however scrupulously it
+then runs it. If no auditor entry covers the instance you need, that is a stakeholder request, not a
+file you write.
+
+Three rules on the spawn itself, none of them optional:
 
 1. **The spawn payload is a POINTER, not a FRAME.** Send the item id, the SHA, "read
    `<AUDIT_LANE_DIR>/<ITEM>.architect.md`", and "follow `AUDITOR_LOOP_PROMPT.md`" **with its full

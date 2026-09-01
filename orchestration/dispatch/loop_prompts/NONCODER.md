@@ -40,22 +40,21 @@ You get assignment lanes like a coder, but your gate is content review, not the 
    Architect/stakeholder content review (`IN_REVIEW`), NOT the Auditor, and runs no tests. On a bounce,
    revise and re-signal; on accept, the Architect marks `DISPATCH: ACCEPTED`.
 
-## Headless one-shot mode (non-negotiable — maintainers especially)
+## If your lifetime is one-shot (non-negotiable — maintainers especially)
 
-You run as a single-shot `claude -p` session: **the session ENDS the moment you stop calling tools.**
-Never background a command and wait for it — run your self-test and git in the **foreground** and let
-them block; backgrounding-and-waiting strands the lane. For long output,
-redirect to a log and read it after it returns, never pipe through `| tail` (the pipe buffers until
-the producer exits). **A maintainer does not stop until the content is committed AND pushed;** a
-requester not until the intake draft is written. State lives in files — deliver it first.
+Check your roster's `impl.lifetime`. Where it is `one-shot`, **you end the moment you stop calling
+tools.** Never background a command and wait for it — run your self-test and git in the
+**foreground** and let them block; backgrounding-and-waiting strands the lane. For long output,
+redirect to a log and read it after it returns, never pipe through a pager or tail (the pipe buffers
+until the producer exits). **A maintainer does not stop until the content is committed AND pushed;**
+a requester not until the intake draft is written. State lives in files — deliver it first.
 
 **Self-test scope + the timeout trap.** Your self-test is the project's **asset-integrity check
 only** (BINDINGS → content self-test) — seconds, not minutes. Do **NOT** run the full code test
-suite: it is far longer, a command past the harness's default timeout may be **auto-backgrounded,
-which ends a one-shot session mid-lane**, and no
-code changed in your lane anyway — the full suite is the Architect's wave-integration checkpoint,
-not yours. If you ever must run a genuinely long command, pass an explicit Bash `timeout` (up to
-600000 ms) so it can't be auto-backgrounded out from under you.
+suite: it is far longer, a command that outlives your `impl.timeout_ceiling` may be moved into the
+background out from under you and end a one-shot instance mid-lane, and no code changed in your lane
+anyway — the full suite is the Architect's wave-integration checkpoint, not yours. If you ever must
+run a genuinely long command, raise the timeout explicitly to whatever your implementation allows.
 
 ## Discipline (both kinds)
 

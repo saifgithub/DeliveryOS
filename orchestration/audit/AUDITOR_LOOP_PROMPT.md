@@ -54,7 +54,7 @@ repo layout, and do not proceed on an unresolved token.
      on a poll loop is how it gets killed by its own harness with no verdict and no trace of why.
    - **Standing session, no item named:** `sh <AUDIT_ROOT>/watcher.sh auditor` blocks until at least
      one lane is AWAITING_AUDIT. **Pass `-t <seconds>` unless a human is sitting at the terminal
-     ready to interrupt it** — bounded, it exits 3 and you report "no work"; unbounded and headless,
+     ready to interrupt it** — bounded, it exits 3 and you report "no work"; unbounded and unattended,
      it never returns.
    - **Either way**, `sh <AUDIT_ROOT>/watcher.sh state` prints the table once and exits, which is
      the safe thing to run when you are unsure.

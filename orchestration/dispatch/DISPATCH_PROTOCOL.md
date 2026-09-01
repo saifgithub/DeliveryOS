@@ -127,15 +127,37 @@ that can rewrite its own gate's roster entry controls the existence of its own g
 becomes prose again (ROLES.md rule 4). The Architect may freely *start* an auditor's watcher — that
 is scheduling, not roster control.
 
-**Hosting (important).** An instance is an **independent, listable session — NOT a subagent of the
-Architect.** Only an independent session appears in the stakeholder's session/agent list and can be opened
-and interrogated; an Agent-tool subagent is nested in its parent and is invisible. Consequences:
-(1) coordination is **file-only** — independent sessions share no memory, so the Architect never
-messages an instance in-process; each instance self-notices its turn via `dispatch.sh inst <id>`.
-(2) The stakeholder launches and names the instance sessions (onboarding); the Architect only assigns work
-via lanes. (3) `live_handle` records the session name/id for stakeholder interrogation. See BINDINGS for the
-concrete launch/monitor commands. (SendMessage applies only in the degenerate case where an instance
-is deliberately run as the Architect's own ephemeral subagent — not the interrogable-fleet model.)
+### Hosting — a capability contract, not a hosting technology
+
+An instance can be anything that satisfies the contract below: a session under some agent harness, a
+separate process, a script, a service behind an API, or a person. Which one it is for a given
+instance is `impl.kind`, resolved through **BINDINGS → Implementation profiles**. The protocol names
+none of them.
+
+**What every instance must supply:**
+
+1. **It shares no memory with any other role.** This is the load-bearing one, and it is true of every
+   `impl.kind` including a human. It is *why* coordination is **file-only**: the Architect never
+   hands an instance work in-process, and each instance learns its turn by deriving state from files
+   (`dispatch.sh inst <id>`, or whatever its `turn_taking` prescribes).
+2. **It writes only its own paths, and commits and pushes them itself** — or, where `write_mode` is
+   `patch-returned` or `read-only`, something else commits on its behalf and the profile says what.
+3. **It can be re-attached or re-launched from `live_handle`**, whose form the profile defines. The
+   protocol stores that token and never parses it.
+
+**The cost of an instance nobody can list, stated rather than prohibited.** Some implementations
+produce an instance that is nested inside another one and does not appear in any list the stakeholder
+can see. That is allowed, and it is a real loss: the stakeholder cannot open it and interrogate it,
+which is one of the few checks that does not run through an agent. Prefer independently listable
+instances where the profile offers both; where it does not, record the cost in BINDINGS rather than
+pretending it is not there.
+
+**Implementation profiles (BINDINGS, one row per profile).** The columns are portable; every value
+is local. `id`, `kind`, `launch_template`, `resume_template`, `watch_capable`, `anchor` (which file
+that implementation auto-loads, if any), `context_policy`, `fanout`, `timeout_ceiling`,
+`result_convention`, `version_pin`. **No portable file names a value from any of these columns** —
+not a command, not a tool, not a model, not a context size, not the name of a compaction policy. A
+portable file says *"the policy its profile binds"*; the profile says what that is.
 
 ## 3. The lanes (directory as queue, no shared mutable flag)
 
@@ -261,6 +283,20 @@ watcher would freeze its other lanes); `architect [-i N]` (block until a lane ne
 turn is its own choice — the state is always re-derivable from files, so nothing is lost while a
 role is busy elsewhere.
 
+**Watcher modes and `impl.turn_taking`.** A blocking watch is correct for an instance that lives
+long enough to hold one and fatal for one that does not, so the mode follows the roster, not taste:
+
+| `turn_taking` | What it does | Failure it avoids |
+|---|---|---|
+| `self-watch` | Runs its own watch, bounded (`-t`) unless something can interrupt it | An unbounded block in an instance nothing can interrupt never returns |
+| `always-on` | Holds the watch continuously and re-arms after every hand-off | — |
+| `invoked` | Runs **no** watcher. Something else derives its turn and starts it per round; the roster names that watcher-on-behalf-of | An implementation that cannot poll at all — or would burn its whole lifetime doing so — silently never picking up work |
+
+`invoked` is not a degenerate case. Two real shapes need it: an implementation whose lifetime is one
+call, where a poll loop consumes the lifetime and leaves nothing for the work; and one whose control
+flow cannot reach the filesystem at all, so the derive-and-start must happen one level out. Either
+way the state is still derived from the same files by the same script — only *who runs it* moves.
+
 ## 5. Bidirectional clarification round-trip
 
 Either party can pause a lane to ask the other a question, addressed to a specific instance:
@@ -269,10 +305,12 @@ Either party can pause a lane to ask the other a question, addressed to a specif
   sets `STATUS: NEEDS-INFO`. The Architect asking a requester sets `TRIAGE: NEEDS-INFO` on the
   intake draft. The answerer appends `A[n]:` and clears the flag (bumps STATUS back). Forward
   progress resumes only when answered — survives restarts.
-- **Live (doorbell):** if the instance is running, SendMessage its `live_handle` the question for an
-  immediate reply — but still record the resolved fact in the file. **The file is truth; the live
-  channel is only a doorbell and stays lightweight** (status, clarification, simple hand-offs — never
-  large context, never a command to execute; agents cannot run slash commands).
+- **Live (doorbell):** if the instance is running *and* its profile provides an out-of-band ping,
+  send the question to its `live_handle` for an immediate reply — but still record the resolved fact
+  in the file. Many profiles provide no such channel; that costs latency and nothing else, because
+  the durable path above is the one the protocol depends on. **The file is truth; the live channel is
+  only a doorbell and stays lightweight** (status, clarification, simple hand-offs — never large
+  context, never a command to execute).
 
 ## 6. The two-handshake bridge
 
@@ -330,28 +368,28 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
    provider's rolling usage window: exhausting it strands every in-flight agent at once and
    everything uncommitted dies with them. Therefore instances **commit incrementally**, and the
    Architect **stops at lane boundaries** rather than starting an audit that may die mid-verdict.
-8. **Context (no human needed).** `/compact` cannot be automated — agents can't run slash commands,
-   no skill/hook/setting triggers compaction (`PreCompact` only observes or blocks one), and there is
-   no SDK trigger. It is also **not needed**: auto-compaction is **always on and runs in headless /
-   SDK / subagent contexts** (it clears old tool outputs, then summarizes, as an instance nears its
-   limit — no human, no command). Three tiers, all Architect-automatable: (1) auto-compaction handles
-   routine creep; (2) **session resume** (`resume: sessionId`) or respawn-fresh-on-the-same-lane
-   resets an instance's context while continuity lives in files; (3) heavy reads go to disposable
-   subagents (ultracode) so an instance's own context stays lean. The one failure mode — a single
-   tool output so large it refills context immediately after compacting — is avoided by keeping lanes
-   narrowly scoped. **No human is ever required to manage an instance's context.**
+8. **Context (no human needed).** Whatever an implementation does about a full context window is
+   **the policy its profile binds** (`impl.context_policy`) — an automatic reduction, a hard limit,
+   nothing at all. The protocol requires only this: **no human is ever required to manage an
+   instance's context**, and no role's turn depends on one intervening. Three mechanisms, in
+   preference order, all available to the Architect without a human: (1) whatever the profile's own
+   context policy does, unattended; (2) **re-launch or resume** the instance — `resume_template` or
+   `launch_template` — since continuity lives in files, not in a session; (3) push heavy reads into
+   **disposable sub-work** whose transcript never enters the instance's own context, where the
+   profile's `fanout` grant allows it. The one failure mode — a single tool output large enough to
+   refill the context immediately after it was reduced — is avoided by keeping lanes narrowly scoped,
+   which is the Architect's job at decomposition.
 
 9. **Token economy — bound instance lifetime to a work unit, not the context ceiling.**
-   Auto-compaction (§8) fires only near the model's context limit (~1M tokens); operating there is
-   expensive because input is billed on every tool call in proportion to the context carried, so it
-   is a backstop, NOT the operating point. Keep instances **short-lived**: spawn a fresh instance per
-   lane (or per round), build, hand off, **exit** — the next lane gets a new instance starting small.
-   Continuity is in files, so ending early costs nothing. Push heavy reads/exploration into
-   **disposable subagents** (ultracode) whose transcript never enters the instance's context. Keep
-   the stable prefix (these protocol docs, the agent guide, the lane file) byte-stable so **prompt caching**
-   discounts it every call. Use **session resume** only for a tight same-lane bounce loop where the
-   prior context is still relevant; otherwise respawn fresh. The Architect sizes lanes narrowly so no
-   single instance-session grows large.
+   A context ceiling is a **backstop, not an operating point**: input is billed on every call in
+   proportion to the context carried, so an instance run near its limit is expensive on every call
+   until it ends. Keep instances **short-lived**: fresh instance per lane (or per round), build, hand
+   off, **exit** — the next lane starts small. Continuity is in files, so ending early costs nothing.
+   Push heavy reads and exploration into **disposable sub-work** whose transcript never enters the
+   instance's context. Keep the stable prefix (these protocol docs, the project's agent guide, the
+   lane file) **byte-stable**, so any implementation that discounts a repeated prefix can. Resume an
+   instance only for a tight same-lane bounce where the prior context is still relevant; otherwise
+   re-launch fresh. The Architect sizes lanes narrowly so no single instance grows large.
 
 ## 9. Done (per item)
 

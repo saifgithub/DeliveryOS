@@ -39,14 +39,15 @@ background a short command and wait for it. There is no "back": a backgrounded s
 waiting caller strands the lane.
 
 **A full test suite is the one exception, and it is a trap.** Where the project's full suite runs
-longer than the Bash tool's maximum timeout (BINDINGS → long-running test command), it can NEVER
-complete in a foreground call; it is always auto-backgrounded, which kills you. Run it via the
-project's wrapper with **background+poll**: launch the wrapper with the Bash tool
-`run_in_background:true` (NO trailing `&`), then **poll its output file until its terminal
-exit-code line appears**, and read that code — never infer pass/fail from a test runner's progress
-dots, since buffering hides them. Never run a blind probe *concurrently* with the full suite (the
-probe file would pollute what the suite scans). **Do not stop until your `VERDICT` is written AND
-pushed** — a committed-but-unpushed verdict is not delivered.
+longer than your implementation's command timeout (`impl.timeout_ceiling`; BINDINGS → long-running
+test command), it can NEVER complete in a foreground call — it is moved into the background out from
+under you, which ends a one-shot instance. Run it via the project's wrapper with **background+poll**:
+start the wrapper in the background *deliberately* (never with a trailing `&` and a blind wait), then
+**poll its output file until its terminal exit-code line appears**, and read that code. **Never infer
+pass/fail from a runner's progress output** — buffering hides it, and the exit code is the only thing
+that is actually the verdict. Never run a blind probe *concurrently* with the full suite (the probe
+file would pollute what the suite scans). **Do not stop until your `VERDICT` is written AND pushed** —
+a committed-but-unpushed verdict is not delivered.
 
 **Match rigor to blast radius.** An isolated, additive change is adequately covered by the targeted
 tests over the surface it touched; reach for the full suite when your own diff review shows the

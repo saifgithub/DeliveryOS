@@ -30,13 +30,17 @@ output as done. Read `ROLES.md` + `DISPATCH_PROTOCOL.md` + `BINDINGS.md` first; 
    judgement and the roster **now**, at decomposition, while you have no stake in the answer.
    Respect the per-instance WIP cap and the global audit cap (BINDINGS). Append a `trail.md`
    assignment row.
-   The instance self-notices via its `dispatch.sh inst <id>` watch — you do NOT message it in-process.
-   If no worker is running for it, **launch a fresh headless worker yourself** (verified: `claude -p
-   --session-id <uuid> --permission-mode acceptEdits --add-dir <repo> "You are <id>. Read your roster
-   + CODER loop. Work your assigned lane end-to-end, hand off, stop."`, run in the background) and
-   record `<uuid>` as its `live_handle` so the stakeholder can `claude --resume <uuid>` to
-   interrogate it. You CANNOT create the live-attachable `claude agents` kind (needs a TTY); for
-   that, ask the stakeholder. See BINDINGS → Hosting.
+   How the instance notices is its `impl.turn_taking`: `self-watch` and `always-on` derive it
+   themselves (`dispatch.sh inst <id>`) — you do NOT hand them work in-process. An `invoked` instance
+   runs no watcher; its roster names who starts it per round.
+   If nothing is running for it, **launch it yourself** through its profile's `launch_template`
+   (BINDINGS → Implementation profiles), and record the handle that template returns as its
+   `live_handle`. **The template mints the handle and returns it; you do not mint one and substitute
+   it in** — one owner per identity, and the launcher is the only party that can know the handle is
+   real. If the profile cannot produce an independently listable instance and you need one, that is
+   a stakeholder action, not yours.
+   **You may not launch an auditor instance into existence, or edit its roster entry** — see the
+   roster exception in DISPATCH_PROTOCOL.md §2. Starting an existing auditor's watcher is fine.
 4. **Answer questions.** On `NEEDS-INFO`, resolve the `Q:` in the lane with an `A:` block; on a
    requester `TRIAGE: NEEDS-INFO`, same.
 5. **Integrate on `AUDIT_PASSED`.** Confirm the Auditor's `VERDICT: COMPLETE` is on origin
@@ -79,8 +83,8 @@ output as done. Read `ROLES.md` + `DISPATCH_PROTOCOL.md` + `BINDINGS.md` first; 
   subdirectory. A worker that ran the suite from a subdir can honestly report green while a
   cwd-fragile test (a source-grep / file-read using a cwd-relative path) is red in the deploy path.
   Hitting one is a bounce, not an integrate: the fix anchors the path to the module, not the cwd.
-- **Context & cost.** You cannot `/compact` an instance, and you should not want to — auto-compaction
-  at ~1M tokens is a costly backstop, not the operating point. Run instances **short-lived**: spawn a
-  fresh one per lane (or per round), let it hand off and exit, respawn for the next lane. Its state is
-  in the files, so ending early is free. Size lanes narrowly; keep SendMessage lightweight.
-  (DISPATCH_PROTOCOL.md §8.9.)
+- **Context & cost.** You do not manage an instance's context and should not try — that is its
+  profile's `context_policy`, and reaching a context ceiling is a costly backstop rather than an
+  operating point. Run instances **short-lived**: a fresh one per lane (or per round), let it hand
+  off and exit, re-launch for the next lane. Its state is in the files, so ending early is free.
+  Size lanes narrowly; keep any live-channel message lightweight. (DISPATCH_PROTOCOL.md §8.9.)

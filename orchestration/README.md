@@ -51,13 +51,15 @@ Tier-1 things and is the single acceptance checkpoint after COMPLETE. Details: [
 
 ## Running it
 
-- **Instances are named background sessions** you launch + interrogate (monitor with
-  `claude agents`) — NOT Architect subagents. Coordination is file-only. See
-  [dispatch/BINDINGS.md](dispatch/BINDINGS.md) → Hosting for this project's launch commands.
+- **Instances are independent — they share no memory with each other or with the Architect.** What an
+  instance actually *is* (a session, a process, a script, a service, a person) is its
+  `impl.kind`; the launch and re-attach commands are its **implementation profile**. See
+  [dispatch/BINDINGS.md](dispatch/BINDINGS.md) → Implementation profiles.
 - **Board:** `sh <ORCH_ROOT>/dispatch/dispatch.sh state`. **Watch (Architect):** `… architect`.
   **Watch (an instance):** `… inst <id>`.
-- **Context/cost:** instances are short-lived per-lane; continuity is in files, so they resume or
-  respawn — no `/compact` needed. DISPATCH_PROTOCOL.md §8.8–8.9.
+- **Context/cost:** instances are short-lived per-lane; continuity is in files, so they re-launch or
+  resume rather than growing. No human ever manages an instance's context.
+  DISPATCH_PROTOCOL.md §8.8–8.9.
 
 ## Memory
 

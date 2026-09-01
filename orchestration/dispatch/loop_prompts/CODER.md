@@ -21,8 +21,8 @@ the dispatch handshake (Architect → you) and the audit handshake (you → Audi
 3. **Build.** In your own worktree `<WORKTREE_DIR>/<your-id>-<ITEM>/`, edit only your owned paths.
    If the item needs a `HOT-FILE` you don't own (e.g. the schema file, a shared interface), do NOT
    edit it — the lane's `DEPENDS-ON` points at the owner's lane; wait for it or raise `NEEDS-INFO`.
-   `STATUS: IN_PROGRESS (round N)`. You MAY use ultracode (`Workflow`) to fan out inside your
-   worktree; the output still lands as one lane.
+   `STATUS: IN_PROGRESS (round N)`. Where your launch granted `fanout`, you MAY fan out disposable
+   sub-work inside your worktree; the output still lands as one lane.
 4. **Ask if unsure.** If scope is ambiguous, append `Q1:` and set `STATUS: NEEDS-INFO (round N)`;
    the Architect answers `A1:`. Don't guess on scope.
 5. **Self-test BEFORE you signal.** Run the BINDINGS test command for the surface you changed, green.
@@ -43,29 +43,31 @@ the dispatch handshake (Architect → you) and the audit handshake (you → Audi
    resubmit (go to step 5). Stay the owner. On COMPLETE, the Architect integrates — you're free for
    the next lane.
 
-## Headless one-shot mode (non-negotiable — read before you run anything)
+## If your lifetime is one-shot (non-negotiable — read before you run anything)
 
-You run as a single-shot `claude -p` session: **the session ENDS the moment you stop calling tools.**
+Check your roster's `impl.lifetime`. Where it is `one-shot`, **you end the moment you stop calling
+tools** — there is no later turn in which to check on anything.
 
 - **Never background a command and wait for it.** No trailing `&`, no "I'll let this run and check
   back" — there is no "back". Run every command (tests, builds, git) in the **foreground** and let it
   block until it returns. Emitting a final message while a job is still running ends your turn, and
   ends you with it.
 - **For long/noisy output, redirect to a log then read it** *after* the command returns:
-  `cmd > /tmp/<lane>.log 2>&1` then `tail -200 /tmp/<lane>.log`. **Never pipe straight through
+  `cmd > <scratch>/<lane>.log 2>&1` then read the tail of that file. **Never pipe straight through
   `| tail`** — the pipe buffers until the producer exits, hiding progress and sometimes reading as a
   0-byte file on a long run.
-- **Mind the harness timeout.** A command that outlives the Bash tool's default timeout is
-  auto-backgrounded by the harness, which kills your one-shot session. Pass an explicit longer
-  timeout, or use the project's background-and-poll wrapper (BINDINGS → long-running test command).
+- **Mind your implementation's command timeout** (`impl.timeout_ceiling`). A command that outlives it
+  may be moved into the background out from under you, which ends a one-shot instance mid-lane. Raise
+  the timeout explicitly where you can, or use the project's background-and-poll wrapper
+  (BINDINGS → long-running test command).
 - **Do not stop until you have committed AND pushed.** Your state lives in files; deliver it first.
 - **Commit incrementally — never only at the end.** If your lane touches many files, commit in
-  batches as you go. A budget or usage-quota wall kills you mid-run without warning, and everything
+  batches as you go. A budget or quota wall ends you mid-run without warning, and everything
   uncommitted at that moment is *lost*, not paused. Incremental commits cost nothing and mean a wall
   costs the tail of your lane instead of all of it.
-- If your launch granted ultracode (`fanout=ultra`), you MAY use the Workflow/Agent tools to fan out
-  disposable sub-agents INSIDE your worktree for a heavy lane — keep each at the cheapest tier its
-  sub-task needs; the fan-out is disposable, the lane still lands as one hand-off.
+- Where your launch granted `fanout`, you MAY fan out disposable sub-work INSIDE your worktree for a
+  heavy lane — keep each at the cheapest **band** its sub-task needs (ROLES.md); the fan-out is
+  disposable, and the lane still lands as one hand-off.
 
 ## Discipline
 
@@ -106,5 +108,5 @@ You run as a single-shot `claude -p` session: **the session ENDS the moment you 
   answered: the lane goes quiet with the work finished and nobody's turn.
 - **Run lean, then exit.** After `READY_FOR_AUDIT` (and again after the Architect integrates), you
   are done — **exit**; don't idle-accumulate context waiting for the next lane. Your state is in the
-  files, so a fresh instance picks up the next lane cheaply. Offload heavy reads/exploration to
-  disposable subagents (ultracode) so your own context stays small. (DISPATCH_PROTOCOL.md §8.9.)
+  files, so a fresh instance picks up the next lane cheaply. Offload heavy reads and exploration to
+  disposable sub-work so your own context stays small. (DISPATCH_PROTOCOL.md §8.9.)
