@@ -81,8 +81,8 @@ unedited copy as working.
 ## Tier C — never copy (runtime state)
 
 `dispatch/lanes/` · `dispatch/intake/` (except the `*.TEMPLATE.md` above) · `dispatch/DELIVERY_PLAN.md` ·
-`audit/cr/` · `audit/runs/` · `audit/regression/` · `audit/audit-trail.md` · `history/lanes/` ·
-`history/trail/`
+`audit/cr/` · `audit/runs/` · `audit/regression/` · `audit/acceptance/` · `audit/trail/` ·
+`audit/audit-trail.md` · `history/lanes/` · `history/trail/` · `install/ANSWERS.md`
 
 These are one repo's operational history. Copying them imports another project's lanes, verdicts and
 regression pins as if they were yours — creating exactly the fabricated evidence the audit layer
@@ -96,7 +96,9 @@ own when it has a wave to plan, and inheriting someone else's reads as a mandate
 2. Write the two BINDINGS files, resolving every token above.
 3. Write one `roster/<instance-id>.md` per intended instance.
 4. Point the project's governance checklist at `DEFINITION_OF_DONE.md` and answer its rows.
-5. Seed `board.md` / `trail.md` headers; create the tier-C directories empty.
+5. Seed `board.md` / `trail.md` / `audit/audit-trail.md` headers (resolving `<TZ>` in each);
+   create every tier-C directory empty — including the two rotation/acceptance targets
+   `audit/trail/` and `audit/acceptance/`, which the auditor's loop writes into and will not create.
 6. `sh dispatch/dispatch.sh state` — it should print an empty board without error. That is the
    replication smoke test.
 

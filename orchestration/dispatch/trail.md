@@ -7,6 +7,6 @@ trail.md — the dispatch ledger: one terse, timestamped row per assignment and 
 
 # Dispatch trail
 
-| When (KL) | Item | Instance | Round | Event | Headline |
+| When (`<TZ>`) | Item | Instance | Round | Event | Headline |
 |---|---|---|---|---|---|
 | _none yet_ | | | | | |

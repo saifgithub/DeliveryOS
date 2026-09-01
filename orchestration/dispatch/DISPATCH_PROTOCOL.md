@@ -1,8 +1,8 @@
 <!--
 DISPATCH_PROTOCOL.md — the Architect ↔ instance dispatch handshake. GENERIC and PROJECT-AGNOSTIC:
 copy verbatim into any project. Project specifics resolve via BINDINGS.md. Companion: ROLES.md
-(the role model). Layers ON TOP OF the existing builder→Auditor audit handshake (orchestration/audit/
-PROTOCOL.md), which it does not modify. On any conflict about verification, the audit PROTOCOL wins.
+(the role model). Layers ON TOP OF the existing builder→Auditor audit handshake (../audit/PROTOCOL.md),
+which it does not modify. On any conflict about verification, the audit PROTOCOL wins.
 Owner: the Architect.
 -->
 
@@ -15,7 +15,7 @@ pattern, one layer up.
 
 ## 1. The trust-critical contract (never changes)
 
-- **Disjoint write-paths, shared branch.** The Architect writes `orchestration/**` (minus
+- **Disjoint write-paths, shared branch.** The Architect writes `<ORCH_ROOT>/**` (minus
   `lanes/*.<instance-id>.md`) + the change registers + the work-item specs. Each **instance** writes
   its own SOURCE paths + its own `lanes/<ITEM>.<instance-id>.md` + (for coders) its audit lane
   `<AUDIT_LANE_DIR>/<ITEM>.architect.md`. The Auditor writes `<AUDIT_ROOT>/**` only. Each role
@@ -56,7 +56,7 @@ is deliberately run as the Architect's own ephemeral subagent — not the interr
 
 ## 3. The lanes (directory as queue, no shared mutable flag)
 
-Per work item, under `orchestration/dispatch/lanes/`:
+Per work item, under `<DISPATCH_ROOT>/lanes/`:
 
 - **`<ITEM>.assign.md`** (Architect owns): `KIND:` (code | content | requester-note),
   `INSTANCE: <instance-id>`, `GATE: independent | spawned | none` (see §4a),
@@ -167,7 +167,7 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
 ## 7. Non-coder flows
 
 - **Requester** (`noncoder.*` feeding DEFs/CRs): never receives an assignment lane. Drops a draft
-  into `orchestration/dispatch/intake/`; the Architect triages (with the §5 round-trip if more is needed) →
+  into `<DISPATCH_ROOT>/intake/`; the Architect triages (with the §5 round-trip if more is needed) →
   authors the CR/DEF spec → opens an assignment lane. **Requesters propose; only the Architect
   mints the dispatched work item.**
 - **Maintainer** (`noncoder.*` editing assets): receives assignment lanes like a coder, but
@@ -184,7 +184,7 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
    pushes to origin. The Auditor audits the committed SHA in its own worktree, never the live tree.
 5. **Dependencies.** A dependent item's COMPLETE is provisional until its `DEPENDS-ON` is COMPLETE.
 6. **Single ledger + shared board + retention (keep files small).** `trail.md` is the chronological
-   record — the Architect appends one **terse, timestamped** row (`YYYY-MM-DD HH:MM` KL) per
+   record — the Architect appends one **terse, timestamped** row (`YYYY-MM-DD HH:MM` in `<TZ>`) per
    assignment and per closure. The trail is a **LOG, not a state store**: the current state of any
    lane always comes from the lane files (`dispatch.sh state`), never the trail — so old rows can be
    archived safely even for a still-open item. Keep it bounded with **`rotate_trail.py`** (a SINGLE,

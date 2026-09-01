@@ -25,7 +25,7 @@ ready, submits into the audit layer; the Auditor's `VERDICT` flows back up. Shar
 ## Tree
 
 ```
-orchestration/
+<ORCH_ROOT>/                           # wherever this tree was vendored (BINDINGS)
   README.md · ROLES.md                 # start here; the 4-role model (shared)
   dispatch/                            # Architect ↔ instance layer
     DISPATCH_PROTOCOL.md · dispatch.sh # generic contract + state-deriver/watcher
@@ -54,7 +54,7 @@ Tier-1 things and is the single acceptance checkpoint after COMPLETE. Details: [
 - **Instances are named background sessions** you launch + interrogate (monitor with
   `claude agents`) — NOT Architect subagents. Coordination is file-only. See
   [dispatch/BINDINGS.md](dispatch/BINDINGS.md) → Hosting for this project's launch commands.
-- **Board:** `sh orchestration/dispatch/dispatch.sh state`. **Watch (Architect):** `… architect`.
+- **Board:** `sh <ORCH_ROOT>/dispatch/dispatch.sh state`. **Watch (Architect):** `… architect`.
   **Watch (an instance):** `… inst <id>`.
 - **Context/cost:** instances are short-lived per-lane; continuity is in files, so they resume or
   respawn — no `/compact` needed. DISPATCH_PROTOCOL.md §8.8–8.9.

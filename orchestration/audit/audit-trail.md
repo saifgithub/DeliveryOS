@@ -7,6 +7,6 @@ audit-trail.md — the ONE chronological history across all audit lanes (PROTOCO
 
 # Audit trail
 
-| When (KL) | Item | Round | Verdict | Headline |
+| When (`<TZ>`) | Item | Round | Verdict | Headline |
 |---|---|---|---|---|
 | _none yet_ | | | | |

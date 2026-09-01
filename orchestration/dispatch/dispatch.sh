@@ -31,7 +31,7 @@
 #   dispatch.sh inst <id> [-i N]   block until >=1 lane is ASSIGNED to <id> or AUDIT_RETURNED on it
 # Env: DISPATCH_LANE_DIR overrides the lane dir (default <script dir>/lanes).
 #      DISPATCH_AUDIT_DIR overrides the audit lane dir (default <script dir>/../audit/cr).
-# Portable POSIX sh, no dependencies. Sibling of orchestration/audit/watcher.sh.
+# Portable POSIX sh, no dependencies. Sibling of ../audit/watcher.sh.
 
 set -u
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -64,7 +64,7 @@ undelivered() {  # $1=file; echoes "1" if the file is untracked or differs from 
 lane_state() {  # $1=item; echoes "STATE instance asg_round st_kw verdict gate"
   # Dispatch tokens (ASSIGNED/DISPATCH/STATUS) MUST be at line start — anchored so a token
   # mentioned in prose/backticks is never parsed as a live signal. (VERDICT is read unanchored to
-  # mirror orchestration/audit/watcher.sh, whose files carry a `## VERDICT:` heading + a trailer.)
+  # mirror ../audit/watcher.sh, whose files carry a `## VERDICT:` heading + a trailer.)
   a="$LANE_DIR/$1.assign.md"
   asg_line=$(grep -Eo '^ASSIGNED: *[A-Za-z0-9._-]+ *round *[0-9]+' "$a" 2>/dev/null | tail -1)
   # Read GATE before the UNASSIGNED return. A lane written at decomposition and not yet assigned is
