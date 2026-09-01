@@ -32,6 +32,7 @@
 #   dispatch.sh inst <id> [-i N]   block until >=1 lane is ASSIGNED to <id> or AUDIT_RETURNED on it
 # Env: DISPATCH_LANE_DIR overrides the lane dir (default <script dir>/lanes).
 #      DISPATCH_AUDIT_DIR overrides the audit lane dir (default <script dir>/../audit/cr).
+#      DISPATCH_INTAKE_DIR overrides the intake dir (default <script dir>/intake).
 #      DISPATCH_GATE_CHECK overrides the machine-gate hook (default <script dir>/gate_check.sh).
 # Portable POSIX sh, no dependencies. Sibling of ../audit/watcher.sh.
 
@@ -39,6 +40,7 @@ set -u
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 LANE_DIR=${DISPATCH_LANE_DIR:-"$SCRIPT_DIR/lanes"}
 AUDIT_DIR=${DISPATCH_AUDIT_DIR:-"$SCRIPT_DIR/../audit/cr"}
+INTAKE_DIR=${DISPATCH_INTAKE_DIR:-"$SCRIPT_DIR/intake"}
 GATE_CHECK=${DISPATCH_GATE_CHECK:-"$SCRIPT_DIR/gate_check.sh"}
 
 last_round() {  # $1=file $2=extended-regex; echoes the last round number or empty
@@ -165,6 +167,21 @@ items() {
   done
 }
 
+count_intake() {  # echoes the number of drafts awaiting the Architect (TRIAGE: OPEN or NEEDS-INFO)
+  # An intake draft has no lane, so every derived state above is blind to it: a requester's draft
+  # would sit in a directory nobody reads while the board printed "no lanes need you". This is the
+  # only place the board looks outside lanes/, and it reads exactly one token from a shape tier A
+  # owns (intake/DRAFT.TEMPLATE.md). A draft is not a work item and never gets a row on the board.
+  c=0
+  for f in "$INTAKE_DIR"/*.md; do
+    [ -f "$f" ] || continue
+    case "$f" in *.TEMPLATE.md) continue ;; esac
+    t=$(last_kw "$f" '^TRIAGE: *(OPEN|NEEDS-INFO|ACCEPTED|REJECTED)')
+    case "${t:-OPEN}" in OPEN|NEEDS-INFO) c=$((c+1)) ;; esac
+  done
+  echo "$c"
+}
+
 print_state() {
   n=0
   printf '%-14s %-16s %-16s %-5s %-18s %-9s %-12s %s\n' "ITEM" "STATE" "INSTANCE" "ASG" "STATUS" "VERDICT" "GATE" "REGISTER"
@@ -174,6 +191,8 @@ print_state() {
     printf '%-14s %-16s %-16s r%-4s %-18s %-9s %-12s %s\n' "$it" "$1" "$2" "$3" "$4" "$5" "$6" "$7"
   done
   [ "$n" -eq 0 ] && echo "(no lanes yet under $LANE_DIR)"
+  ic=$(count_intake)
+  [ "$ic" -gt 0 ] && echo "intake: $ic draft(s) awaiting triage under $INTAKE_DIR"
   return 0
 }
 
@@ -233,6 +252,11 @@ print_inbox() {
     echo "inbox clear — no auditor verdict awaiting integration."
   fi
   [ "$other" -gt 0 ] && echo "(also owing you: $other lane(s) UNASSIGNED/BLOCKED/NEEDS-INFO/IN_REVIEW/UNGATED — full board: dispatch.sh state)"
+  # Intake goes on the trailer, NOT the exit code — same reason as the other Architect-owed states:
+  # a chronic backlog would keep this permanently red and desensitise it to the one event it exists
+  # to catch, a fresh auditor COMPLETE.
+  ic=$(count_intake)
+  [ "$ic" -gt 0 ] && echo "(also owing you: $ic intake draft(s) awaiting triage)"
   [ "$hot" -gt 0 ] && return 1
   return 0
 }
@@ -246,8 +270,10 @@ case "$MODE" in
     INTERVAL=30; [ "${1:-}" = "-i" ] && INTERVAL=${2:-30}
     echo "watching $LANE_DIR for Architect-actionable lanes (poll ${INTERVAL}s, ctrl-c to stop)..."
     while :; do
-      c=$(count_architect)
-      if [ "$c" -gt 0 ]; then echo "$(date '+%H:%M:%S') $c lane(s) need the Architect:"; print_state; exit 0; fi
+      # Untriaged intake wakes the Architect too: a draft nobody triages never becomes a register
+      # row, never gets a lane, and is therefore invisible to every lane-derived state.
+      c=$(( $(count_architect) + $(count_intake) ))
+      if [ "$c" -gt 0 ]; then echo "$(date '+%H:%M:%S') $c item(s) need the Architect:"; print_state; exit 0; fi
       sleep "$INTERVAL"
     done ;;
   inst)

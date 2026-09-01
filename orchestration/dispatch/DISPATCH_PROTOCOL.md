@@ -332,6 +332,15 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
   register* it belongs in, not an id; severity/priority on the project's own scale; and
   `TRIAGE: OPEN | NEEDS-INFO | ACCEPTED | REJECTED`, which the **Architect** owns and the requester
   never writes past the initial `OPEN`. A draft is not a register row and carries no `<ITEM>` id.
+  The shape is `intake/DRAFT.TEMPLATE.md`.
+
+  **`dispatch.sh` derives intake state too**, and it is the only place the board looks outside
+  `lanes/`. A draft at `TRIAGE: OPEN` or `NEEDS-INFO` is Architect-owed: it appears on the trailer of
+  `state` and `inbox`, and it wakes the `architect` watch. Without that a draft is invisible to every
+  derived state in §4 — it has no lane, and it never gets one until someone triages it, so the board
+  would print "nothing needs you" over an untriaged queue. It is deliberately kept **out of `inbox`'s
+  exit code**: a chronic intake backlog would keep that permanently non-zero and desensitise it to
+  the one event it exists to catch.
 - **Maintainer** (`noncoder.*` editing assets): receives assignment lanes like a coder, but
   `READY_FOR_REVIEW` routes to Architect/stakeholder content review (`IN_REVIEW`) — no Auditor, no tests.
 
@@ -362,7 +371,15 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
    enforces it**: a lane can sit awaiting audit indefinitely while the board renders it as an
    ordinary in-flight state. Until it has an owner and a real elapsed-time input it is an
    acknowledged gap, not a control — so the Architect re-derives the board at the **start of every
-   session** and clears anything in `UNGATED` / `AWAITING_AUDIT` before taking new work.
+   work session** and clears anything in `UNGATED` / `AWAITING_AUDIT` before taking new work.
+
+   **What would close it, so the gap is not just restated forever:** a liveness stamp that
+   `dispatch.sh state` / `watcher.sh state` **renders as a stale row**. A stamp nobody derives from
+   is prose; only the rendered staleness is the control. It needs a named writer, a real elapsed-time
+   input, its own subdirectory (every flat file in `<AUDIT_ROOT>/` is copy-verbatim tier A), a
+   tier-C listing, and — so a restored instance can find its own open journal — the journal's path
+   stamped at round open. Not built: a control for a fleet that has not run yet is a control with no
+   calibration, and the wrong elapsed-time threshold trains people to ignore the row.
 7a. **Concurrency cap.** The cap is on **concurrently spawned agents of any role** — every role
    draws one shared quota — and it **queues rather than blocks**. The binding constraint is the
    provider's rolling usage window: exhausting it strands every in-flight agent at once and
