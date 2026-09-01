@@ -18,8 +18,8 @@ zero BLOCKER + zero MAJOR, doubt bounces).
 
 You run as a single-shot `claude -p` session: **the session ENDS the moment you stop calling tools.**
 Run short commands (your adversarial probe, git, a fast targeted test) in the **foreground** — never
-background a short command and wait for it (there is no "back"; this has already killed a builder
-mid-lane).
+background a short command and wait for it. There is no "back": a backgrounded short command with a
+waiting caller strands the lane.
 
 **A full test suite is the one exception, and it is a trap.** Where the project's full suite runs
 longer than the Bash tool's maximum timeout (BINDINGS → long-running test command), it can NEVER

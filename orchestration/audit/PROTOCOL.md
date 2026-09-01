@@ -5,7 +5,8 @@ PROTOCOL.md — the builder→Auditor audit handshake, v2. PORTABLE CORE: copy v
   (builds + fixes) and the AUDITOR (verifies) so the two work concurrently without serializing,
   until each work item is COMPLETE (zero BLOCKER + zero MAJOR).
   Ratified 2026-06-21; DEF routing added 2026-06-27; guardrail 6 (output compression) added
-  2026-07-12; genericized 2026-07-23 (see PORTABLE_MANIFEST.md).
+  2026-07-12; genericized 2026-07-23 (see PORTABLE_MANIFEST.md); incident narration removed
+  2026-09-01 (PORTABLE_MANIFEST.md invariant 2 — the rule stays, the anecdote goes).
 -->
 
 # Audit handshake v2: parallel per-item lanes
@@ -102,8 +103,7 @@ On EVERY verdict (AWAITING_FIXES and COMPLETE alike), the auditor writes the ver
 appends the `<AUDIT_ROOT>/audit-trail.md` ledger row, then COMMITS those `<AUDIT_ROOT>/` paths by name
 AND PUSHES them to origin, and confirms origin advanced before treating the round as handed back. A
 committed-but-unpushed verdict is NOT delivered: an origin-syncing counterpart sees no verdict and reads
-the lane as still AWAITING_AUDIT (this once stranded a round-10 AWAITING_FIXES verdict on a local clone
-for ~2h). Note also that the auditor CANNOT update `INDEX.md` (architect-owned), so on a bounce the
+the lane as still AWAITING_AUDIT. Note also that the auditor CANNOT update `INDEX.md` (architect-owned), so on a bounce the
 INDEX lags: detect a returned verdict by reading the auditor lane `VERDICT` keyword, never by the INDEX
 row or by comparing round numbers alone (after a bounce SUBMITTED == VERDICT, numerically identical to a
 COMPLETE). On COMPLETE the architect then advances or deploys that item while other lanes proceed

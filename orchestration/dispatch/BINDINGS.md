@@ -27,9 +27,9 @@ yet. This is available headroom for future multi-instance work, not something in
 | Test command — webview surface | `npm run typecheck --workspace=@deliveryos/webview` (`tsc --noEmit`) — **no unit tests exist for this surface**; typecheck is the only automated gate today |
 | Test command — contracts surface | `npm run build:contracts` (`tsc -p tsconfig.json`) — a shared type-definitions package with no tests of its own; correctness is verified by its consumers' typecheck |
 | The contract check | `npm run build:contracts && npm run typecheck --workspace=deliveryos` — rebuilds `contracts/dist` and typechecks the extension against it. `extension` consumes `contracts/dist`, not `contracts/src`, so a contract change that isn't rebuilt first is invisible to the extension's own typecheck — this is DeliveryOS's real cross-lane coupling point, and the reason `contracts/src/index.ts` is a hot file below |
-| The long-running test command | `npm run gate` (`scripts/gate.mjs`: clean → build → typecheck → test → package) — the existing full self-build gate, already used as the non-agentic acceptance gate for MABP chunks |
-| The content self-test | N/A — no content corpus in this project (no lesson/copy corpus analogous to AMI's) |
-| Live-stack verification | Load the packaged `.vsix` in the VS Code Extension Development Host and exercise the golden-path panel for the changed feature. DeliveryOS has no deployed host to curl or ssh into — this is the closest equivalent to AMI's live-stack check |
+| The long-running test command | `npm run gate` (`scripts/gate.mjs`: clean → build → typecheck → test → package) — the full self-build regression suite. **Not** an acceptance gate over independently-authored per-item checks: `gate.mjs` states it gates building this project only, and the per-delivery acceptance-check generation is unbuilt |
+| The content self-test | N/A — no content corpus in this project |
+| Live-stack verification | Load the packaged `.vsix` in the VS Code Extension Development Host and exercise the golden-path panel for the changed feature. This project has no deployed host to curl or ssh into, so this is its nearest equivalent |
 | The device-only marker | N/A — no mobile/device-only surface in this project |
 | Per-instance WIP cap | 1 active lane per instance |
 | Global audit cap | 1 lane `IN_AUDIT` at a time |

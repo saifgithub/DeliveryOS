@@ -28,7 +28,7 @@ rule.
 | Docs | The doc(s) updated for any changed behaviour (e.g. `docs/architecture/*`, a chunk spec), or a one-line reason none needed it. |
 | Commit tag | `(DOS:<instance-id> <ITEM>)` as it appears on the commit(s). |
 | Register | The `docs/pm/BACKLOG.md` row or `docs/build/bugs.json` entry as it now reads. |
-| Model / effort / budget | Tier, effort level, and a one-line reason — this project has no per-tier cost table (unlike AMI's `dispatch/BINDINGS.md` cost tiers); disposition in prose is sufficient until dispatch volume justifies a table. |
+| Model / effort / budget | Tier, effort level, and a one-line reason — this project has no per-tier cost table; disposition in prose is sufficient until dispatch volume justifies one. |
 
 ## Notes
 

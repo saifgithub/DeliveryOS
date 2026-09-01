@@ -4,7 +4,7 @@
 
 How an AI-assisted project ships code through coordinated agents.
 
-This process is adapted from the AMI multi-agent build process (`ami_ai/core_platform/Docs/MULTI_AGENT_BUILD_PROCESS.md`, 3-role canonical). The shape is the same: separate decisioning from execution, use a sustained architect session and fresh sub-agents, run multiple verification cycles.
+The shape: separate decisioning from execution, use a sustained architect session and fresh sub-agents, run multiple verification cycles.
 
 ---
 
@@ -611,5 +611,4 @@ A project on a different stack copies this table and fills its own column; the g
 
 **Created:** 2026-05-21.
 **Updated:** 2026-06-14 (v4 — autonomous, independently-authored acceptance gates; verification by mechanism over fabricable evidence; verifier triangulation; minimised human dependency). Prior: 2026-05-30 (v3 — B-016 evidence manifest and adversarial QA; project-agnostic generalization).
-**Adapted from:** the AMI multi-agent build process (3-role canonical, 2026-04-29).
 **Phase A planning loop:** `docs/planning/claude-code-build-prompts.md`.

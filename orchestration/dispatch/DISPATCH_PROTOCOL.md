@@ -197,18 +197,15 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
    Architect reads/writes the trail; instances read their lane + the relevant archived lane.
 7. **Stall rule.** At a cap with no movement for the BINDINGS stall window, the Architect escalates
    to the stakeholder rather than blocking indefinitely. **Nothing computes this and nothing
-   enforces it** — an item has sat awaiting audit across whole sessions with its audit never
-   launched, while the board showed it as an ordinary in-flight state. Until it has an owner and a
-   real elapsed-time input it is an acknowledged gap, not a control: the Architect re-derives the
-   board at the **start of every session** and clears anything in `UNGATED` / `AWAITING_AUDIT`
-   before taking new work.
-7a. **Concurrency cap.** The cap is on **concurrently spawned agents of any role** — coders,
-   auditors and the DoD agent draw one shared quota — and it **queues rather than blocks**. The
-   binding constraint is the provider's rolling usage window: exhausting it strands every in-flight
-   agent at once and everything uncommitted dies with them, so instances **commit incrementally**
-   (a worker has lost a full lane of edits to a budget wall before reaching its first commit) and
-   the Architect **stops at lane boundaries** rather than starting an audit that may die
-   mid-verdict.
+   enforces it**: a lane can sit awaiting audit indefinitely while the board renders it as an
+   ordinary in-flight state. Until it has an owner and a real elapsed-time input it is an
+   acknowledged gap, not a control — so the Architect re-derives the board at the **start of every
+   session** and clears anything in `UNGATED` / `AWAITING_AUDIT` before taking new work.
+7a. **Concurrency cap.** The cap is on **concurrently spawned agents of any role** — every role
+   draws one shared quota — and it **queues rather than blocks**. The binding constraint is the
+   provider's rolling usage window: exhausting it strands every in-flight agent at once and
+   everything uncommitted dies with them. Therefore instances **commit incrementally**, and the
+   Architect **stops at lane boundaries** rather than starting an audit that may die mid-verdict.
 8. **Context (no human needed).** `/compact` cannot be automated — agents can't run slash commands,
    no skill/hook/setting triggers compaction (`PreCompact` only observes or blocks one), and there is
    no SDK trigger. It is also **not needed**: auto-compaction is **always on and runs in headless /

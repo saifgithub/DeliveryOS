@@ -41,15 +41,15 @@ You get assignment lanes like a coder, but your gate is content review, not the 
 
 You run as a single-shot `claude -p` session: **the session ENDS the moment you stop calling tools.**
 Never background a command and wait for it — run your self-test and git in the **foreground** and let
-them block (backgrounding-and-waiting has already killed a worker mid-lane). For long output,
+them block; backgrounding-and-waiting strands the lane. For long output,
 redirect to a log and read it after it returns, never pipe through `| tail` (the pipe buffers until
 the producer exits). **A maintainer does not stop until the content is committed AND pushed;** a
 requester not until the intake draft is written. State lives in files — deliver it first.
 
 **Self-test scope + the timeout trap.** Your self-test is the project's **asset-integrity check
 only** (BINDINGS → content self-test) — seconds, not minutes. Do **NOT** run the full code test
-suite: it is far longer, a command past the Bash tool's default timeout is **auto-backgrounded by
-the harness and kills your one-shot session** (this has already killed a lane mid-commit), and no
+suite: it is far longer, a command past the harness's default timeout may be **auto-backgrounded,
+which ends a one-shot session mid-lane**, and no
 code changed in your lane anyway — the full suite is the Architect's wave-integration checkpoint,
 not yours. If you ever must run a genuinely long command, pass an explicit Bash `timeout` (up to
 600000 ms) so it can't be auto-backgrounded out from under you.

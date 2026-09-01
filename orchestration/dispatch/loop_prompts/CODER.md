@@ -49,8 +49,8 @@ You run as a single-shot `claude -p` session: **the session ENDS the moment you 
 
 - **Never background a command and wait for it.** No trailing `&`, no "I'll let this run and check
   back" — there is no "back". Run every command (tests, builds, git) in the **foreground** and let it
-  block until it returns. Emitting a final message while a job is still running ends your turn and
-  ends you — this has already killed a worker mid-lane.
+  block until it returns. Emitting a final message while a job is still running ends your turn, and
+  ends you with it.
 - **For long/noisy output, redirect to a log then read it** *after* the command returns:
   `cmd > /tmp/<lane>.log 2>&1` then `tail -200 /tmp/<lane>.log`. **Never pipe straight through
   `| tail`** — the pipe buffers until the producer exits, hiding progress and sometimes reading as a
@@ -61,9 +61,8 @@ You run as a single-shot `claude -p` session: **the session ENDS the moment you 
 - **Do not stop until you have committed AND pushed.** Your state lives in files; deliver it first.
 - **Commit incrementally — never only at the end.** If your lane touches many files, commit in
   batches as you go. A budget or usage-quota wall kills you mid-run without warning, and everything
-  uncommitted at that moment is *lost*, not paused: a worker has died on an exceeded budget cap
-  after editing dozens of files and before its first commit, and all of it had to be redone.
-  Incremental commits cost nothing and mean a wall costs the tail of your lane instead of all of it.
+  uncommitted at that moment is *lost*, not paused. Incremental commits cost nothing and mean a wall
+  costs the tail of your lane instead of all of it.
 - If your launch granted ultracode (`fanout=ultra`), you MAY use the Workflow/Agent tools to fan out
   disposable sub-agents INSIDE your worktree for a heavy lane — keep each at the cheapest tier its
   sub-task needs; the fan-out is disposable, the lane still lands as one hand-off.
@@ -78,16 +77,14 @@ You run as a single-shot `claude -p` session: **the session ENDS the moment you 
 
   **Source** — push to `lane/<ITEM>.<your-id>`, never the shared branch. A submission pushed
   straight to the shared branch has skipped the gate entirely: **nothing reaches the shared branch
-  except through the Architect**, who merges only once the lane's `GATE:` is satisfied. This was
-  ambiguous once — the instruction read "push to origin" without naming a branch — and a lane pushed
-  its source straight to the shared branch, bypassing both the audit and the integration step. If you
-  find yourself committing source on the shared branch, stop and branch.
+  except through the Architect**, who merges only once the lane's `GATE:` is satisfied. "Push to
+  origin" without a named branch is not an instruction to push source to the shared one. If you find
+  yourself committing source on the shared branch, stop and branch.
 
   **Your lane file and your audit-bridge file** — commit these to the **shared branch**. They are
   not deliverables, they are shared coordination state: every watcher derives the board from them on
-  the shared branch, so a hand-off that exists only on your lane branch is invisible to everyone.
-  A whole finished round has already sat waiting this way, with one board reporting the coder still
-  working and the other reporting the auditor had nothing (BINDINGS → Escalation precedents).
+  the shared branch, so a hand-off that exists only on your lane branch is invisible to everyone —
+  each side's board reads the other as idle, and the round waits indefinitely.
   Committing them is not "reaching the shared branch" in the sense the gate cares about — they carry
   no source, and the Architect still controls every merge.
 
