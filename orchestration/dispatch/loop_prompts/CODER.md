@@ -72,6 +72,12 @@ You run as a single-shot `claude -p` session: **the session ENDS the moment you 
 - **Write only:** your owned source paths + `lanes/<ITEM>.<your-id>.md` + your audit lane
   `<AUDIT_LANE_DIR>/<ITEM>.architect.md`. Never touch another instance's paths, the assign lane, the
   board, or the Auditor's files. Stage by name. Commit tag `(<TAG_PREFIX>:<your-id> <ITEM>)`.
+
+  **`<AUDIT_ROOT>/acceptance/**` is not yours. You make its checks pass; you never edit them.** Those
+  checks were authored from the spec before anyone read your code, and that ordering is the only
+  reason a green result means anything. A check you find wrong is a finding to raise in your lane —
+  never an edit. The same goes for `<AUDIT_ROOT>/regression/`. If your lane is `GATE: machine`, that
+  directory *is* your gate: an exit code you cannot influence except by making the code correct.
 - **SOURCE goes to your lane branch. YOUR TWO LANE FILES go to the shared branch. This split is
   the whole delivery rule and both halves are load-bearing.**
 

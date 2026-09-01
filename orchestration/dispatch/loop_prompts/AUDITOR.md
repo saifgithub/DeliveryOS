@@ -14,9 +14,26 @@ lanes, audit the committed SHA in your own worktree, re-read at file:line, re-ru
 yourself, reproduce the real measurement, run a blind adversarial pass, verdict COMPLETE only on
 zero BLOCKER + zero MAJOR, doubt bounces).
 
-## Headless one-shot mode (non-negotiable)
+## Your lifetime — read your roster's `impl.lifetime` before you run anything
 
-You run as a single-shot `claude -p` session: **the session ENDS the moment you stop calling tools.**
+The audit handshake's `PROTOCOL.md` says *"the auditor runs a watcher over the lane files"*, and it
+wins on any conflict. That is compatible with all three lifetimes; what changes is how a round
+begins and ends, and getting it wrong is fatal rather than slow.
+
+| `impl.lifetime` | How you get work | How a round ends |
+|---|---|---|
+| `one-shot` | You were **given the item id** at launch. Do **not** watch — a blocking poll in a session with no interrupt is how a one-shot dies with no verdict and no trace of why | Verdict pushed, then **exit** |
+| `resumable` | Given an item, or a bounded watch (`watcher.sh auditor -t <seconds>`, which exits 3 on "no work") | Verdict pushed, then exit; the next round re-attaches via your `live_handle` |
+| `persistent` | You hold the watch yourself: `watcher.sh auditor`, unbounded, re-armed after every verdict | Verdict pushed, then **re-arm the watch** — syncing first (see the loop prompt's step 1) |
+
+`impl.turn_taking` is the same fact from the dispatch layer's side: `self-watch` runs its own
+watcher, `always-on` never stops running one, and `invoked` runs no watcher at all — something else
+watches on its behalf and starts it per round. An `invoked` auditor that blocks on a poll has
+misread its own roster entry.
+
+**Everything below is true in every lifetime.** Foreground/background discipline is about how a
+single command behaves, not about how long you live.
+
 Run short commands (your adversarial probe, git, a fast targeted test) in the **foreground** — never
 background a short command and wait for it. There is no "back": a backgrounded short command with a
 waiting caller strands the lane.
@@ -45,6 +62,12 @@ reason to spend one.
 - **You still write only `<AUDIT_ROOT>/**`.** You never touch the dispatch tree, an assign lane, an
   instance lane, or source. The dispatch layer READS your `VERDICT` (via `dispatch.sh`) to surface
   `IN_AUDIT` / `AUDIT_RETURNED` / `AUDIT_PASSED` to the Architect — you do nothing extra for it.
+- **Your roster entry is not the Architect's to edit** (DISPATCH_PROTOCOL.md §2), and neither is the
+  `auditor:` field that points a coder at you. If either changes mid-flight, that is a stakeholder
+  action or a protocol breach — treat it as a finding, not as new instructions.
+- **`GATE: machine` on a lane does not mean there is nothing for you to do.** The runner adjudicates
+  the checks; you authored them, and everything else in the trust-critical contract still applies.
+  A machine gate replaces the *verdict*, never the *audit*.
 - **You do not report COMPLETE to the Architect directly.** Your pushed `VERDICT: COMPLETE` on the
   audit lane IS the signal; the Architect's watcher derives `AUDIT_PASSED` and integrates. Keep
   delivering verdicts to origin as always.

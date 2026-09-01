@@ -33,8 +33,12 @@ moves. Below, `<ITEM>` is any item id in this project's id format (BINDINGS).
   Per-item rigor is unchanged under parallelism (guardrail 4).
 - DISJOINT PATHS, shared branch (BINDINGS): the ARCHITECT writes SOURCE + its own
   `<AUDIT_LANE_DIR>/<ITEM>.architect.md` + `<AUDIT_LANE_DIR>/INDEX.md`; the AUDITOR writes
-  `<AUDIT_ROOT>/**` only (`<ITEM>.auditor.md`, `runs/`, `regression/`, `audit-trail.md`, this
-  PROTOCOL). Each role commits ONLY its own paths, staged by name, AND PUSHES them to origin
+  `<AUDIT_ROOT>/**` only (`<ITEM>.auditor.md`, `runs/`, `regression/`, `acceptance/`,
+  `audit-trail.md`, this PROTOCOL). `acceptance/<ITEM>/` holds the item's from-spec acceptance
+  checks and `regression/` holds permanent pins: different failure meanings, so never one directory.
+  Neither is ever writable by the implementer — that is what makes a check independent, and it is
+  decidable by comparing paths against the implementing instance's owned set rather than by trusting
+  anyone. Each role commits ONLY its own paths, staged by name, AND PUSHES them to origin
   immediately. DELIVERY IS ON ORIGIN, NOT LOCAL: a committed-but-unpushed lane file is invisible to a
   counterpart that syncs via origin, so a verdict or submission counts as handed over only after
   origin reflects it. Confirm origin advanced (e.g. `git branch -r --contains <sha>`) before treating
@@ -91,6 +95,18 @@ build steps); the protocol mandates no specific mechanism on the return path.
    `VERDICT: COMPLETE | AWAITING_FIXES (round N)`, `depends-on:`), and severity labels (`BLOCKER`,
    `MAJOR`, `MINOR`) are NEVER compressed or paraphrased, so the auditor's re-verification,
    `watcher.sh`'s regex, and the trust-critical contract's COMPLETE test all stay exact.
+
+## Round currency: a verdict answers the round it was derived from
+
+Submissions and verdicts share ONE counter, so a verdict is only about the submission at its own
+round. The auditor re-derives `SUBMITTED` immediately before writing, and stamps the verdict at the
+round it actually answered — never at the round it started on.
+
+If `SUBMITTED` advanced mid-audit, the auditor **carries its findings forward and re-verifies each
+against the new revision**. It does not discard the round and start clean: that would be a sanctioned
+route to dropping a BLOCKER silently, which the doubt-bounces rule below exists to close. The readers
+already prevent a stale *pass* (a submission newer than the last verdict reads as unanswered
+whatever that verdict said); the residual this rule closes is a verdict stamped at the wrong round.
 
 ## Borderline severity: doubt bounces
 
