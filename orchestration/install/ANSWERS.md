@@ -88,6 +88,11 @@ Things that are true and not good:
    fix is a per-subsystem test layout, not a roster edit.
 5. **`docs/build/CHUNK_LEDGER.md` is a second copy of register state** and has already drifted. It
    collapses into the bound registers when chunks route through lanes.
+6. **The v0.2.0 work in flight belongs to no register row.** `CHUNK_LEDGER.md` reports UAT + DEPLOY
+   stages built and uncommitted while `docs/pm/BACKLOG.md`'s *In progress* section reads "nothing in
+   flight", and no `B-NNN` row covers it. The first real use of the `backlog` register has to either
+   mint that row retroactively or accept a shipped item that was never registered. Left open
+   deliberately: minting it is the stakeholder's call about their own register, not the installer's.
 
 ## Verdict
 

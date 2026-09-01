@@ -9,6 +9,15 @@
 > planning, after build) and in the per-chunk loop between them. Where this and the baseline appear to
 > conflict, the baseline wins until evidence promotes this work.
 
+> **Where this sits after 2026-09-01.** `orchestration/` is now the chassis (`CLAUDE.md`), and this
+> lab's central variable has a home in it: decorrelation is `impl.family` on a roster entry, and
+> capability is `BAND:` on a lane. That is the *same* claim this file makes — a model family, not a
+> tool identity — expressed as roster/BINDINGS data instead of prose. This file stays the place the
+> instrument is specified and its evidence recorded; the chassis is where a decorrelated auditor is
+> actually configured. `AUDITOR: own | foreign | human` remains correct **here** and must not be
+> ported into the chassis: those words are relative to whoever wrote them and invert on copy, which
+> is exactly why the portable side records a family value instead.
+
 **Created:** 2026-06-19. (Revision history is in git.)
 
 ---

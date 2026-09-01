@@ -29,13 +29,25 @@ decided, the migration is not done.
   extension. It stays the working process until a CR completes end-to-end under orchestration. State:
   `docs/build/CHUNK_LEDGER.md`, `STRUCTURAL_DEBT.md`, `COHESION_LOG.md`.
 
-**Migration order.** (1) Retire the duplicate audit kernel — `docs/build/auditor/` and
-`orchestration/audit/` are the same five files at different maturity; orchestration's v2 wins, repoint
-references. (2) Bind the gate — DoD Section A *Tests* → `npm run gate`; the Auditor's COMPLETE test →
-gate green **plus** independently-authored checks. (3) Collapse `docs/MHBP_LAB.md` + `docs/MABP_LAB.md`,
-which answer one question — *who verifies* — that is roster/BINDINGS data, not two lab docs.
-(4) Run one CR end-to-end: no lane has ever completed in this repo, and until one does the rest is
-design, not process.
+**Migration order.**
+1. **Retire the duplicate audit kernel** — `docs/build/auditor/` and `orchestration/audit/` are the
+   same five files at different maturity; orchestration's v2 wins, repoint references. *Not done.*
+   They have now diverged 2–5× in length; `docs/build/auditor/README.md` records the divergence and
+   which one a change belongs in. They stay until step 4 makes the migration real.
+2. ~~**Bind the gate.**~~ **Done 2026-09-01.** `GATE: machine` is a derived state in `dispatch.sh`
+   (a project hook's exit code, not a word on a lane); the Auditor authors acceptance checks from the
+   spec *before* reading the implementation, into `orchestration/audit/acceptance/<ITEM>/`; and
+   `npm run gate -- --item <ID>` executes them and records its own verdict with the revision it ran
+   at. The DoD's *Tests* row (the project's own suite) and its new *Acceptance gate* row are
+   deliberately different claims, answerable by different commands.
+3. **Collapse `docs/MHBP_LAB.md` + `docs/MABP_LAB.md`** — they answer one question, *who verifies*,
+   which is now `impl.family` + `BAND:` in roster/BINDINGS data, not two lab docs. *Not done.*
+4. **Run one item end-to-end.** No lane has ever completed in this repo, and until one does the rest
+   is design, not process. This is also what unblocks steps 1 and 3.
+
+**How a project adopts it:** `cp -r orchestration/`, scrub the inherited tier-B/C files, run
+`orchestration/install/INSTALL_INTERVIEW.md`, and stop when `install/check_bindings.sh` exits 0.
+The only code an adopting project writes is its own `gate_check.sh`.
 
 **Packaging is a requirement, not a follow-on.** The methodology ships to other projects, so the
 portable/bindings split is load-bearing: a portable file names no project, host, person, path outside

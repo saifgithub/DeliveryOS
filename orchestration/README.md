@@ -74,10 +74,19 @@ Architect rotates `dispatch/trail.md` → `history/trail/`; the Auditor rotates 
 
 ## Replicating in another project
 
-**[PORTABLE_MANIFEST.md](PORTABLE_MANIFEST.md) is the authoritative copy list** — which files go
-verbatim, which are written once per project, and which are runtime state that must never be
-copied. In short: copy the portable set, write the two BINDINGS files + a `roster/<id>.md` per
-instance, seed empty runtime dirs. No code changes.
+1. `cp -r` this tree. **[PORTABLE_MANIFEST.md](PORTABLE_MANIFEST.md) is the authoritative copy
+   list** — what goes verbatim, what is written once per project, what must never be copied.
+2. **Scrub** the tier-B and tier-C files the copy brought with it, out of the tree. A stale
+   `roster/` is the worst of them: every field in it reads as a real binding.
+3. **Run [install/INSTALL_INTERVIEW.md](install/INSTALL_INTERVIEW.md)** — ten phases. It conducts
+   the stand-up, creates a register if the project has none, and emits both BINDINGS files, the
+   roster and the DoD bindings.
+4. **`sh install/check_bindings.sh`** — six checks, and **its exit code is the only claim that the
+   stand-up is complete.** Then `sh dispatch/dispatch.sh state` should print an empty board.
 
-Portable files contain **no project name, no host, no path outside this tree, and no person's
-name.** If you find one, it is a bug in the split, not a detail to preserve — move it to BINDINGS.
+The only code an adopting project writes is its own `gate_check.sh`, and only if it uses
+`GATE: machine`. Everything else is bindings.
+
+Portable files contain **no project name, no host, no path outside this tree, no person's name, and
+no harness, tool or model name.** If you find one, it is a bug in the split, not a detail to
+preserve — move it to BINDINGS. `check_bindings.sh` checks 4 and 5 are that rule, executable.
