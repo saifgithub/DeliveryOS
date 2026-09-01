@@ -1,5 +1,5 @@
 ---
-description: Pick up work handed over by /sm-handover from a different session, machine, or instance. Takes the ID printed by the handover; with no argument, lists what is available.
+description: Pick up work handed over by /sm-handover from a different session, machine, or instance. With no argument, takes the newest memo; pass the ID printed by the handover to take a specific one.
 argument-hint: [ID]
 ---
 
@@ -34,8 +34,8 @@ else                          ARCHIVE_DIR=".checkpoint_history"; fi
 git fetch --quiet 2>/dev/null; git status --short --branch | head -1
 
 if [ -z "$ARGUMENTS" ]; then
-  echo "MODE=list"
-  find "$ARCHIVE_DIR" -maxdepth 1 -name '*.md' 2>/dev/null | sort -r | while read -r f; do
+  echo "MODE=latest"
+  find "$ARCHIVE_DIR" -maxdepth 1 -name '*.md' 2>/dev/null | sort -r | head -3 | while read -r f; do
     echo "=== $(basename "$f")"; head -8 "$f"
   done
 else
@@ -49,11 +49,14 @@ session id, as printed by `/sm-handover`. The listing uses `find` rather than a 
 unmatched glob aborts the loop under `zsh`, which is the default shell on macOS; `sort -r` puts the
 newest first, since the filenames lead with a sortable UTC timestamp.
 
-- **No argument** — render the listing as a table, newest first: ID, UTC time, the identity marker
-  from line 1 if the project uses one, and the memo's one-line statement of where the work stood.
-  **Stop there.** Do not pick one for the user.
-- **0 matches** — say the ID is unknown, then fall back to the listing above. If the branch line
-  showed this checkout is behind, suggest `git pull` first.
+- **No argument** — take the **newest** memo. That is `$MEMO`; continue. The block prints the top
+  three so step 4 can name the two you passed over: the archive interleaves every concurrent line of
+  work, so naming them is what makes a wrong pick visible immediately instead of silently.
+  If nothing is listed, say the archive is empty and stop.
+- **0 matches** — say the ID is unknown and show the candidates. **Do not silently fall back to the
+  newest**: an ID that misses means the memo has not arrived on this machine, which is a different
+  problem from "no ID given." If the branch line showed this checkout is behind, suggest `git pull`
+  first.
 - **More than 1 match** — print all matches and ask which. Never guess.
 - **Exactly 1 match** — that is `$MEMO`; continue.
 
@@ -90,6 +93,8 @@ Reply in short bullets:
 - The agreed next step
 - One or two key constraints or gotchas from the memo, to prove you absorbed it
 - Anything under **State not in git** that is missing here and blocks the next step
+- When no ID was given: which memo you took, and the two you passed over — so a wrong pick costs one
+  re-run instead of a session of work on the wrong track
 
 If the memo has an **Explicit next step (user-directed)** line, proceed with it immediately — do not
 pause for confirmation. Otherwise end with: "Ready — shall I pick up from [next step]?"
