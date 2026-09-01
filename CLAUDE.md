@@ -12,29 +12,39 @@ development with AI agents**. The `.vsix` extension is one deliverable; the buil
 (MABP/MHBP, and now the portable `orchestration/` protocol) is another, versioned and shipped
 alongside it (see `skills/README.md`).
 
-## Two orchestration systems, both DeliveryOS's to keep
+## One process, converging — `orchestration/` is the chassis
 
-This repo runs two distinct multi-agent coordination mechanisms. They are not layers of one system —
-know which one a given piece of work belongs to before touching it.
+Two coordination mechanisms live here. As of 2026-09-01 they converge on one: the direction is
+decided, the migration is not done.
 
-- **MABP / MHBP** — the actively-used, DeliveryOS-specific chunk-by-chunk build process. One
-  Architect, serial, one chunk in flight at a time. Entry point: `docs/MULTI_AGENT_BUILD_PROCESS.md`
-  (baseline) → `docs/MHBP_LAB.md` (experimental variant, non-normative). State lives in
-  `docs/build/CHUNK_LEDGER.md`, `docs/build/STRUCTURAL_DEBT.md`, `docs/build/COHESION_LOG.md`. This is
-  what actually builds the extension today.
-- **`orchestration/`** — a portable, project-agnostic dispatch + audit protocol (four-role model:
-  Architect / Auditor / Coder / Non-coder) adopted 2026-07-27 as headroom for future multi-instance
-  parallel work. Entry point: `orchestration/README.md`. **Not currently wired into the active
-  build** — no lanes have been dispatched; DeliveryOS's chunks are not dispatch-protocol work items.
-  Its tier-A files (see `orchestration/PORTABLE_MANIFEST.md`) are portable core: they must stay
-  free of DeliveryOS-specific content so they can be `cp`'d into another project unedited. Project
-  specifics live in the `BINDINGS.md` / `DELIVERYOS_BINDINGS.md` files beside them.
+- **`orchestration/` is the chassis** — four roles (Architect / Auditor / Coder / Non-coder), parallel
+  lanes with disjoint write-paths and round-watermark state, intake, rotated ledgers, and a portable
+  install recipe (`orchestration/PORTABLE_MANIFEST.md`). Entry: `orchestration/README.md`.
+- **MABP §16 is the verification engine** — the only part of either system that makes "done"
+  un-fabricable: acceptance checks authored by an independent verifier from the spec, uneditable by the
+  implementer, adjudicated by a non-agentic runner whose exit code is the verdict (`npm run gate` →
+  `docs/build/gate/last-run.json`). Orchestration's auditor re-runs the suite the *builder* wrote — a
+  weaker claim. The gate binds **into** orchestration; it is not replaced by it.
+- **MABP is what has actually shipped** (`docs/MULTI_AGENT_BUILD_PROCESS.md`) — 16 chunks and the
+  extension. It stays the working process until a CR completes end-to-end under orchestration. State:
+  `docs/build/CHUNK_LEDGER.md`, `STRUCTURAL_DEBT.md`, `COHESION_LOG.md`.
 
-**DeliveryOS is the canonical keeper of both**, regardless of where either was refined. MABP
-originated and stays here. The audit-layer kernel behind `orchestration/`'s audit protocol also
-originated here (`docs/build/auditor/PROTOCOL.md`, canonical-origin per its own header) — its dispatch
-layer matured through real use elsewhere before this adoption pass brought the fuller protocol back.
-Treat both as one coherent domain to maintain coherently, not two things that happen to coexist.
+**Migration order.** (1) Retire the duplicate audit kernel — `docs/build/auditor/` and
+`orchestration/audit/` are the same five files at different maturity; orchestration's v2 wins, repoint
+references. (2) Bind the gate — DoD Section A *Tests* → `npm run gate`; the Auditor's COMPLETE test →
+gate green **plus** independently-authored checks. (3) Collapse `docs/MHBP_LAB.md` + `docs/MABP_LAB.md`,
+which answer one question — *who verifies* — that is roster/BINDINGS data, not two lab docs.
+(4) Run one CR end-to-end: no lane has ever completed in this repo, and until one does the rest is
+design, not process.
+
+**Packaging is a requirement, not a follow-on.** The methodology ships to other projects, so the
+portable/bindings split is load-bearing: a portable file names no project, host, person, path outside
+its tree, or work-item id, and states the rule rather than the incident that produced it. Anything
+DeliveryOS-specific belongs in a BINDINGS file.
+
+**DeliveryOS is the canonical keeper**, regardless of where either was refined. MABP originated and
+stays here; the audit-layer kernel originated here too, and its dispatch layer matured through real use
+elsewhere before this adoption pass brought the fuller protocol back.
 
 **Rule that follows from this:** never name another project in DeliveryOS's own protocol/process
 docs, even as attribution — a portable file that leaks a source project's name is a defect in the
