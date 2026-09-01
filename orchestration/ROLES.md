@@ -17,7 +17,7 @@ instances. The Architect maintains the roster.
 |---|---|---|---|
 | **Architect** | **exactly 1** | no | Maintains the roster. Triages incoming requests, files the work item, assigns a lane to a specific instance, integrates on COMPLETE. Never builds source; **never self-closes a lane**. |
 | **Auditor** | **≥1** (shard by domain) | no — verifies | The independent verification gate. Re-runs, re-reads, re-measures; never closes on the builder's word. Multiple auditors parallelize review (e.g. `auditor.backend`, `auditor.mobile`). |
-| **Non-coder** | **≥1**, specialized | no | **Requester** sub-kind feeds work items IN (bug reports → DEF, market/GTM insight → CR). **Maintainer** sub-kind edits non-code assets (content, data, docs, translations). Gated by content-review, not the Auditor. |
+| **Non-coder** | **≥1**, specialized | no | **Requester** sub-kind feeds work items IN — drafts into intake, proposing which register the item belongs in; never mints an id. **Maintainer** sub-kind edits non-code assets (content, data, docs, translations). Gated by content-review, not the Auditor. |
 | **Coder** | **many**, granular | yes | Builds within a bound domain (its sub-specification). Routed through an Auditor. |
 
 ## The company metaphor (how to reason about it)

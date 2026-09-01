@@ -9,9 +9,10 @@ Owner: the Architect.
 # Dispatch handshake: Architect assigns, instances build, Auditor verifies
 
 The Architect and the fleet work CONCURRENTLY across many work items; no role idles waiting on
-another. A WORK ITEM is a CR or a DEF. State is DERIVED from per-item lane files — **no shared
-mutable flag, no lock, no merge conflict on concurrent commits**. This is the audit handshake's
-pattern, one layer up.
+another. A WORK ITEM is a row in one of the project's **registers** (§1a) — a planned change, a
+defect, a backlog entry, whatever list that project already keeps. State is DERIVED from per-item
+lane files — **no shared mutable flag, no lock, no merge conflict on concurrent commits**. This is
+the audit handshake's pattern, one layer up.
 
 ## 1. The trust-critical contract (never changes)
 
@@ -25,6 +26,44 @@ pattern, one layer up.
 - **The Auditor is the gate.** A code work item is COMPLETE only when its Auditor confirms zero
   BLOCKER + zero MAJOR (audit handshake unchanged). The Architect **integrates** on COMPLETE; it
   never self-closes.
+
+## 1a. Registers — the lists work items come from
+
+The protocol dispatches items; it does not own the list they come from. Each project binds **one or
+more registers** (BINDINGS → change registers); this protocol names none of them. A register is
+whatever that project already keeps its planned changes, defects, backlog or issues in. The contract
+is over the FIELDS a register must supply — never over its shape or file format, which differ
+legitimately between one register and the next inside the same project.
+
+Per register, BINDINGS resolves:
+
+| Binding | What it must supply |
+|---|---|
+| `<REGISTER_PATH>` | where the register lives, and how a single row is addressed within it |
+| `<ITEM_KIND>` | what kind of work item its rows are (a planned change, a defect, …) |
+| `<STATUS_VOCAB>` | the exact status values this register uses, and which of them mean the item is not yet started, is being worked, and is closed |
+| `<SPEC_POINTER>` | how a row points at the item's own specification — the thing a lane's `ACCEPTANCE:` names |
+| `<DOD_APPLIES>` | whether items of this kind carry the Definition-of-Done evidence set. Decided **per kind, by a human, at stand-up** — never per item at submission time, where the answer is worth something to whoever is submitting |
+
+The `<ITEM>` id format is bound once for the whole project (see the audit handshake's `PROTOCOL.md`,
+which already delegates id shape to BINDINGS); a register does not re-bind it, it states which slice
+of that format its own rows use.
+
+Three rules follow, and they are why the binding exists:
+
+1. **The register is the list; `lanes/` is only the subset in flight.** `dispatch.sh state` is a
+   **board, not an inventory** — it can only see items someone has already opened a lane for. An
+   item with no lane is invisible to every derived state in §4. That is correct behaviour, not a
+   gap: ask the register what exists, ask the board what is moving.
+2. **An item is dispatchable only once its row exists and its `<SPEC_POINTER>` target exists.** This
+   is what makes *"requesters propose; only the Architect mints"* (§7) checkable rather than merely
+   procedural — a lane whose `ACCEPTANCE:` resolves to nothing was minted out of order.
+3. **At least one register must be bound.** Zero is a stand-up error, not a lean setup: every work
+   item is a row in one of them, so with none bound there is nothing an item can be.
+
+**Anything else that renders an item's status is a cache and must say so.** A status restated in a
+plan doc, a ledger, a board file or a second register drifts from the row, and nothing detects the
+drift. The register row is the answer to *"what is the real status of this item"*.
 
 ## 2. Instances and addressing
 
@@ -59,9 +98,12 @@ is deliberately run as the Architect's own ephemeral subagent — not the interr
 Per work item, under `<DISPATCH_ROOT>/lanes/`:
 
 - **`<ITEM>.assign.md`** (Architect owns): `KIND:` (code | content | requester-note),
-  `INSTANCE: <instance-id>`, `GATE: independent | spawned | none` (see §4a),
-  `ACCEPTANCE: <path to the CR/DEF spec>`, `DEPENDS-ON:` (or none),
-  `HOT-FILES:` (or none), the what/why, and two signal lines:
+  `INSTANCE: <instance-id>`, `GATE: independent | spawned | machine | none` (see §4a),
+  `REGISTER: <register-id>:<row-id>` — which register row this lane serves (§1a),
+  `BAND: <capability band>` — the band this lane is dispatched at (ROLES.md), sourced from the
+  instance's roster entry, **written by the Architect, never self-reported by the instance**,
+  `ACCEPTANCE:` — the item's own spec, resolved through its register's `<SPEC_POINTER>`,
+  `DEPENDS-ON:` (or none), `HOT-FILES:` (or none), the what/why, and two signal lines:
   - `ASSIGNED: <instance-id> round N` — creating or bumping this line is the "your turn" signal.
   - `DISPATCH: OPEN | ACCEPTED (round N)` — `ACCEPTED` = the Architect integrated after the
     Auditor's COMPLETE; the lane is closed.
@@ -72,11 +114,17 @@ Per work item, under `<DISPATCH_ROOT>/lanes/`:
 ### 3a. Machine-parsed tokens — NEVER paraphrased
 
 `ASSIGNED: <id> round N`, `STATUS: <KEYWORD> (round N)`, `DISPATCH: <KEYWORD> (round N)`,
-`GATE: <KEYWORD>`, `DEPENDS-ON:`, `INSTANCE:`, `KIND:`, and the clarification tokens
-`NEEDS-INFO` / `Q[n]:` / `A[n]:`
+`GATE: <KEYWORD>`, `REGISTER: <register-id>:<row-id>`, `TRIAGE: <KEYWORD>`, `DEPENDS-ON:`,
+`INSTANCE:`, `KIND:`, and the clarification tokens `NEEDS-INFO` / `Q[n]:` / `A[n]:`
 are read by `dispatch.sh` regex and by the Architect's trust-critical integration test. Write them
 byte-exact — a paraphrase silently breaks the state machine. Narrative prose around them is
 compressed (fragments, no filler); the tokens are not.
+
+**Every machine-parsed value is ONE whitespace-free token.** `dispatch.sh` reads a keyword as the
+second whitespace-separated field and passes lane state around positionally; a value containing a
+space is silently truncated to its first word. That is why `REGISTER:` is `<register-id>:<row-id>`
+and not two fields. `BAND:` is a lane field but not a machine-parsed one — it is read by the
+Auditor, not by a script, so it is absent from this list on purpose.
 
 ## 4. State derivation (the core logic)
 
@@ -109,6 +157,7 @@ and prints ungated lanes identically to audited ones. `UNGATED` is that missing 
 | `none` | No audit required — a chunk small enough, and with a small enough blast radius, to ship on its self-test | `DISPATCH: ACCEPTED` |
 | `spawned` | Audited by an agent the Architect spawned | audit `VERDICT: COMPLETE` |
 | `independent` | Audited by a stakeholder-started session the Architect does not control | audit `VERDICT: COMPLETE` |
+| `machine` | Gated by a **non-agentic runner** over acceptance checks authored independently of the implementer, run at the submitted revision. No agent verdict is required, because no agent issues one | the project's gate hook exits 0 (see below) |
 | *absent* | — | **never** — renders `UNGATED`. An unbound gate fails **loud**, never open |
 
 **Record `GATE:` when you WRITE the lane, not when the work comes back.** At decomposition you have
@@ -116,11 +165,27 @@ no stake in the answer; at hand-off the work looks finished and skipping is the 
 exact state in which a gate gets waived on the lane that most needed it. *Prompt instructions are
 not controls.*
 
-**A CR ships as chunks + a CR-level audit, or as CR-only. The CR-level audit is mandatory in both
-branches.** That is what makes `GATE: none` safe on a chunk: there is no path to a finished CR that
-skips the terminal gate, so chunking is a cost-and-parallelism decision rather than a safety one.
+**How `machine` is satisfied.** `dispatch.sh` invokes an optional project-supplied hook —
+`gate_check.sh` beside it, or the path in `DISPATCH_GATE_CHECK` — with the item id as its only
+argument. **Exit 0 = gated; anything else, including the hook being absent, renders `UNGATED`**,
+matching the fail-loud rule for an unrecorded `GATE:`. The portable code names no command, opens no
+result file and knows no result format: the hook is where the project's own runner and record shape
+live (`<GATE_RUN_RECORD>`, BINDINGS). This is the one place tier-A code calls out to a
+project-supplied script, and it is deliberate — it is what makes `machine` a derived state rather
+than a word on a lane.
+
+**Why `machine` is not `none` with extra steps.** `none` reaches `DONE` on `DISPATCH: ACCEPTED`
+alone — the Architect's own token, unverified by anything. `machine` reaches `DONE` on an exit code
+the Architect did not write, over checks the implementer did not author and cannot edit. The two
+sound adjacent and differ in exactly the property gates exist for.
+
+**An item ships as chunks + an item-level audit, or as item-only. The item-level audit is mandatory
+in both branches.** That is what makes `GATE: none` safe on a chunk: there is no path to a finished
+item that skips the terminal gate, so chunking is a cost-and-parallelism decision rather than a
+safety one. "Chunk" here is this protocol's own word for a sub-unit of one item — it is not imported
+project vocabulary, and a project that calls them something else changes nothing but the noun.
 Write **all** chunks down before dispatching any of them — that is the only way to check the
-decomposition is *complete*, and it is what the CR-level audit diffs against the CR document, so a
+decomposition is *complete*, and it is what the item-level audit diffs against the item's spec, so a
 chunk you forgot to write down is a hole the terminal audit can actually catch.
 
 **Choosing `none` vs an audit** — two terms, either one sufficient to require a gate:
@@ -166,10 +231,16 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
 
 ## 7. Non-coder flows
 
-- **Requester** (`noncoder.*` feeding DEFs/CRs): never receives an assignment lane. Drops a draft
+- **Requester** (`noncoder.*` feeding a register): never receives an assignment lane. Drops a draft
   into `<DISPATCH_ROOT>/intake/`; the Architect triages (with the §5 round-trip if more is needed) →
-  authors the CR/DEF spec → opens an assignment lane. **Requesters propose; only the Architect
-  mints the dispatched work item.**
+  mints the register row and authors its spec → opens an assignment lane. **Requesters propose; only
+  the Architect mints the dispatched work item.**
+
+  A draft carries, at minimum: a crisp problem statement; evidence a reader can re-check (file:line,
+  logs, a measurement, a repro); the proposed `<ITEM_KIND>` — which is a proposal for *which
+  register* it belongs in, not an id; severity/priority on the project's own scale; and
+  `TRIAGE: OPEN | NEEDS-INFO | ACCEPTED | REJECTED`, which the **Architect** owns and the requester
+  never writes past the initial `OPEN`. A draft is not a register row and carries no `<ITEM>` id.
 - **Maintainer** (`noncoder.*` editing assets): receives assignment lanes like a coder, but
   `READY_FOR_REVIEW` routes to Architect/stakeholder content review (`IN_REVIEW`) — no Auditor, no tests.
 
@@ -232,7 +303,7 @@ it, so review shards by domain. The audit handshake then runs verbatim; `dispatc
 ## 9. Done (per item)
 
 On the Auditor's COMPLETE (`AUDIT_PASSED`), the Architect: verifies the verdict is on origin,
-updates the CR/DEF register status, appends the `trail.md` closure row, writes
+updates the status on the row the lane's `REGISTER:` names, appends the `trail.md` closure row, writes
 `DISPATCH: ACCEPTED (round N)` on the assign lane, **archives the closed lane pair to
 `../history/lanes/<ITEM>.md`** (the durable per-item record — what/why, every Q/A round-trip, the
 verdict; this keeps active `lanes/` lean and is the collective memory), **reaps the lane's
@@ -268,8 +339,14 @@ collective memory, not a parallel one.
 
 ## 10. Replicability
 
-Portable (copy verbatim): `ROLES.md`, `DISPATCH_PROTOCOL.md`, `loop_prompts/`, `dispatch.sh` (and
-the audit handshake's `PROTOCOL.md` + `watcher.sh`). Per-project (write once): `BINDINGS.md`,
-`roster/`, and the runtime `board.md`/`trail.md`/`lanes/`/`intake/`. Stand up a new project by
-copying the portable set and writing `BINDINGS.md` + one `roster/<id>.md` per intended instance. No
-code changes.
+`PORTABLE_MANIFEST.md` is the authoritative copy list and the only place the tiers are enumerated —
+this section states the shape, not the inventory. Portable (copy verbatim): this file, `ROLES.md`,
+`DEFINITION_OF_DONE.md`, `loop_prompts/`, `dispatch.sh`, the install kit, and the audit handshake's
+`PROTOCOL.md` + loop prompts + `watcher.sh`. Per-project (write once): the two BINDINGS files,
+`roster/`, and the seeded `board.md`/`trail.md` headers. Never copied: `lanes/`, `intake/` drafts,
+and everything under `<AUDIT_ROOT>/` that records a verdict or a run.
+
+Stand up a new project with `install/INSTALL_INTERVIEW.md`, which conducts the binding interview and
+ends in `install/check_bindings.sh` — whose exit code is the only claim that the stand-up is
+complete. The one piece of code an adopting project writes itself is its `gate_check.sh`, and only
+if it uses `GATE: machine`.

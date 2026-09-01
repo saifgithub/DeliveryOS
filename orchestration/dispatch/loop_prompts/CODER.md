@@ -17,7 +17,7 @@ the dispatch handshake (Architect → you) and the audit handshake (you → Audi
 1. **Watch.** `sh <DISPATCH_ROOT>/dispatch.sh inst <your-id>` blocks until a lane is `ASSIGNED` to you
    (new work) or `AUDIT_RETURNED` on your lane (a bounce to fix).
 2. **Claim.** Write `lanes/<ITEM>.<your-id>.md` with `STATUS: CLAIMED (round N)` (N = the assign
-   round). Read `ACCEPTANCE` (the CR/DEF spec) and the `DEPENDS-ON` / `HOT-FILES` header.
+   round). Read `ACCEPTANCE` (the item's own spec) and the `DEPENDS-ON` / `HOT-FILES` header.
 3. **Build.** In your own worktree `<WORKTREE_DIR>/<your-id>-<ITEM>/`, edit only your owned paths.
    If the item needs a `HOT-FILE` you don't own (e.g. the schema file, a shared interface), do NOT
    edit it — the lane's `DEPENDS-ON` points at the owner's lane; wait for it or raise `NEEDS-INFO`.
@@ -35,7 +35,7 @@ the dispatch handshake (Architect → you) and the audit handshake (you → Audi
    `STATUS: READY_FOR_AUDIT (round N)`.
 
    **Chunk evidence list** — a chunk does NOT render the Definition-of-Done table; that is
-   CR-scoped and the Architect fills it once for the whole item. Your chunk carries exactly:
+   item-scoped and the Architect fills it once for the whole item. Your chunk carries exactly:
    the SHA(s), what changed and why, the test command **and its observed output**, the contract
    re-verification if you crossed a seam, and anything you could not verify — named, not omitted.
    A documented partial beats an overclaim the Auditor will bounce.

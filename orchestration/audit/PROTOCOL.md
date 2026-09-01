@@ -6,14 +6,18 @@ PROTOCOL.md — the builder→Auditor audit handshake, v2. PORTABLE CORE: copy v
   until each work item is COMPLETE (zero BLOCKER + zero MAJOR).
   Ratified 2026-06-21; DEF routing added 2026-06-27; guardrail 6 (output compression) added
   2026-07-12; genericized 2026-07-23 (see PORTABLE_MANIFEST.md); incident narration removed
-  2026-09-01 (PORTABLE_MANIFEST.md invariant 2 — the rule stays, the anecdote goes).
+  2026-09-01 (PORTABLE_MANIFEST.md invariant 2 — the rule stays, the anecdote goes); work-item
+  vocabulary generalised from the fixed CR/DEF pair to registers, and round currency stated,
+  2026-09-01 (DISPATCH_PROTOCOL.md §1a). Neither generalisation changes any lane mechanic.
 -->
 
 # Audit handshake v2: parallel per-item lanes
 
 The architect and the auditor work CONCURRENTLY across many work items; neither role idles waiting for
-the other. A WORK ITEM is a CR (a planned change) or a DEF (a defect); both route through IDENTICAL
-lane mechanics. Below, `<ITEM>` is any item id in this project's id format (BINDINGS).
+the other. A WORK ITEM is a row in one of the project's registers — a planned change, a defect, a
+backlog entry, whatever list that project already keeps (`../dispatch/DISPATCH_PROTOCOL.md` §1a). Every
+kind routes through IDENTICAL lane mechanics: the kind changes what an item is about, never how it
+moves. Below, `<ITEM>` is any item id in this project's id format (BINDINGS).
 
 ## The trust-critical contract (never changes)
 
@@ -40,7 +44,7 @@ lane mechanics. Below, `<ITEM>` is any item id in this project's id format (BIND
 
 ## The lanes (directory as queue, no shared mutable flag)
 
-Per item, two files under `<AUDIT_LANE_DIR>/` (one directory holds CR and DEF lanes alike):
+Per item, two files under `<AUDIT_LANE_DIR>/` (one directory holds every kind of lane alike):
 
 - `<ITEM>.architect.md` (architect owns): commit SHA, `depends-on:` (or none), what/why, tests run +
   results, the architect's own revert-proof QA, and a `SUBMITTED: round N` line. Creating or bumping
@@ -49,7 +53,7 @@ Per item, two files under `<AUDIT_LANE_DIR>/` (one directory holds CR and DEF la
   `VERDICT: COMPLETE | AWAITING_FIXES (round N)` line, plus the run-report path under `<AUDIT_ROOT>/runs/`.
 
 STATE is DERIVED from the two files (no shared flag, no merge conflict on concurrent commits). The
-trigger for either role is purely the round numbers on any `*.architect.md` lane (CR or DEF):
+trigger for either role is purely the round numbers on any `*.architect.md` lane, whatever its kind:
 
 - AWAITING_AUDIT (auditor's turn): architect `SUBMITTED round` > auditor `VERDICT round`, or no auditor
   file yet.

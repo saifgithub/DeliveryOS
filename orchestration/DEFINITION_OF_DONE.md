@@ -11,19 +11,37 @@ rather than restating the questions.
 The evidence table an item carries when it is submitted for audit. An independent auditor checks
 this table before calling anything COMPLETE.
 
-## Scope: CR-level only
+## Scope: item-level only
 
 **The DoD is filled in once, for the whole work item — never per chunk.**
 
-A CR may be delivered as *chunks + a CR-level audit*, or as *CR-only*. Either way the CR-level audit
-is mandatory, and the DoD belongs to it. Chunks carry a shorter evidence list (see the CODER loop
-prompt); they do not render this table.
+An item may be delivered as *chunks + an item-level audit*, or as *item-only*. Either way the
+item-level audit is mandatory, and the DoD belongs to it. Chunks carry a shorter evidence list (see
+the CODER loop prompt); they do not render this table.
 
 This is not a formality. If chunks rendered the DoD, most rows would be honestly unanswerable at
 chunk scope — a chunk cannot update a register row or a user manual — so every chunk submission
 would arrive with a column of `N/A`s, the auditor would learn to wave `N/A`s through, and the rule
-that *a false `N/A` is a MAJOR* would be dead by the time it reached the CR-level audit, where it is
-the only thing standing between an unfinished item and `COMPLETE`.
+that *a false `N/A` is a MAJOR* would be dead by the time it reached the item-level audit, where it
+is the only thing standing between an unfinished item and `COMPLETE`.
+
+## Which items render it at all
+
+Not every kind of work item owes the same evidence. A project decides, **per `<ITEM_KIND>`, once, at
+stand-up** — recorded as that register's `<DOD_APPLIES>` binding (DISPATCH_PROTOCOL.md §1a) —
+whether items of that kind render this table.
+
+Two rules make that a scoping decision rather than an escape hatch:
+
+- **It is a human's call, made per kind, before any item of that kind exists.** Never per item, never
+  at submission time. At submission the answer is worth something to whoever is submitting, which is
+  exactly the condition under which a checklist stops being one.
+- **A kind that renders the table renders ALL of it.** Applicability is per kind; row selection is
+  not. Within a kind that renders it, rule 1 below still holds — every row disposed, `N/A` with a
+  reason where a row genuinely does not apply to that item.
+
+A kind whose `<DOD_APPLIES>` is false is still audited, still gated, and still carries its evidence
+in the lane. What it does not carry is this particular table.
 
 ## How to fill it in
 
@@ -43,7 +61,8 @@ A claim that could have been written without doing the work is not evidence.
 | Row | The question it asks | What makes a disposition valid |
 |---|---|---|
 | **Scope** | Does the change match the item spec's stated scope and acceptance? | Names the spec, and states what was in and out |
-| **Tests** | Is the project's test gate green over the changed code? | The command run and its observed result |
+| **Tests** | Is the project's **own** test suite green over the changed code? | The command run and its observed result |
+| **Acceptance gate** | Did a **non-agentic runner** exit 0 over acceptance checks authored independently of the implementer, at the submitted revision? | The runner's own recorded verdict, the revision it ran at, and where the checks live. Not a pasted summary, and not the implementer's own suite — that is the Tests row |
 | **Manual verification** | Was the real behaviour exercised, not assumed? | How it was exercised and what was observed |
 | **Scope discipline** | Is anything unrelated bundled into this change? | Confirmed against the actual diff, not from memory |
 | **Contract integrity** | Do the seams this change crosses still hold? | Re-verified against the real counterpart, not just compilation |
@@ -54,7 +73,7 @@ A claim that could have been written without doing the work is not evidence.
 |---|---|---|
 | **Docs** | Is behaviour that changed reflected where it is documented? | The file(s) updated, or why none needed it |
 | **Commit tag** | Is authorship and the item id traceable from history? | The tag as it appears on the commit(s) |
-| **Register** | Does the item's register row reflect its real status? | The row as it now reads |
+| **Register** | Does the item's register row reflect its real status? | The row the lane's `REGISTER:` names, as it now reads |
 | **Model / effort / budget** | Which tier did this run at, under what cap, and why? | Tier, cap, and a one-line justification. Start cheap; an expensive run needs a reason |
 
 Findings in Section A mean **it is broken**. Findings in Section B mean **it is unfinished**. They
@@ -78,6 +97,11 @@ build, and routing both as one undifferentiated "MAJOR" teaches everyone to disc
    has no binding *during* an audit is too late; the audit is already blocked on it.
 5. **The auditor spot-checks dispositions independently.** A filled-in table is a claim. A missing
    table or a false `N/A` is a MAJOR.
+6. **A project with no non-agentic runner dispositions the Acceptance gate row
+   `N/A — no non-agentic runner exists`**, and every lane it dispatches is `GATE: spawned` or
+   `independent` rather than `machine`. That is rule 1 working as intended: the row stays, visible
+   and unanswered, instead of being softened into something the project already does. It is also the
+   one row a project can close by *building* something rather than by writing a disposition.
 
 ## Why this is split
 

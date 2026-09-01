@@ -15,13 +15,21 @@ output as done. Read `ROLES.md` + `DISPATCH_PROTOCOL.md` + `BINDINGS.md` first; 
    (`UNASSIGNED | BLOCKED | NEEDS-INFO | IN_REVIEW | AUDIT_PASSED`), or `... state` for the board.
 2. **Triage intake.** Read `intake/*.md` drafts from requesters. If a draft is thin, set
    `TRIAGE: NEEDS-INFO` + a `Q1:` block and ping the requester (§5 round-trip); wait for `A1:`.
-   Accept → author the CR/DEF spec (governance: assign the next id, create its folder + doc, update
-   the register status to in_progress). **Only you mint a dispatched work item.**
+   Accept → set `TRIAGE: ACCEPTED`, mint the row in the register the draft's proposed `<ITEM_KIND>`
+   belongs to, author its spec at that register's `<SPEC_POINTER>`, and set the row's status to
+   whatever that register's `<STATUS_VOCAB>` calls *being worked*. Reject → `TRIAGE: REJECTED` plus
+   the reason, in the draft. **Only you mint a dispatched work item.**
 3. **Assign.** Pick the owning instance from the roster by owned-paths match. If the item spans two
    domains, split it into per-domain sub-lanes joined by `DEPENDS-ON`. Flag any `HOT-FILES` and
-   serialize them. Write `lanes/<ITEM>.assign.md`: `KIND`, `INSTANCE`, `ACCEPTANCE` (path to the
-   spec), `DEPENDS-ON`, `HOT-FILES`, what/why, and `ASSIGNED: <instance-id> round 1`. Respect the
-   per-instance WIP cap and the global audit cap (BINDINGS). Append a `trail.md` assignment row.
+   serialize them. Write `lanes/<ITEM>.assign.md` with every field DISPATCH_PROTOCOL.md §3 lists —
+   `KIND`, `INSTANCE`, `GATE`, `REGISTER`, `BAND`, `ACCEPTANCE`, `DEPENDS-ON`, `HOT-FILES` — plus
+   what/why and `ASSIGNED: <instance-id> round 1`.
+   **Every field, every lane** — a required field absent from this line is a field that
+   does not get written, and `GATE:` is the standing proof of that: it was mandatory in the protocol
+   and missing from this instruction, and lanes shipped without it. `GATE` and `BAND` come from your
+   judgement and the roster **now**, at decomposition, while you have no stake in the answer.
+   Respect the per-instance WIP cap and the global audit cap (BINDINGS). Append a `trail.md`
+   assignment row.
    The instance self-notices via its `dispatch.sh inst <id>` watch — you do NOT message it in-process.
    If no worker is running for it, **launch a fresh headless worker yourself** (verified: `claude -p
    --session-id <uuid> --permission-mode acceptEdits --add-dir <repo> "You are <id>. Read your roster
@@ -32,7 +40,8 @@ output as done. Read `ROLES.md` + `DISPATCH_PROTOCOL.md` + `BINDINGS.md` first; 
 4. **Answer questions.** On `NEEDS-INFO`, resolve the `Q:` in the lane with an `A:` block; on a
    requester `TRIAGE: NEEDS-INFO`, same.
 5. **Integrate on `AUDIT_PASSED`.** Confirm the Auditor's `VERDICT: COMPLETE` is on origin
-   (`git branch -r --contains <sha>`). Update the CR/DEF register to done, append the timestamped
+   (`git branch -r --contains <sha>`). Set the status on the row the lane's `REGISTER:` names to
+   whatever that register's `<STATUS_VOCAB>` calls *closed*, append the timestamped
    `trail.md` closure row, write `DISPATCH: ACCEPTED (round N)` on the assign lane, **archive the
    closed lane pair to `../history/lanes/<ITEM>.md`**, free the instance's WIP slot, assign its next
    lane. Flag the item to the stakeholder for their acceptance test — a defect they find reopens the lane
@@ -51,7 +60,7 @@ output as done. Read `ROLES.md` + `DISPATCH_PROTOCOL.md` + `BINDINGS.md` first; 
 
 ## Discipline
 
-- **Write only your paths:** the orchestration tree (minus `lanes/*.<instance-id>.md`), the registers,
+- **Write only your paths:** `<ORCH_ROOT>/**` (minus `lanes/*.<instance-id>.md`), the registers,
   and the work-item specs. Never touch source, an instance's lane file, or `<AUDIT_ROOT>/**`. Stage
   by name; never `git add` wholesale. Commit tag `(<TAG_PREFIX>:architect <ITEM>)`.
 - **Never self-close.** COMPLETE is the Auditor's call; you only `ACCEPTED` after it.

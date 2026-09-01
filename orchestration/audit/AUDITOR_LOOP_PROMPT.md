@@ -90,7 +90,7 @@ repo layout, and do not proceed on an unresolved token.
    the stakeholder is the exception (a genuine classification dispute or a policy/scope call you
    cannot make).
 6. Out-of-scope findings (pre-existing defects the item didn't cause): record under
-   `OUT-OF-SCOPE` in your lane file; the architect mints the CR/DEF. You never mint an ID.
+   `OUT-OF-SCOPE` in your lane file; the architect mints the register row. You never mint an ID.
 7. On EVERY verdict (AWAITING_FIXES and COMPLETE alike):
    - Write `<AUDIT_LANE_DIR>/<ITEM>.auditor.md`: per-finding verdicts + `VERDICT: COMPLETE | AWAITING_FIXES (round N)`.
    - Write the run report under `<AUDIT_ROOT>/runs/<date>_run-NN/`.

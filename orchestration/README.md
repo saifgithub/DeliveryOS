@@ -46,7 +46,7 @@ ready, submits into the audit layer; the Auditor's `VERDICT` flows back up. Shar
 
 **Architect** (1, COO) assigns + integrates, never builds or self-closes · **Auditor** (≥1, QA)
 independently verifies · **Coder** (many) builds a bound domain · **Non-coder** (≥1) *requesters*
-feed work in (bugs→DEF, GTM→CR) / *maintainers* edit non-code assets. The stakeholder is CEO — provisions
+feed work in via intake drafts / *maintainers* edit non-code assets. The stakeholder is CEO — provisions
 Tier-1 things and is the single acceptance checkpoint after COMPLETE. Details: [ROLES.md](ROLES.md).
 
 ## Running it

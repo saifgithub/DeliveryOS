@@ -8,8 +8,9 @@ ARCHITECT_LOOP_PROMPT.md: the standing v2 reminder prompt for the BUILD ARCHITEC
 
 # Architect: build and remediate work items in a v2 lane handshake with the auditor
 
-A WORK ITEM is a CR (a planned change) or a DEF (a defect); both route through IDENTICAL lane
-mechanics. Below, `<ITEM>` is any item id in this project's id format (BINDINGS).
+A WORK ITEM is a row in one of the project's registers — a planned change, a defect, a backlog
+entry, whatever list that project keeps. Every kind routes through IDENTICAL lane mechanics. Below,
+`<ITEM>` is any item id in this project's id format (BINDINGS).
 
 ## Your role and paradigm
 
@@ -41,7 +42,9 @@ repo layout, and do not proceed on an unresolved token.
    (`sh <AUDIT_ROOT>/watcher.sh state` prints the derived truth to reconcile against).
 3. The project's agent guide (auto-loaded) + whatever record it keeps of current build state
    (a checkpoint memo, a status doc — BINDINGS names it) — build state and governance rules.
-4. The CR or DEF you are building, in its register and its own folder (BINDINGS → change registers).
+4. The item you are building: its register row and the spec that row points at (BINDINGS → change
+   registers). If either does not exist yet, the item was minted out of order — it is not
+   dispatchable (DISPATCH_PROTOCOL.md §1a).
 
 ## The lane loop (v2: state is DERIVED, there is no shared flag)
 
@@ -60,7 +63,8 @@ hand-off — a submit, a merge, an answer to a `NEEDS-INFO`, an assignment.
 
 1. Pick any item NOT AWAITING_AUDIT (build a new one, or fix a bounced one). An item is yours
    while your `SUBMITTED round` is less than or equal to the auditor's `VERDICT round`.
-2. Build it per the project's normal governance: file the CR/DEF, implement, self-test.
+2. Build it per the project's normal governance: mint the register row and its spec, implement,
+   self-test.
 3. Verify BEFORE you signal: the project's test command is green over the changed code, and the real
    behaviour (API response, on-device check, live-host smoke test — BINDINGS) was reproduced live,
    not assumed. A documented partial beats an overclaim the auditor will bounce.
@@ -70,12 +74,16 @@ hand-off — a submit, a merge, an answer to a `NEEDS-INFO`, an assignment.
    Bump `round` by one on every resubmit. Update `INDEX.md` to match.
 
    **What else the submission carries depends on its scope:**
-   - **CR-level submission** — also carries the fully disposed **Definition of Done**: the portable
-     questions in [`../DEFINITION_OF_DONE.md`](../DEFINITION_OF_DONE.md), answered per this
-     project's bindings (BINDINGS → Definition-of-Done table). Every row disposed; a CR submission
-     without it is incomplete. Have a **fresh agent** fill it in — never one of the chunk authors.
-     A worker grading its own work inherits its own blind spot; that is how a defect ships with two
-     guards that only catch the exact phrasing their author had already thought of.
+   - **Item-level submission**, where the item's kind binds `<DOD_APPLIES>` — also carries the fully
+     disposed **Definition of Done**: the portable questions in
+     [`../DEFINITION_OF_DONE.md`](../DEFINITION_OF_DONE.md), answered per this project's bindings
+     (BINDINGS → Definition-of-Done table). Every row disposed; such a submission without it is
+     incomplete. Have a **fresh agent** fill it in — never one of the chunk authors. A worker grading
+     its own work inherits its own blind spot; that is how a defect ships with two guards that only
+     catch the exact phrasing their author had already thought of.
+     Its **Acceptance gate** row is dispositioned from `<GATE_RUN_RECORD>` — the non-agentic
+     runner's own record, carrying its result and the revision it ran at. Read the record; do not
+     restate it. If the revision it records is not the one you submitted, the row is unanswered.
    - **Chunk submission** — does NOT render the DoD table. It carries the shorter chunk evidence
      list (see the CODER loop prompt): SHA(s), what/why, the test command and its observed output,
      contract re-verification if a seam was crossed, and anything unverified named rather than
@@ -116,7 +124,8 @@ not a shortcut. Three rules, none of them optional:
    coder, and for the same reason: **agents fabricate completion at every tier**, auditors included.
 3. **Never economy tier for an auditor.** A cheap auditor returns a confident `VERDICT: COMPLETE`
    it never earned, which is *worse* than no auditor — it manufactures false confidence rather than
-   leaving a visible gap. Standard for chunk audits, premium for the CR-level audit.
+   leaving a visible gap. Standard band for chunk audits, premium for the item-level audit
+   (ROLES.md → Capability bands).
 
 **When to escalate to a stakeholder-started auditor instead** — route on **reversibility**, not size
 or importance, and judge it against the **real diff after the work**, not your guess before it. If
@@ -149,7 +158,7 @@ worktree either way.
    work defers instead of being refused, so you never have to choose between breaking the cap and
    dropping a lane. The binding constraint is the provider's rolling usage window — exhausting it
    strands every in-flight agent at once, and everything uncommitted dies with them.
-   **Stop at lane boundaries.** Do not start a CR-level audit late in a window: an auditor that dies
+   **Stop at lane boundaries.** Do not start an item-level audit late in a window: an auditor that dies
    mid-verdict leaves a half-written `<ITEM>.auditor.md`, and `tail -1`-wins reads whatever token
    happens to be last — an ambiguous state strictly worse than a clean `AWAITING_AUDIT`.
 2. SHARED INDEX: keep `INDEX.md` current so the queue is visible without deriving from N files.

@@ -43,8 +43,13 @@ lane_state() {  # $1=item id; echoes "STATE sub vr keyword"
   # Same rule on the verdict side, so this table and the dispatch board cannot disagree about
   # whether a gate has been satisfied.
   if [ -n "$(undelivered "$u")" ]; then echo "UNCOMMITTED $sub - -"; return; fi
-  kw=$(grep -Eo 'VERDICT: *(COMPLETE|AWAITING_FIXES)' "$u" 2>/dev/null | tail -1 | awk '{print $2}')
-  vr=$(last_round "$u" 'VERDICT: *(COMPLETE|AWAITING_FIXES) *\(round *[0-9]+'); vr=${vr:-0}
+  # Anchored to line start, allowing the `## VERDICT:` heading form and bold emphasis. Unanchored,
+  # a verdict keyword quoted in the auditor's own prose ("this is not a COMPLETE because…") reads as
+  # a live signal. The keyword is the LAST field of the match, since the anchor may consume markers.
+  # ../dispatch/dispatch.sh reads it with the identical regex; the two must never diverge, or that
+  # board and this table can disagree about whether a gate is satisfied.
+  kw=$(grep -Eo '^[#*]* *VERDICT: *(COMPLETE|AWAITING_FIXES)' "$u" 2>/dev/null | tail -1 | awk '{print $NF}')
+  vr=$(last_round "$u" '^[#*]* *VERDICT: *(COMPLETE|AWAITING_FIXES) *\(round *[0-9]+'); vr=${vr:-0}
   if [ "$sub" -gt "$vr" ]; then echo "AWAITING_AUDIT $sub $vr ${kw:--}"; return; fi
   case "${kw:-}" in
     AWAITING_FIXES) echo "AWAITING_FIXES $sub $vr $kw" ;;
@@ -69,6 +74,10 @@ print_state() {
     printf '%-22s %-16s %-10s %-9s\n' "$it" "$1" "r$2" "r$3(${4})"
   done
   [ "$n" -eq 0 ] && echo "(no lanes yet under $CR_DIR)"
+  # Explicit: without it the function's status is the failed `[ -eq 0 ]` test, so `state` exited 1
+  # exactly when lanes DID exist — inverting the documented exit codes for any caller that gates on
+  # them. ../dispatch/dispatch.sh guards the identical construct the same way.
+  return 0
 }
 
 count_state() {  # counts lanes whose state == $TARGET

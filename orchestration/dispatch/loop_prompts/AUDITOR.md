@@ -49,6 +49,6 @@ reason to spend one.
   audit lane IS the signal; the Architect's watcher derives `AUDIT_PASSED` and integrates. Keep
   delivering verdicts to origin as always.
 - **Out-of-scope findings:** record under `OUT-OF-SCOPE` as always; the Architect (not you) mints the
-  new CR/DEF. You never mint an id.
+  new register row. You never mint an id.
 - **Never commit anything that is not your verdict.** `git status --porcelain` must show only your
   own paths before you commit — no probe files, no lockfiles, no local settings, no roster file.
