@@ -98,6 +98,11 @@ revision field) · the acceptance-check directory · `<DOD_BINDINGS_PATH>`.
 A profiles table that exists with empty columns is a stand-up error like any other unbound token;
 the table's presence is not the binding, its cells are.
 
+**Decorrelation:** `DECORRELATION: required | waived — <reason>`. An absent line means `required`,
+and `check_bindings.sh` check 7 fails a fleet whose auditor shares a family with what it gates. The
+waiver exists because one available model family is a normal situation; it waives the failure and
+never the visibility, and a human declares it at stand-up.
+
 **Operations:** the Architect's inner process · the continuity/status record · caps and the stall
 window · escalation precedents · the hot-file registry.
 

@@ -74,8 +74,19 @@ What fills each band **here**. This is the only file in the tree permitted to na
 | Standard | <UNBOUND> | |
 | Premium | <UNBOUND> | |
 
-Record here whether the fleet can decorrelate at all — an auditor whose `impl.family` matches every
-coder it gates is a gate that fails the same way its subject does.
+## Decorrelation (DISPATCH_PROTOCOL.md §2)
+
+An auditor whose `impl.family` matches what it gates fails the same way its subject does. State the
+decision as a machine-read line — one whitespace-free keyword, then the reason if waived:
+
+```
+DECORRELATION: <UNBOUND>
+```
+
+`required` is the default and what to reach for. `waived — <reason>` is correct and honest for a
+project with one available model family, and it is a **human's call at stand-up**: it waives the
+stand-up failure, never the per-run visibility, and `family:` stays mandatory under it so the
+comparison still works the day a second family arrives. An absent line means `required`.
 
 ## Hot-file registry
 

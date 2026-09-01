@@ -114,11 +114,24 @@ execute — the file is truth.
 | Standard | Sonnet-class |
 | Premium | Opus-class |
 
-**The fleet cannot decorrelate today.** Every roster entry is `family: claude`, auditor included.
-Other families are available to this project and documented (`docs/MHBP_LAB.md` §1 — a separate
-agentic CLI on a different family, and two local OpenAI-compatible endpoints the architect calls
-directly), and none has ever been wired into a lane. Recorded here as a known gap rather than left
-for someone to infer from a roster of identical `family:` values.
+## Decorrelation (DISPATCH_PROTOCOL.md §2)
+
+```
+DECORRELATION: waived — one model family is wired into this fleet; the others are available but have never run a lane
+```
+
+**What this waives and what it does not.** Every roster entry here is `family: claude`, auditor
+included, so `auditor.deliveryos` fails where the coders it gates fail — and the machine gate does
+not rescue that, because the same family authored the acceptance checks. The waiver stops that from
+failing the stand-up. It does **not** stop `check_bindings.sh` printing every correlated pair on
+every run, and it is not a judgement that decorrelation does not matter here.
+
+**The condition that lifts it.** Other families are available to this project and documented
+(`docs/MHBP_LAB.md` §1 — a separate agentic CLI on a different family, and two local
+OpenAI-compatible endpoints the architect calls directly). None has been wired into a lane. When one
+is, add a second `auditor.*` roster entry on that family, repoint the coders' `auditor:` fields, and
+delete this waiver. Writing that entry *before* the family actually runs would be an aspirational
+binding, which is the one thing a bindings file must not contain.
 
 ## Definition-of-Done bindings
 

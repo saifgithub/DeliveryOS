@@ -78,3 +78,7 @@ leave a visible gap.
    non-agentic runner — acceptance checks the implementing instance does not own and therefore
    cannot edit. **Prompt instructions are not controls.** Each of those is checkable by someone who
    distrusts every agent in the fleet; that is the test a control has to pass.
+5. **Decorrelation is the fifth, and the one a project can legitimately not have.** An auditor drawn
+   from the same model family as what it audits fails where its subject fails. A project with one
+   available family declares that (`DECORRELATION: waived`, DISPATCH_PROTOCOL.md §2) rather than
+   pretending otherwise — a declared weakness is worked around; an undeclared one is relied upon.

@@ -114,6 +114,39 @@ when their `family:` values differ, which is a fact about the models and stays t
 `family:` is MANDATORY on **every** instance, not only auditor-capable ones: the check that matters
 is *coder family ≠ its auditor's family*, and that comparison is a lookup only if both sides record it.
 
+### Decorrelation, and the waiver for a single-family fleet
+
+**The rule:** an instance's `auditor:` should name an instance whose `family:` differs from its own.
+An auditor drawn from the same family as the thing it audits shares its blind spots — it fails where
+its subject fails, which is the one place a gate has to hold. A machine gate does not rescue this:
+the same family authored the acceptance checks.
+
+**The waiver, because one family is a normal situation and not a disqualifying one.** A project with
+access to exactly one model family declares it, once, in BINDINGS:
+
+```
+DECORRELATION: required
+DECORRELATION: waived — <the reason, in one line>
+```
+
+One whitespace-free keyword after the colon, so it is machine-read like every other token here.
+`required` is the default and what a project should reach for; `waived` is a **stand-up decision a
+human makes with the cost in front of them**, not a default and not something an agent may set.
+
+Three properties make the waiver honest rather than a way to switch the rule off:
+
+1. **It waives the FAILURE, never the VISIBILITY.** A waived fleet still prints, every run, exactly
+   which instance/auditor pairs share a family. Silence would make the waiver indistinguishable
+   from decorrelation actually being achieved.
+2. **`family:` stays mandatory under a waiver.** Recording it is what makes the comparison possible
+   the day a second family arrives; a waiver that also let the field go blank would erase the
+   information needed to lift it.
+3. **It is re-examined when a second family becomes available**, which is a real event a project can
+   notice. A waiver with no such condition is a permanent exemption wearing a temporary word.
+
+An absent `DECORRELATION:` line means `required`. Like `GATE:`, an unrecorded decision fails loud
+rather than defaulting open.
+
 **`owns:` grammar (normative).** One path glob per line, no brace expansion, no inline prose, comments
 on their own line. Prose like *"and their test counterparts"* is not a path and no check can compute
 set disjointness over it — and disjointness is what guardrail 3 (collision avoidance) and the

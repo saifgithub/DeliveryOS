@@ -11,6 +11,7 @@
 #   4  the honesty grep: this project's own name/hosts/stakeholder must not appear in tier A
 #   5  harness/tool/model names must not appear in tier A  (this is what "any LLM" means)
 #   6  incident-narration heuristic over tier A            (advisory: warns, never fails)
+#   7  auditor family != the family of each instance it gates, unless BINDINGS declares the waiver
 #
 # Checks 4 and 5 need this project's needles, which are project VALUES and therefore must not live
 # in this file — this script is tier A, and a tier-A file carrying the project's own name would fail
@@ -218,6 +219,72 @@ check_narration() {
   fi
 }
 
+# --- 7. decorrelation: an auditor must not share a family with what it gates ------------------
+# `family:` is recorded on every instance precisely so this comparison is a lookup. An auditor drawn
+# from the same family as its subject fails where its subject fails, and the machine gate does not
+# rescue that — the same family authored the acceptance checks.
+#
+# THE WAIVER waives the FAILURE, never the VISIBILITY: a waived fleet still prints every correlated
+# pair on every run, because silence would make a declared waiver indistinguishable from
+# decorrelation actually being achieved. An ABSENT DECORRELATION: line means `required` — an
+# unrecorded decision fails loud, the same rule GATE: follows.
+check_decorrelation() {
+  R="$ORCH/dispatch/roster"
+  [ -d "$R" ] || return 0                     # check 3 has already failed on this
+  ls "$R"/*.md >/dev/null 2>&1 || return 0
+
+  B="$ORCH/dispatch/BINDINGS.md"
+  mode="required"
+  if [ -f "$B" ]; then
+    d=$(grep -Eo '^DECORRELATION: *(required|waived)' "$B" 2>/dev/null | tail -1 | awk '{print $2}')
+    [ -n "$d" ] && mode="$d"
+  fi
+
+  fam=${TMPDIR:-/tmp}/.cb_fam_$$; : > "$fam"
+  missing=0
+  for f in "$R"/*.md; do
+    [ -f "$f" ] || continue
+    id=$(basename "$f" .md)
+    v=$(grep -E '^[[:space:]]+family:' "$f" 2>/dev/null | head -1 | sed 's/.*family:[[:space:]]*//; s/[[:space:]]*#.*//; s/[[:space:]]*$//')
+    if [ -z "$v" ]; then
+      fail "7 decorrelation: $id has no impl.family — it is MANDATORY on every instance, waiver or not"
+      missing=1; continue
+    fi
+    printf '%s\t%s\n' "$id" "$v" >> "$fam"
+  done
+  if [ "$missing" -eq 1 ]; then rm -f "$fam"; return; fi
+
+  pairs=""
+  for f in "$R"/*.md; do
+    [ -f "$f" ] || continue
+    id=$(basename "$f" .md)
+    aud=$(grep -E '^auditor:' "$f" 2>/dev/null | head -1 | sed 's/^auditor:[[:space:]]*//; s/[[:space:]]*#.*//; s/[[:space:]]*$//')
+    # Only a NAMED roster instance is comparable. "n/a", "per-lane GATE" and anything else that is
+    # not an id in this roster names no family to compare against.
+    afam=$(grep -F "$(printf '%s\t' "$aud")" "$fam" 2>/dev/null | head -1 | cut -f2)
+    [ -n "$afam" ] || continue
+    mine=$(grep -F "$(printf '%s\t' "$id")" "$fam" | head -1 | cut -f2)
+    [ "$mine" = "$afam" ] && pairs="${pairs}        $id ($mine) is gated by $aud ($afam)
+"
+  done
+  rm -f "$fam"
+
+  if [ -z "$pairs" ]; then
+    pass "7 decorrelation: every gated instance has an auditor of a different family"
+  elif [ "$mode" = "waived" ]; then
+    echo "warn  7 decorrelation: WAIVED in BINDINGS — these pairs share a model family and this"
+    echo "        fleet's auditor therefore fails where its subject fails:"
+    printf '%s' "$pairs"
+    echo "        Re-examine the waiver when a second family becomes available."
+  else
+    fail "7 decorrelation: auditor shares a family with what it gates:"
+    printf '%s' "$pairs"
+    echo "        Either give the auditor a different impl.family, or make it a stated decision:"
+    echo "        add 'DECORRELATION: waived — <reason>' to dispatch/BINDINGS.md. A human makes"
+    echo "        that call at stand-up; it is not a default and not an agent's to set."
+  fi
+}
+
 echo "check_bindings.sh — orchestration stand-up verdict"
 echo "tree: $ORCH"
 echo
@@ -228,6 +295,7 @@ PROJECT_NEEDLES=$(echo "$NEEDLE_PROJECT|$NEEDLE_HOSTS|$NEEDLE_PERSON" | sed 's/|
 grep_tier_a "4 project" "$PROJECT_NEEDLES"
 grep_tier_a "5 harness" "$NEEDLE_HARNESS"
 check_narration
+check_decorrelation
 echo
 
 if [ "$fails" -gt 0 ]; then

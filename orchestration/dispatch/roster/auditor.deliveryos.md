@@ -29,12 +29,17 @@ impl:
   write_mode:  commits
 ```
 
-**Known weakness, recorded rather than hidden: `family: claude` matches every coder it gates.** The
+**Known weakness, declared rather than hidden: `family: claude` matches every coder it gates.** The
 fleet is not decorrelated. An auditor that fails the way its subject fails catches less than its
 presence suggests, and the `machine` gate does not rescue that — the same family authored the
-acceptance checks. What would fix it is a second auditor entry on a different model family; this
-project has other families available and has never wired one into a lane, which is why the honest
-entry today is this one plus this paragraph rather than an aspirational second row.
+acceptance checks.
+
+This is **declared**, not merely written down: `dispatch/BINDINGS.md` carries
+`DECORRELATION: waived`, and `check_bindings.sh` check 7 prints every correlated pair on every run
+rather than going quiet about it. Without that line the stand-up fails. What lifts it is a second
+auditor entry on a different model family — this project has others available and has never wired
+one into a lane, which is why the honest entry today is this one plus the waiver rather than an
+aspirational second row.
 
 **`turn_taking: invoked`, not `self-watch`.** Under `lifetime: one-shot`, a poll loop consumes the
 whole lifetime. The Architect derives `AWAITING_AUDIT` from the board and starts this instance per

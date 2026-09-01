@@ -188,7 +188,8 @@ working as designed — visible, and closable later by building something.
 | **Which implementations are available?** | One row per distinct way an instance can run here. Two setups differing in tool loop, context budget or write access are two rows, not one — a band is model **and** harness |
 | **Per row, the profile columns** | `id`, `kind`, `launch_template`, `resume_template`, `watch_capable`, `anchor`, `context_policy`, `fanout`, `timeout_ceiling`, `result_convention`, `version_pin`. A column with no value is a stand-up error, not an empty cell — including `anchor: none`, which is a real and load-bearing answer |
 | **Per row, its band and family** | Band from `ROLES.md`. Family is what decorrelation is computed over, so it must distinguish rows that would otherwise fail the same way |
-| **Which profile fills each role?** | And for auditors: **not Economy**, and ideally a different `family` from the coders it gates. Where only one family is available, record that — a fleet that cannot decorrelate should know it |
+| **Which profile fills each role?** | And for auditors: **not Economy**, and a different `family` from the coders it gates |
+| **`DECORRELATION: required` or `waived`?** | `required` unless this project genuinely has one model family, in which case `waived — <reason>` plus the condition that would lift it. **This is the stakeholder's call, not yours** — put the cost in front of them (an auditor of the same family fails where its subject fails, and the machine gate does not rescue it, because the same family authored the checks) and let them answer. `check_bindings.sh` check 7 fails a correlated fleet without this line, and still prints every correlated pair with it |
 
 ---
 

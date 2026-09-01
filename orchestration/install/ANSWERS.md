@@ -52,7 +52,7 @@ existing register the template's contract is satisfied by instead.
 | 4.3 | 4 | `gate_check.sh` | `resolved` | `dispatch/gate_check.sh` — reads the record, compares its `gitSha` to the lane's submitted SHA. All four branches verified |
 | 5.1 | 5 | Which implementations are available | `resolved` | One profile: `agentic-premium`. `dispatch/BINDINGS.md` → Implementation profiles |
 | 5.2 | 5 | `version_pin` | **`deferred`** | No pin is set. Decided when a second release of the same tool is in use concurrently and two instances need distinguishing |
-| 5.3 | 5 | Auditor family ≠ coder family | **`deferred`** | Not achievable today — see Known gaps. Decided when a second family is wired into a lane |
+| 5.3 | 5 | `DECORRELATION: required` or `waived` | `resolved` | **`waived`** — one family is wired into this fleet. `dispatch/BINDINGS.md` → Decorrelation carries the line and the condition that lifts it. Check 7 still prints all three correlated pairs on every run |
 | 6.1 | 6 | Domains and `owns:` | `resolved` | Four roster entries, grammar clean, sets disjoint (check 3 green) |
 | 6.2 | 6 | Hot files | `resolved` | Three, in `dispatch/BINDINGS.md`. They are why `coder.features` is `wip_cap: 1` |
 | 7.1 | 7 | Caps, stall window | `resolved` | 1 / 1 / one active session. Conservative, uncalibrated, and stated as such |
@@ -69,17 +69,22 @@ be skipped by someone who assumes an inherited roster is a starting point rather
 
 - **`impl.version_pin`** — decided when two instances run different releases of the same tool
   concurrently and their results diverge. Until then a pin would be a value nobody reads.
-- **Auditor decorrelation** — decided when a second model family is actually wired into a lane. The
-  families are available and documented; none has run. Writing a second auditor roster entry before
-  that would be an aspirational binding, which is the thing this file exists not to contain.
+- **Auditor decorrelation** — resolved as a *declared waiver*, not left open: `DECORRELATION: waived`
+  in `dispatch/BINDINGS.md`, which is what check 7 requires before it will pass a correlated fleet.
+  What is deferred is *lifting* it, and its condition is a real event: a second model family actually
+  wired into a lane. The families are available and documented; none has run. Writing a second
+  auditor roster entry before that would be an aspirational binding, which is the thing this file
+  exists not to contain.
 
 ## Known gaps at stand-up
 
 Things that are true and not good:
 
-1. **The fleet cannot decorrelate.** Every roster entry, auditor included, is one model family. An
-   auditor that fails the way its subject fails catches less than its presence suggests, and the
-   machine gate does not rescue it — the same family authored the acceptance checks.
+1. **The fleet cannot decorrelate**, and says so out loud. Every roster entry, auditor included, is
+   one model family. An auditor that fails the way its subject fails catches less than its presence
+   suggests, and the machine gate does not rescue it — the same family authored the acceptance
+   checks. Declared as `DECORRELATION: waived`; `check_bindings.sh` prints all three correlated pairs
+   on every run, so the waiver cannot be mistaken for the problem having gone away.
 2. **No lane has ever run.** Every cap, the stall window, and the whole dispatch layer are
    uncalibrated. The first real lane is the only thing that will change that.
 3. **The webview surface has no test suite.** `typecheck` is its only automated gate.
